@@ -143,7 +143,7 @@ No centralized infra. No pre-built KB. Manual mode (no Apify) works at zero cost
 | File | What |
 |---|---|
 | [`./SOURCES.md`](./SOURCES.md) | 23 authoritative SAP sources in 4 tiers (Tier-1 git / Tier-2 Apify / Tier-3 manual / Tier-4 MCP) |
-| [`./PATTERNS.md`](./PATTERNS.md) | ~70 battle-tested patterns in 8 categories (UI5/FE V4, CAP/TS, BTP/Kyma deployment with 4-target matrix, security, customizing, lifecycle, events, ecosystem plugins). Consulted during Step 1 target resolution + Step 6 side-by-side scaffold |
+| [`./PATTERNS.md`](./PATTERNS.md) | ~90 battle-tested patterns in 9 categories (UI5/FE V4, CAP/TS, BTP/Kyma deployment with 4-target matrix, security, customizing, lifecycle, events, ecosystem plugins, **ABAP level-escalation recipes D→B / C→A / B→A**). Consulted during Step 1 target resolution, Step 4 decision, Step 6a in-place rewrite + Step 6b side-by-side scaffold |
 | [`./INTEGRATIONS.md`](./INTEGRATIONS.md) | Step-by-step mapping: refactor phase × ARC-1 MCP tool × arc-1 native skill × secondsky/sap-skills plugin |
 
 ## Recommended companion plugins

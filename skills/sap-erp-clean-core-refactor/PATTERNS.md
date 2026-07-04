@@ -1,4 +1,4 @@
-# SAP CAP + Fiori Elements V4 — Battle-Tested Patterns
+# Clean Core Refactor — Battle-Tested Patterns (CAP/Fiori target + ABAP escalation)
 
 > **This is a reference document**, not a runnable skill. It ships alongside [`SKILL.md`](./SKILL.md) inside the `sap-erp-clean-core-refactor` skill so the refactor skill is **self-contained** — it doesn't need an external repository to consult deployment patterns when generating side-by-side scaffolds.
 >
@@ -6,9 +6,9 @@
 
 A reference catalog of patterns and gotchas that have surfaced repeatedly across production SAP CAP + Fiori Elements V4 + BTP deployments. Each entry distills a real-world failure mode into a generic pattern: **symptom** observed by users or operators, **root cause** in the framework / runtime / deployment layer, and a **remedy** that is portable across CAP projects.
 
-This document is **not a runner** — it never executes commands. It is a curated reference consulted by [`SKILL.md`](./SKILL.md) during refactor planning (Step 1c target resolution, Step 6b side-by-side scaffold), referenced from [`INTEGRATIONS.md`](./INTEGRATIONS.md) for the companion plugin map, and available for direct reading by humans.
+This document is **not a runner** — it never executes commands. It is a curated reference consulted by [`SKILL.md`](./SKILL.md) during refactor planning (Step 1c target resolution, Step 4 per-object decision, Step 6a in-place rewrite, Step 6b side-by-side scaffold), referenced from [`INTEGRATIONS.md`](./INTEGRATIONS.md) for the companion plugin map, and available for direct reading by humans.
 
-Patterns are organized into **eight categories**. Each category lists the most load-bearing patterns first; lighter-weight items follow. Where multiple frameworks expose the same gotcha (e.g. `@UI.Hidden` interaction with `@Core.OperationAvailable`), the entry points to the framework documentation rather than reproducing it.
+Patterns are organized into **nine categories**: 1-8 cover the CAP/Fiori/BTP *target* side of a side-by-side extraction; Category 9 covers the *ABAP* side — per-finding level-escalation recipes (D→B, C→A, B→A) applied during in-place rewrites. Each category lists the most load-bearing patterns first; lighter-weight items follow. Where multiple frameworks expose the same gotcha (e.g. `@UI.Hidden` interaction with `@Core.OperationAvailable`), the entry points to the framework documentation rather than reproducing it.
 
 ## How to read this skill
 
@@ -1004,6 +1004,79 @@ Generic library documentation lookup. Use for non-SAP dependencies (Node librari
 ### 8.16 — Playwright MCP (`playwright`)
 
 Browser automation for UI tests. Use during Fiori app smoke tests or visual regression checks.
+
+---
+
+## Category 9 — ABAP Level-Escalation Recipes (D→B, C→A, B→A)
+
+The ABAP-side counterpart of Categories 1-8: per-finding rewrite recipes consumed by
+`SKILL.md` Step 4 (decide) and Step 6a (`rewrite_in_place`). Each recipe maps an ATC /
+classification finding to the escalation move, its target level, and an effort size
+(S ≤ ½ day per object, M ≤ 2 days, L = needs its own plan). Multiply effort by the
+fan-in risk factor from SKILL.md Step 2.
+
+### 9.0 — How to use these recipes
+
+1. Match the object's worst findings (from `sap-clean-core-atc` + `SAPDiagnose(action="atc")`) against the tables below — worst level first.
+2. **Never invent a released successor.** The tables name the well-known ones; for anything else resolve live via `sap_get_object_details(...)` → `successorObjects` (mcp-sap-docs, backed by `SAP/abap-atc-cr-cv-s4hc`) and verify the successor exists on the customer release with `SAPSearch`.
+3. A recipe is *done* only when the verification loop (9.4) confirms the object's re-classified level.
+4. Mechanical variants of these rewrites often ship as ATC quickfixes — try `SAPDiagnose(action="quickfix")` → `apply_quickfix` before hand-editing.
+
+### 9.1 — D → B: get out of the no-API zone
+
+Target: legitimate, documented on-prem constructs. These moves rarely reach A directly — they remove the "no API status / undocumented internals" exposure first.
+
+| Finding (ATC / classification) | Recipe | Effort |
+|---|---|---|
+| Modification of a SAP object (SPAU-relevant) | Revert the modification; re-implement the delta as a BAdI or explicit enhancement-spot implementation. Find candidate BAdIs via `SAPSearch` on the enclosing package + SE18 naming (`BADI_*`) | M |
+| User exit (CMOD/SMOD `EXIT_*` include) | Move logic to the successor BAdI — most SMOD exits have one; resolve via `sap_get_object_details` or the exit's IMG docs | M |
+| Implicit enhancement point | Replace with an explicit BAdI implementation or documented explicit enhancement spot; implicit points are upgrade-fragile and stay D | M |
+| Direct `INSERT`/`UPDATE`/`MODIFY`/`DELETE` on SAP standard tables | Replace with the documented BAPI/FM write + its COMMIT protocol; if none exists, isolate behind a Z-interface and flag `research_required` | M-L |
+| Z-clone of a SAP standard program/class | Diff clone vs. original (`SAPRead` both, compare), extract the delta into an enhancement on the original, retire the clone | L |
+| `EXEC SQL` / ADBC native SQL | Rewrite as ABAP SQL; keep DB hints only with measured evidence (see `debug-slow-sql`) | S-M |
+| `CALL 'SYSTEM'` / kernel calls, direct OS access | Remove; replace with the documented FM/class equivalent or move the capability to the side-by-side extension | M |
+| BDC / `CALL TRANSACTION ... USING` | Replace with the BAPI equivalent; on S/4 targets prefer the released OData API consumed from side-by-side | M-L |
+| SELECT on Simplification-DB casualties (`KONV`, `VBFA` semantics, index tables like `BSIS`/`BSAD`, …) | Follow the Simplification Item note: successor table / compatibility CDS view; verify per release | S-M |
+
+### 9.2 — C → A: internal API → released API
+
+Target: only released APIs (`state=released` in the API release contract). Curated top offenders — anything not listed goes through `successorObjects` lookup (rule 9.0.2).
+
+| Internal / unreleased construct | Released successor (cloud development) | Notes |
+|---|---|---|
+| `CL_GUI_ALV_GRID`, `REUSE_ALV_*`, classic `WRITE` lists | RAP + Fiori Elements List Report (embedded or side-by-side) | On-prem-only intermediate: `CL_SALV_TABLE` — that lands at B, not A |
+| `CL_GUI_FRONTEND_SERVICES`, `GUI_UPLOAD`/`GUI_DOWNLOAD`, `WS_*` | None (GUI-bound) — move file exchange to the Fiori UI / side-by-side + document store | GUI dependency cannot be released; UI concern |
+| `GUID_CREATE` FM | `CL_SYSTEM_UUID` / `XCO_CP=>UUID` | Quickfix-able |
+| `SO_NEW_DOCUMENT_ATT_SEND_API1` and friends | `CL_BCS_MAIL_MESSAGE` (released mail API) | Config: communication arrangement for outbound mail |
+| `BAL_LOG_*` application-log FMs | `CL_BALI_LOG` (Business Application Log API) | Log object/subobject become configuration objects |
+| `JOB_OPEN`/`JOB_SUBMIT`/`JOB_CLOSE`, `SUBMIT ... VIA JOB` | Application Jobs framework (APJ catalog + template + `*_APJ_*` runtime API) | The report body becomes a class implementing the APJ interfaces |
+| `NUMBER_GET_NEXT` | `CL_NUMBERRANGE_RUNTIME=>NUMBER_GET` | Number-range object itself is a Z object — fine |
+| `ENQUEUE_*`/`DEQUEUE_*` FMs on own lock objects | `CL_ABAP_LOCK_OBJECT_FACTORY` on the same Z lock object | Lock object stays; only the call style changes |
+| Direct `SY-DATUM`/`SY-UZEIT` in cloud-strict code | `XCO_CP=>SY->DATE( )` / `CL_ABAP_CONTEXT_INFO` | Time-zone-correct by construction |
+| Date/period conversion FMs (`CONVERT_DATE_*`, factory-calendar FMs) | `XCO_CP_TIME` / released calendar CDS (`I_CalendarDate`, …) | Verify per construct — coverage is uneven |
+| Direct SELECT on SAP tables (`VBAK`, `KNA1`, `MARA`, `BSEG`, …) | Released `I_*` CDS views (`I_SalesDocument`, `I_Customer`, `I_Product`, `I_JournalEntry`, …) | THE most frequent C finding; resolve each table via `successorObjects` |
+| RFC call to an unreleased FM | Released OData/SOAP API (api.sap.com) consumed via `CL_WEB_HTTP_CLIENT_MANAGER` + `CL_HTTP_DESTINATION_PROVIDER` | Needs destination/communication arrangement |
+| `POPUP_TO_CONFIRM` and dialog FMs | RAP action + Fiori side-effect/confirmation dialog | UI concern moved out of ABAP |
+| `READ_TEXT`/`SAVE_TEXT` (SAPscript long texts) | No generic released successor — model own text entity or app-specific API | Flag `research_required`; frequent side-by-side driver |
+| `COMMIT WORK` inside business logic headed for RAP | RAP save sequence (`MODIFY ENTITIES` + framework commit) | Delegate rewrite to `generate-rap-logic` |
+
+### 9.3 — B → A: escalation and the closing move
+
+| Situation | Recipe | Effort |
+|---|---|---|
+| Stable Z-API (class/interface/CDS) consumed by other Z code | **Wrap-and-release**: verify stability (`SAPContext(action="impact")` fan-in + owner sign-off) → `SAPManage(action="set_api_state", contract="C1")` → every consumer drops to A | S |
+| Unavoidable unreleased SAP dependency | **Tier-2 wrapper** (SAP 3-tier extensibility model): isolate the dependency in a dedicated wrapper package, release the *wrapper's* API (C1), track the SAP successor for later swap | M |
+| Classic BAPI usage (fine on-prem, unreleased in cloud) | Wrap behind a Z-interface now (cheap), swap the implementation to the released OData API when extracting side-by-side | S + later M |
+| CDS views built on classic DDIC views / unreleased base views | Rebase onto released `I_*` interface views; keep field aliases to avoid consumer churn | M |
+
+`--aggressive` / `--push-to-a` / `--target-level=A` enable this whole table; the default plan applies only the S-effort rows opportunistically.
+
+### 9.4 — Verification loop (every recipe)
+
+1. `SAPDiagnose(action="atc")` on the object — the original finding must be gone, no new P1/P2.
+2. Re-classify: the object's level per `sap-clean-core-atc` roll-up must equal the recipe's target level (D→B recipes: no more D findings; C→A: only released references; B→A: contract visible on the API).
+3. `SAPDiagnose(action="unittest")` — regression tests from Step 6-pre still green.
+4. `SAPRead(action="diff")` — review the rewrite as a diff before transport release.
 
 ---
 
