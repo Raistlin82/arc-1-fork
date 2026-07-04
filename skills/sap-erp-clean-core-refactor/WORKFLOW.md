@@ -26,20 +26,68 @@ deterministic gates. Every step below is tagged with one of three tiers:
 
 | Tier | What it means | Who decides the output | Reliability model |
 |---|---|---|---|
-| **Deterministic** | SAP-proposed quickfixes (`SAPDiagnose quickfix → apply_quickfix`), `SAPLint lint_and_fix`/`format`, ATC/unit-test runs, reads, transport ops | SAP / abaplint / the tool — zero LLM creativity | High: exact transformations and hard pass/fail gates |
-| **Generative** | The actual rewrites (D→B, C→A), test generation, CAP scaffolds, reviews, reports — the agent reads the source, consults [`PATTERNS.md`](./PATTERNS.md) recipes + plugin knowledge, and writes the result | The LLM agent | Only as good as the gates around it — never trusted bare (see the cage below) |
-| **Human** | Plan review/edit, per-object confirmation on the diff, `remove_unused` sign-off, side-by-side QA parity | You | — |
+| **Deterministic** 🟦 | SAP-proposed quickfixes (`SAPDiagnose quickfix → apply_quickfix`), `SAPLint lint_and_fix`/`format`, ATC/unit-test runs, reads, transport ops | SAP / abaplint / the tool — zero LLM creativity | High: exact transformations and hard pass/fail gates |
+| **Generative** 🟪 | The actual rewrites (D→B, C→A), test generation, CAP scaffolds, reviews, reports — the agent reads the source, consults [`PATTERNS.md`](./PATTERNS.md) recipes + plugin knowledge, and writes the result | The LLM agent | Only as good as the gates around it — never trusted bare (see the cage below) |
+| **Human** 🟨 | Plan review/edit, per-object confirmation on the diff, `remove_unused` sign-off, side-by-side QA parity | You | — |
 
-**The cage around every Generative write** (rewrite pipeline, in order):
-① regression tests BEFORE touching (baseline behavior frozen) → ② the agent writes → SAP
-syntax check rejects what doesn't compile → ③ `/abap-cloud-review` cheap second opinion →
-④ ATC re-run: original finding gone, no new P1/P2, net regression **aborts the loop** →
-⑤ unit tests still green → ⑥ you confirm on the `SAPRead(action="diff")` → ⑦ rollback from
-SAP version history if anything slips through.
+The mechanical (Deterministic) pass runs **twice by design**: once package-wide as **Phase 0**
+right after plan approval (lights-out — the only part that needs no per-object review), and
+again per object as step ⓪ of every rewrite, catching mechanical findings that surface during
+the rewrite itself.
 
-The only genuinely lights-out portion is the mechanical burn-down (Deterministic tier): SAP
-quickfixes + lint autofixes can run package-wide without per-object review, with ATC + unit
-tests as the net.
+## The process at a glance
+
+```mermaid
+flowchart TD
+    S1[/"1 · /bootstrap-system-context"/]:::det --> S2[/"2 · /sap-erp-clean-core-refactor ZPKG plan"/]:::gen
+    S2 --> S3{"3 · HUMAN GATE<br/>review &amp; edit the plan<br/>(no writes so far)"}:::hum
+    S3 -->|approved| P0["PHASE 0 · package-wide mechanical burn-down<br/>quickfix → apply_quickfix · lint_and_fix · format<br/>lights-out — own transport"]:::det
+    P0 --> P0R["ATC re-run — refresh plan numbers"]:::det
+    P0R --> EX["4 · /sap-erp-clean-core-refactor ZPKG execute<br/>per-object loop, HUMAN confirmation each"]:::gen
+    EX --> DEC{"plan decision<br/>per object"}:::hum
+    DEC --> RW["rewrite_in_place<br/>D→B · C→A<br/>(cage pipeline below)"]:::gen
+    DEC --> SBS["extract_to_side_by_side<br/>→ modernize-abap-to-btp-cap<br/>= Level A on the ERP side"]:::gen
+    DEC --> REL["release_api<br/>/api-style-review →<br/>SAPManage set_api_state"]:::det
+    DEC --> KB["keep_at_level_b<br/>SKTD + ATC exemption<br/>(on-prem only)"]:::gen
+    DEC --> RM["remove_unused<br/>sign-off → references check<br/>→ delete"]:::hum
+    RW --> V
+    SBS --> V
+    REL --> V
+    KB --> V
+    RM --> V
+    V["7 · VERIFY · cumulative ATC + unittest<br/>+ perf check on hot data-access rewrites<br/>net ATC regression aborts the loop"]:::det
+    V --> TR[/"5 · /sap-transport-review<br/>per-object diffs + risk flags"/]:::gen
+    TR --> DONE["SAPTransport release<br/>(inactive-objects pre-check built in)"]:::det
+
+    classDef det fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef gen fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+    classDef hum fill:#fef3c7,stroke:#d97706,color:#92400e
+```
+
+🟦 Deterministic · 🟪 Generative · 🟨 Human — numbers refer to table A.
+
+**The cage around every Generative rewrite** (one object inside `rewrite_in_place`):
+
+```mermaid
+flowchart TD
+    Q0["⓪ residual quickfixes<br/>quickfix → apply_quickfix"]:::det --> T1["① regression-test baseline<br/>generate-abap/cds-unit-test<br/>(freezes current behavior)"]:::gen
+    T1 --> W2["② LLM rewrite per PATTERNS 9.1/9.2<br/>SAPWrite + SAPActivate + format"]:::gen
+    W2 --> SC{"SAP syntax check"}:::det
+    SC -->|fail| W2
+    SC -->|pass| R3["③ /abap-cloud-review<br/>cheap second opinion"]:::gen
+    R3 --> A4{"④ ATC re-run<br/>original finding gone?<br/>no new P1/P2?"}:::det
+    A4 -->|regression| RB["⑦ rollback<br/>from SAP version history"]:::det
+    A4 -->|pass| U5{"⑤ unit tests<br/>baseline still green?"}:::det
+    U5 -->|fail| RB
+    U5 -->|pass| H6{"⑥ HUMAN<br/>confirm on SAPRead diff"}:::hum
+    H6 -->|approve| NEXT["assign to transport<br/>→ next object"]:::det
+    H6 -->|reject| RB
+    RB --> NEXT
+
+    classDef det fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef gen fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+    classDef hum fill:#fef3c7,stroke:#d97706,color:#92400e
+```
 
 ## Prerequisites (server-side, once)
 
@@ -51,9 +99,9 @@ tests as the net.
 | **Transportable package — not `$TMP`** | ATC silently skips local objects: 0 findings on a `$TMP` package means "not checked", not "clean" |
 
 > **Honesty note on "automatic ATC remediation":** the automatic pass covers *mechanical*
-> findings (Deterministic tier). Architectural findings — unreleased APIs, direct DB access,
-> modifications — have no auto-fix by definition; they become plan decisions executed at the
-> Generative tier under the cage above.
+> findings (Deterministic tier — Phase 0 plus the per-object residue step). Architectural
+> findings — unreleased APIs, direct DB access, modifications — have no auto-fix by
+> definition; they become plan decisions executed at the Generative tier under the cage above.
 
 ## A — What you type (5 steps)
 
@@ -62,7 +110,7 @@ tests as the net.
 | 1 | `/bootstrap-system-context` | `bootstrap-system-context` | **arc-1** | Deterministic | `SAPManage(action="probe")` → SID, release, components, features; formatter + ATC preset; `abap_feature_matrix` snapshot → `system-info.md`. No sub-skills |
 | 2 | `/sap-erp-clean-core-refactor ZPKG plan` | `sap-erp-clean-core-refactor` | **CHAIN** | Generative (analysis — **no writes**) over Deterministic evidence | Inventory → classification → per-object decision → editable plan at `docs/refactor/<date>-clean-core-plan.md`. Delegation: table B |
 | 3 | *(review & edit the plan — no command)* | — | — | **Human** | The gate. Override any per-object decision before anything touches the system |
-| 4 | `/sap-erp-clean-core-refactor ZPKG execute` | `sap-erp-clean-core-refactor` | **CHAIN** | Mixed — per-step tiers in table C, per-object **Human** confirmation throughout | Applies the plan. Delegation: table C |
+| 4 | `/sap-erp-clean-core-refactor ZPKG execute` | `sap-erp-clean-core-refactor` | **CHAIN** | **Phase 0**: Deterministic, lights-out · then per-object loop: mixed tiers (table C) with **Human** confirmation throughout | Package-wide mechanical burn-down + ATC refresh first, then applies the plan object by object. Delegation: table C |
 | 5 | `/sap-transport-review` | `sap-transport-review` | **arc-1** | Generative review over Deterministic diffs | Pre-release gate: per-object unified diffs + risk flags on the transport. Standalone |
 
 ## B — Delegation chain of `plan` (step 2)
@@ -80,16 +128,19 @@ tests as the net.
 | 4 Per-object decision | decision tree + [`PATTERNS.md`](./PATTERNS.md) Category 9 recipes | **CHAIN** (reference doc) | Generative (proposal — finalized by the **Human** gate, step 3 of table A) |
 | 5 Stakeholder report (`--report=dossier`) | `sap-migration-dossier` | **arc-1** | Generative (report writing) |
 
-## C — Delegation chain of `execute` (step 4), per plan decision
+## C — Delegation chain of `execute` (step 4)
+
+**Phase 0 comes first, package-wide, then the per-object loop.**
 
 | Plan decision | Calls | Origin | Tier |
 |---|---|---|---|
-| *(before anything)* optional local baseline | `setup-abap-mirror` — abapGit-style package snapshot for local `git diff` evidence | **arc-1** | Deterministic |
-| **`rewrite_in_place`** (D→B, C→A) | ① regression tests: `generate-abap-unit-test` / `generate-cds-unit-test` (CDS seeds from `SAPDiagnose(action="cds_testcases")` on 8.16+) | **arc-1** | Generative (test code) over Deterministic seeds |
-| | ② mechanical burn-down: `SAPDiagnose(action="quickfix")` → `apply_quickfix` | **MCP** ARC-1 | **Deterministic** — the only lights-out part |
-| | ③ rewrite per [`PATTERNS.md`](./PATTERNS.md) 9.1/9.2 recipes → `SAPWrite` + `SAPActivate` + `SAPLint(action="format")` | **CHAIN** + **MCP** ARC-1 | **Generative** — the LLM writes the ABAP; syntax check + format are Deterministic |
-| | ④ `/abap-cloud-review` — cheap review BEFORE the ATC round-trip | **PLUGIN** `sap-abap` | Generative (review) |
-| | ⑤ `SAPDiagnose(action="atc")` + `unittest` + `SAPRead(action="diff")`; rollback from version history on regression | **MCP** ARC-1 | Deterministic gates + **Human** confirmation on the diff |
+| **Phase 0 — mechanical burn-down** (all rewrite/mechanical objects, one sweep) | `SAPDiagnose(action="quickfix")` → `apply_quickfix` + `SAPLint(action="lint_and_fix")` + `SAPLint(action="format")`; own transport; `SAPDiagnose(action="atc")` re-run refreshes the plan numbers | **MCP** ARC-1 | **Deterministic — lights-out** (no per-object review; ATC + unit tests are the net) |
+| *(before the loop)* optional local baseline | `setup-abap-mirror` — abapGit-style package snapshot for local `git diff` evidence | **arc-1** | Deterministic |
+| **`rewrite_in_place`** (D→B, C→A) | ⓪ residual quickfixes surfaced during rewrite: `quickfix` → `apply_quickfix` | **MCP** ARC-1 | Deterministic |
+| | ① regression tests: `generate-abap-unit-test` / `generate-cds-unit-test` (CDS seeds from `SAPDiagnose(action="cds_testcases")` on 8.16+) | **arc-1** | Generative (test code) over Deterministic seeds |
+| | ② rewrite per [`PATTERNS.md`](./PATTERNS.md) 9.1/9.2 recipes → `SAPWrite` + `SAPActivate` + `SAPLint(action="format")` | **CHAIN** + **MCP** ARC-1 | **Generative** — the LLM writes the ABAP; syntax check + format are Deterministic |
+| | ③ `/abap-cloud-review` — cheap review BEFORE the ATC round-trip | **PLUGIN** `sap-abap` | Generative (review) |
+| | ④⑤⑥ `SAPDiagnose(action="atc")` + `unittest` + `SAPRead(action="diff")`; ⑦ rollback from version history on regression | **MCP** ARC-1 | Deterministic gates + **Human** confirmation on the diff |
 | | RAP behavior logic → `generate-rap-logic`; full RAP stack (rare) → `generate-rap-service-researched` | **arc-1** | Generative |
 | **`rewrite_in_place`** — specialized shapes | SEGW V2 service (MPC/DPC) → `migrate-segw-to-rap` (never hand-rewrite generated classes) | **arc-1** | Generative (guided reverse-engineering) |
 | | analytical Z report → `generate-analytics-star-schema` → `generate-cds-analytical-query` | **arc-1** | Generative |
@@ -122,7 +173,7 @@ tests as the net.
 - **You invoke 5 things**; 3 are stock arc-1, 2 are this chain's orchestrator.
 - **This chain owns exactly 4 skills**: the orchestrator + the 3 CAP-extraction skills. Everything else it drives is stock arc-1 (**21 upstream skills** engaged across the run: bootstrap-system-context, sap-transport-overview, sap-unused-code, sap-clean-core-atc, explain-abap-code, sap-migration-dossier, setup-abap-mirror, generate-abap-unit-test, generate-cds-unit-test, generate-rap-logic, generate-rap-service-researched, migrate-segw-to-rap, generate-analytics-star-schema, generate-cds-analytical-query, migrate-custom-code, convert-ui5-to-fiori-elements, modernize-ui5-app, sap-object-documenter, debug-slow-sql, sap-transport-review, analyze-chat-session) or external plugins (**7 review/gate commands**, never writes).
 - **Every write to the SAP system goes through the ARC-1 MCP server** — behind its safety ceiling (`allowWrites`, package allowlist, transport gates), regardless of which skill asked for it.
-- **Automation in one sentence**: Deterministic evidence and gates at the edges, Generative code in the middle, Human confirmation on every diff that reaches the system — only the mechanical quickfix burn-down runs lights-out.
+- **Automation in one sentence**: Deterministic evidence and gates at the edges, Generative code in the middle, Human confirmation on every diff that reaches the system — only Phase 0 (and the per-object mechanical residue) runs lights-out.
 
 ## See also
 
