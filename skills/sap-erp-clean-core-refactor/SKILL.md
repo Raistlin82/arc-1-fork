@@ -49,6 +49,8 @@ After plan emission, edit `docs/refactor/<date>-clean-core-plan.md` to override 
 | D | **B** | `rewrite_in_place` via BAdI / enhancement-point (or `extract_to_side_by_side` if BAdI not feasible or `--target-level=A`) |
 | B | **B** | `keep_at_level_b` (default). Escalates to A only with `--aggressive` / `--push-to-a` / `--target-level=A` |
 
+**Target levels are expected landings, not ceilings.** "D → B" means the *realistic* landing of an in-place rewrite (the official home for internals-coupling is a BAdI/enhancement spot — a documented classic API = Level B; released cloud enhancement spots are a small subset). When a finding has a 1:1 released successor (PATTERNS 9.2), the rewrite lands at A directly — and the Step 7 re-classification records whatever level was actually achieved. The in-place path that cannot reach A is exactly what `extract_to_side_by_side` is for.
+
 **System-type modifier** — the tree above assumes an on-prem/private-cloud system. Resolve the system type once in Step 1 (`bootstrap-system-context` probe → `system-info.md`) and apply:
 
 | Where the code must live | Compliance floor | Effect on the tree |
