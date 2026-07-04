@@ -1044,7 +1044,9 @@ Target: only released APIs (`state=released` in the API release contract). Curat
 
 | Internal / unreleased construct | Released successor (cloud development) | Notes |
 |---|---|---|
-| `CL_GUI_ALV_GRID`, `REUSE_ALV_*`, classic `WRITE` lists | RAP + Fiori Elements List Report (embedded or side-by-side) | On-prem-only intermediate: `CL_SALV_TABLE` — that lands at B, not A |
+| `CL_GUI_ALV_GRID`, `REUSE_ALV_*`, classic `WRITE` lists (transactional) | RAP + Fiori Elements List Report (embedded or side-by-side) | On-prem-only intermediate: `CL_SALV_TABLE` — that lands at B, not A |
+| Analytical Z report (ALV over aggregates, read-only) | CDS analytical cube + query via `generate-analytics-star-schema` → `generate-cds-analytical-query` | Embedded analytics is the successor, NOT a transactional LROP |
+| SEGW OData V2 service (MPC/DPC generated classes) | RAP V4 stack via `migrate-segw-to-rap` | Never hand-rewrite the generated MPC/DPC classes |
 | `CL_GUI_FRONTEND_SERVICES`, `GUI_UPLOAD`/`GUI_DOWNLOAD`, `WS_*` | None (GUI-bound) — move file exchange to the Fiori UI / side-by-side + document store | GUI dependency cannot be released; UI concern |
 | `GUID_CREATE` FM | `CL_SYSTEM_UUID` / `XCO_CP=>UUID` | Quickfix-able |
 | `SO_NEW_DOCUMENT_ATT_SEND_API1` and friends | `CL_BCS_MAIL_MESSAGE` (released mail API) | Config: communication arrangement for outbound mail |
@@ -1077,6 +1079,7 @@ Target: only released APIs (`state=released` in the API release contract). Curat
 2. Re-classify: the object's level per `sap-clean-core-atc` roll-up must equal the recipe's target level (D→B recipes: no more D findings; C→A: only released references; B→A: contract visible on the API).
 3. `SAPDiagnose(action="unittest")` — regression tests from Step 6-pre still green.
 4. `SAPRead(action="diff")` — review the rewrite as a diff before transport release.
+5. Data-access recipes only, on hot objects: no performance regression — `debug-slow-sql` ladder (`SAPDiagnose(action="odata_perf")` / `SAPDiagnose(action="cds_sql")`); a released `I_*` view with the wrong access path can be slower than the SELECT it replaced.
 
 ---
 

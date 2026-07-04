@@ -68,6 +68,7 @@ After plan emission, edit `docs/refactor/<date>-clean-core-plan.md` to override 
 - Verify Apify MCP is available — if not, the skill degrades to **manual mode** (emits "consult URL X" pointers; user pastes back snippets).
 - Resolve `$TARGET` (`--target=…` or ask once).
 - One-time per system: run [`../bootstrap-system-context/SKILL.md`](../bootstrap-system-context/SKILL.md) to capture release / ATC preset / formatter into `system-info.md`. With mcp-sap-docs connected, also snapshot `abap_feature_matrix` for the captured release — Step 6a rewrites must only use language features that exist there.
+- Transport-conflict scan: [`../sap-transport-overview/SKILL.md`](../sap-transport-overview/SKILL.md) — if any object of the package sits in someone else's open transport, flag it now (an object locked in two requests stalls Step 6.5).
 - Init `.cache/sap-clean-core/` (gitignored).
 
 ### Step 2 — Inventory + impact analysis
@@ -117,14 +118,24 @@ With `--report=dossier` (or whenever the plan must be shared with stakeholders w
 
 ### Step 6 — Execute (opt-in)
 
+Optional baseline first: [`../setup-abap-mirror/SKILL.md`](../setup-abap-mirror/SKILL.md) snapshots the package locally (abapGit-style) before any write — cheap local `git diff` evidence for the whole run.
+
 Per object, ask confirmation. Then dispatch:
 
 | Decision | Action |
 |---|---|
 | `rewrite_in_place` | (0) Mechanical findings first: `SAPDiagnose(action="quickfix")` → `apply_quickfix` — burn down ATC noise before hand-rewriting. (1) Generate regression test via [`../generate-abap-unit-test/SKILL.md`](../generate-abap-unit-test/SKILL.md) or [`../generate-cds-unit-test/SKILL.md`](../generate-cds-unit-test/SKILL.md) (CDS on 8.16+: seed from `SAPDiagnose(action="cds_testcases")`). (2) `SAPWrite(action="update")` + `SAPActivate` + `SAPLint(action="format")`, then a cheap `/abap-cloud-review` pass (sap-abap plugin) BEFORE the ATC round-trip, then `SAPDiagnose(action="atc")` + `SAPDiagnose(action="unittest")`. (3) Review the edit as a diff: `SAPRead(action="diff")` active-vs-previous. (4) Rollback if regression: restore the pre-rewrite source from version history — `SAPRead(type="VERSION_SOURCE")` + `SAPWrite(action="update")`. For RAP behavior pool delegate to [`../generate-rap-logic/SKILL.md`](../generate-rap-logic/SKILL.md) |
-| `extract_to_side_by_side` | Delegate to [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-cap/SKILL.md). ABAP source stays deprecated-tagged until QA confirms parity. UI side: [`../convert-ui5-to-fiori-elements/SKILL.md`](../convert-ui5-to-fiori-elements/SKILL.md) |
+| `extract_to_side_by_side` | Delegate to [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-cap/SKILL.md). ABAP source stays deprecated-tagged until QA confirms parity. UI side: [`../convert-ui5-to-fiori-elements/SKILL.md`](../convert-ui5-to-fiori-elements/SKILL.md) (annotation-driven LROP) or [`../modernize-ui5-app/SKILL.md`](../modernize-ui5-app/SKILL.md) (freestyle TypeScript, for non-standard UX) |
 | `keep_at_level_b` | Delegate to [`../sap-object-documenter/SKILL.md`](../sap-object-documenter/SKILL.md) (SKTD rationale + ATC exemption) |
 | `remove_unused` | Stakeholder sign-off → `SAPNavigate(action="references")` last-check → `SAPWrite(action="delete")` |
+
+**Specialized rewrite dispatches** (recognize these shapes before falling back to the generic rewrite):
+
+| Object shape | Delegate to |
+|---|---|
+| SEGW OData V2 service (MPC/DPC/MPC_EXT/DPC_EXT classes) | [`../migrate-segw-to-rap/SKILL.md`](../migrate-segw-to-rap/SKILL.md) — reverse-engineer to RAP V4, don't rewrite the generated classes |
+| Analytical Z report (ALV over aggregates, no transaction) | [`../generate-analytics-star-schema/SKILL.md`](../generate-analytics-star-schema/SKILL.md) → [`../generate-cds-analytical-query/SKILL.md`](../generate-cds-analytical-query/SKILL.md) — the clean-core successor is an embedded-analytics cube + query, not a transactional LROP |
+| Object whose plan row lists ONLY mechanical/priority ATC findings | [`../migrate-custom-code/SKILL.md`](../migrate-custom-code/SKILL.md) — the standalone finding-driven fixer covers it without the full 6a pipeline |
 
 New decision arm — `release_api`: run `/api-style-review` (sap-api-style plugin) on the API surface first — a released contract is a compatibility promise, so naming/design debt gets frozen with it — then `SAPManage(action="set_api_state", contract="C1")` on the unreleased Z dependency (see Decision tree note). Idempotent; SAP's "No changes were made" is a no-op success.
 
@@ -132,7 +143,7 @@ Transport: `SAPTransport(check → create → reassign)`. Optional `SAPGit` comm
 
 ### Step 7 — Verify
 
-Cumulative `SAPDiagnose(action="atc")` + `SAPDiagnose(action="unittest")` on the whole package. Net ATC regression aborts the loop. Before releasing the transport, gate the changed set with [`../sap-transport-review/SKILL.md`](../sap-transport-review/SKILL.md) (per-object diffs + risk flags). Optional `analyze-chat-session` at session end for learnings.
+Cumulative `SAPDiagnose(action="atc")` + `SAPDiagnose(action="unittest")` on the whole package. Net ATC regression aborts the loop. For data-access rewrites on hot objects (direct SELECT → released `I_*` CDS view), verify performance did not regress with [`../debug-slow-sql/SKILL.md`](../debug-slow-sql/SKILL.md) — a released view with the wrong access path can be slower than the SELECT it replaced. Before releasing the transport, gate the changed set with [`../sap-transport-review/SKILL.md`](../sap-transport-review/SKILL.md) (per-object diffs + risk flags). Optional `analyze-chat-session` at session end for learnings.
 
 > **ATC skips `$TMP`/local objects** — zero findings on a local package means "not checked", not "clean". Classification and regression gates only work on transportable packages (see [`../sap-clean-core-atc/SKILL.md`](../sap-clean-core-atc/SKILL.md)).
 
@@ -152,6 +163,7 @@ No centralized infra. No pre-built KB. Manual mode (no Apify) works at zero cost
 
 | File | What |
 |---|---|
+| [`./WORKFLOW.md`](./WORKFLOW.md) | **Operator's guide** — the 5 things you type, plus the full delegation map (which skill runs where, whether it is chain / stock arc-1 / external plugin / MCP) |
 | [`./SOURCES.md`](./SOURCES.md) | 23 authoritative SAP sources in 4 tiers (Tier-1 git / Tier-2 Apify / Tier-3 manual / Tier-4 MCP) |
 | [`./PATTERNS.md`](./PATTERNS.md) | ~90 battle-tested patterns in 9 categories (UI5/FE V4, CAP/TS, BTP/Kyma deployment with 4-target matrix, security, customizing, lifecycle, events, ecosystem plugins, **ABAP level-escalation recipes D→B / C→A / B→A**). Consulted during Step 1 target resolution, Step 4 decision, Step 6a in-place rewrite + Step 6b side-by-side scaffold |
 | [`./INTEGRATIONS.md`](./INTEGRATIONS.md) | Step-by-step mapping: refactor phase × ARC-1 MCP tool × arc-1 native skill × secondsky/sap-skills plugin |

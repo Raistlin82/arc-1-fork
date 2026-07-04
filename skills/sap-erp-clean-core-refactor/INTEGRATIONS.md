@@ -32,6 +32,7 @@ Use this document to:
 | 1c — Resolve `$TARGET` | — | — | `sap-btp-developer-guide` (target landscape reference) | — | Default `btp-cf` |
 | 1d — Init local cache | (bash) | — | — | — | `.cache/sap-clean-core/` gitignored |
 | 1e — Bootstrap system context | `SAPManage(action="probe")` + `SAPRead(type="SKTD")` | **`bootstrap-system-context`** | — | — | One-time per system; produces `system-info.md` |
+| 1f — Transport-conflict scan | `SAPTransport(action="list", summary=true, user="*")` | **`sap-transport-overview`** | — | — | Objects already locked in someone else's open TR stall Step 6.5 |
 
 ### Step 2 — Inventory
 
@@ -78,7 +79,10 @@ Use this document to:
 |---|---|---|---|---|---|
 | 6-pre — Generate regression tests (CLAS/FUGR) | — | **`generate-abap-unit-test`** | `sap-abap` (test patterns reference) | — | Capture current behaviour as baseline |
 | 6-pre — Generate regression tests (DDLS) | — | **`generate-cds-unit-test`** | `sap-abap-cds` (CDS Test Double Framework patterns) | — | For CDS views |
-| 6a-0 — Mechanical quickfixes first | `SAPDiagnose(action="quickfix")` → `SAPDiagnose(action="apply_quickfix")` | — | — | — | Burn down ATC noise before any hand rewrite |
+| 6-pre — Local package snapshot (optional) | (source reads) | **`setup-abap-mirror`** | — | — | abapGit-style baseline for local `git diff` evidence across the whole run |
+| 6a-0 — Mechanical quickfixes first | `SAPDiagnose(action="quickfix")` → `SAPDiagnose(action="apply_quickfix")` | — | — | — | Burn down ATC noise before any hand rewrite. Objects with ONLY mechanical findings can go through **`migrate-custom-code`** standalone instead |
+| 6a-alt — SEGW V2 service in inventory | — | **`migrate-segw-to-rap`** | — | — | MPC/DPC classes are generated — reverse-engineer to RAP V4, never hand-rewrite |
+| 6a-alt — Analytical Z report | — | **`generate-analytics-star-schema`** → **`generate-cds-analytical-query`** | — | — | Successor is an embedded-analytics cube + query, not a transactional LROP |
 | 6a — Rewrite in-place: read + write | `SAPRead(VERSIONS)`, `SAPWrite(action="update")`, `SAPActivate(scope="object")` | **`generate-rap-logic`** (when rewrite goes to RAP behavior pool), **`generate-rap-service-researched`** (full RAP stack, rare) | **`sap-abap`** (language patterns), **`sap-abap-cds`** (CDS views if introduced) | — | Pattern-mined via Step 4d-quater |
 | 6a — Format | `SAPLint(action="format")` | — | — | — | Apply project formatter from `system-info.md` |
 | 6a — Cloud-readiness review | — | — | **`sap-abap`** `/abap-cloud-review` | — | Cheap LLM review pass before the ATC round-trip |
@@ -88,7 +92,7 @@ Use this document to:
 | 6d — API design review | — | — | **`sap-api-style`** `/api-style-review` | — | Run BEFORE releasing: a C1 contract freezes naming/design debt |
 | 6d — Release API contract | `SAPManage(action="set_api_state", contract="C1")` | — | — | — | `release_api` arm: release a stable Z dependency so consumers drop to Level A (ARC-1 ≥ 0.9.24; contract support is release-dependent) |
 | 6a — Rollback if regression | `SAPRead(type="VERSIONS")` → `SAPRead(type="VERSION_SOURCE")` → `SAPWrite(action="update")` | — | — | — | Restore the pre-rewrite version from SAP's version history (no git needed) |
-| 6b — Side-by-side scaffold | — | **`modernize-abap-to-btp-cap`** chain, **`convert-ui5-to-fiori-elements`** (UI) | **`sap-cap-capire`** (4 agents: cap-cds-modeler, cap-service-developer, cap-performance-debugger, cap-project-architect), **`sap-btp-developer-guide`**, **`sap-fiori-tools`** + `sapui5` (UI), **`sap-btp-cloud-platform`** (service binding) | `@sap/cds-mcp` (staged-model introspection) | Per-extension CAP project under `bs/<name>/` |
+| 6b — Side-by-side scaffold | — | **`modernize-abap-to-btp-cap`** chain, **`convert-ui5-to-fiori-elements`** or **`modernize-ui5-app`** (UI: annotation-driven vs freestyle) | **`sap-cap-capire`** (4 agents: cap-cds-modeler, cap-service-developer, cap-performance-debugger, cap-project-architect), **`sap-btp-developer-guide`**, **`sap-fiori-tools`** + `sapui5` (UI), **`sap-btp-cloud-platform`** (service binding) | `@sap/cds-mcp` (staged-model introspection) | Per-extension CAP project under `bs/<name>/` |
 | 6b — UI quality gate | — | — | **`sapui5-linter`** `/ui5-linter-check` → `/ui5-linter-fix-plan` | — | When the extension has a UI5/FE frontend |
 | 6b — Destination diagnostics | — | — | **`sap-btp-connectivity`** `/btp-destination-diagnose` | — | When the extension consumes S/4 APIs via destinations |
 | 6b-post — Hand-off gates | — | — | **`sap-cap-capire`** `/cap-deployment-checklist`, **`sap-btp-developer-guide`** `/btp-app-readiness-review`, `sap-btp-best-practices` `/btp-architecture-review` (larger landscapes) | — | Deploy-readiness gates for the generated CAP project, before `cf deploy` |
@@ -104,6 +108,7 @@ Use this document to:
 | 7a — ATC final check | `SAPDiagnose(action="atc")` (whole package) | — | — | — | Cumulative regression |
 | 7b — Unit test full run | `SAPDiagnose(action="unittest")` (whole package) | — | — | — | All tests including pre-existing |
 | 7b-bis — Pre-release transport gate | `SAPTransport(action="list", summary=true)` + `SAPRead(action="diff")` | **`sap-transport-review`** | — | — | Per-object diffs + risk flags before release |
+| 7c-bis — Perf regression on data-access rewrites | `SAPDiagnose(action="odata_perf")` / `SAPDiagnose(action="cds_sql")` | **`debug-slow-sql`** | — | — | Hot objects only; a released `I_*` view can be slower than the SELECT it replaced |
 | 7c — Cross-check against CAP audit | — | [`sap-cap-clean-core-enforce`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-clean-core-enforce/SKILL.md) (other branch) | — | — | Verify BTP-side compliance |
 | 7d — Session learnings | — | **`analyze-chat-session`** | — | — | Propose new skill traps for future runs |
 
