@@ -67,7 +67,7 @@ After plan emission, edit `docs/refactor/<date>-clean-core-plan.md` to override 
 - Verify ARC-1 MCP is connected (`SAPSearch` probe).
 - Verify Apify MCP is available — if not, the skill degrades to **manual mode** (emits "consult URL X" pointers; user pastes back snippets).
 - Resolve `$TARGET` (`--target=…` or ask once).
-- One-time per system: run [`../bootstrap-system-context/SKILL.md`](../bootstrap-system-context/SKILL.md) to capture release / ATC preset / formatter into `system-info.md`.
+- One-time per system: run [`../bootstrap-system-context/SKILL.md`](../bootstrap-system-context/SKILL.md) to capture release / ATC preset / formatter into `system-info.md`. With mcp-sap-docs connected, also snapshot `abap_feature_matrix` for the captured release — Step 6a rewrites must only use language features that exist there.
 - Init `.cache/sap-clean-core/` (gitignored).
 
 ### Step 2 — Inventory + impact analysis
@@ -95,7 +95,7 @@ For each non-A finding, consult sources in this order until evidence is sufficie
 
 1. **Cache hit**: `.cache/sap-clean-core/<sha256-of-topic>/<source>-<date>.md` (30-day TTL stable / 7-day community).
 2. **Tier-1 git** (free): grep `abap-atc-cr-cv-s4hc`, curated `SAP-samples`, `cloud-sdk` (all installed as local clones).
-3. **Tier-4 MCP** (free when installed): `mcp-sap-docs`, `context7`.
+3. **Tier-4 MCP** (free when installed): `mcp-sap-docs` — `sap_get_object_details` for release states, `sap_community_search` (replaces the paid community/blog lookups), `sap_discovery_center_search` for reference architectures, `abap_feature_matrix` for release-gated language features; `@sap/cds-mcp` (`search_docs`/`search_model`) for the CAP side; `context7` for non-SAP libraries.
 4. **Tier-2 Apify** (paid, ~€0.005-0.02/page): `api.sap.com`, `help.sap.com`, `developers.sap.com`, community, blogs.
 5. **Pattern mining** (free, optional): `SAPRead(VERSIONS, VERSION_SOURCE)` for the customer's own history — find how similar Z objects have already been migrated. Cuts rewrite effort 30-50%.
 
@@ -121,12 +121,12 @@ Per object, ask confirmation. Then dispatch:
 
 | Decision | Action |
 |---|---|
-| `rewrite_in_place` | (0) Mechanical findings first: `SAPDiagnose(action="quickfix")` → `apply_quickfix` — burn down ATC noise before hand-rewriting. (1) Generate regression test via [`../generate-abap-unit-test/SKILL.md`](../generate-abap-unit-test/SKILL.md) or [`../generate-cds-unit-test/SKILL.md`](../generate-cds-unit-test/SKILL.md) (CDS on 8.16+: seed from `SAPDiagnose(action="cds_testcases")`). (2) `SAPWrite(action="update")` + `SAPActivate` + `SAPLint(action="format")` + `SAPDiagnose(action="atc")` + `SAPDiagnose(action="unittest")`. (3) Review the edit as a diff: `SAPRead(action="diff")` active-vs-previous. (4) Rollback if regression: restore the pre-rewrite source from version history — `SAPRead(type="VERSION_SOURCE")` + `SAPWrite(action="update")`. For RAP behavior pool delegate to [`../generate-rap-logic/SKILL.md`](../generate-rap-logic/SKILL.md) |
+| `rewrite_in_place` | (0) Mechanical findings first: `SAPDiagnose(action="quickfix")` → `apply_quickfix` — burn down ATC noise before hand-rewriting. (1) Generate regression test via [`../generate-abap-unit-test/SKILL.md`](../generate-abap-unit-test/SKILL.md) or [`../generate-cds-unit-test/SKILL.md`](../generate-cds-unit-test/SKILL.md) (CDS on 8.16+: seed from `SAPDiagnose(action="cds_testcases")`). (2) `SAPWrite(action="update")` + `SAPActivate` + `SAPLint(action="format")`, then a cheap `/abap-cloud-review` pass (sap-abap plugin) BEFORE the ATC round-trip, then `SAPDiagnose(action="atc")` + `SAPDiagnose(action="unittest")`. (3) Review the edit as a diff: `SAPRead(action="diff")` active-vs-previous. (4) Rollback if regression: restore the pre-rewrite source from version history — `SAPRead(type="VERSION_SOURCE")` + `SAPWrite(action="update")`. For RAP behavior pool delegate to [`../generate-rap-logic/SKILL.md`](../generate-rap-logic/SKILL.md) |
 | `extract_to_side_by_side` | Delegate to [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-cap/SKILL.md). ABAP source stays deprecated-tagged until QA confirms parity. UI side: [`../convert-ui5-to-fiori-elements/SKILL.md`](../convert-ui5-to-fiori-elements/SKILL.md) |
 | `keep_at_level_b` | Delegate to [`../sap-object-documenter/SKILL.md`](../sap-object-documenter/SKILL.md) (SKTD rationale + ATC exemption) |
 | `remove_unused` | Stakeholder sign-off → `SAPNavigate(action="references")` last-check → `SAPWrite(action="delete")` |
 
-New decision arm — `release_api`: `SAPManage(action="set_api_state", contract="C1")` on the unreleased Z dependency (see Decision tree note). Idempotent; SAP's "No changes were made" is a no-op success.
+New decision arm — `release_api`: run `/api-style-review` (sap-api-style plugin) on the API surface first — a released contract is a compatibility promise, so naming/design debt gets frozen with it — then `SAPManage(action="set_api_state", contract="C1")` on the unreleased Z dependency (see Decision tree note). Idempotent; SAP's "No changes were made" is a no-op success.
 
 Transport: `SAPTransport(check → create → reassign)`. Optional `SAPGit` commit if `SAP_ALLOW_GIT_WRITES=true`.
 
@@ -159,12 +159,18 @@ No centralized infra. No pre-built KB. Manual mode (no Apify) works at zero cost
 ## Recommended companion plugins
 
 **MUST** (from [secondsky/sap-skills](https://github.com/secondsky/sap-skills)):
-- `sap-abap` — ABAP language patterns (Step 6 rewrite ABAP)
+- `sap-abap` — ABAP language patterns (Step 6 rewrite ABAP) + `/abap-cloud-review` post-rewrite gate (Step 6a)
 - `sap-abap-cds` — CDS view design (Step 6 when introducing CDS)
-- `sap-cap-capire` — CAP framework + 4 dispatchable agents (Step 6 side-by-side)
-- `sap-btp-developer-guide` — BTP reference (Step 1 target resolution)
+- `sap-cap-capire` — CAP framework + 4 dispatchable agents (Step 6 side-by-side) + `/cap-deployment-checklist` hand-off gate
+- `sap-btp-developer-guide` — BTP reference (Step 1 target resolution) + `/btp-app-readiness-review` hand-off gate
 
-**Optional**: Apify MCP (JIT lookup), `mcp-sap-docs` (preferred over Apify when installed), `context7` (non-SAP libs), plus situational SHOULD plugins listed in [`./INTEGRATIONS.md`](./INTEGRATIONS.md).
+**SHOULD**:
+- `sap-api-style` — `/api-style-review` before every `release_api` (Step 6d) and on side-by-side `service.cds` design (Step 6b)
+- `sapui5-linter` — `/ui5-linter-check` + `/ui5-linter-fix-plan` on the side-by-side UI (Step 6b)
+- `sap-btp-connectivity` — `/btp-destination-diagnose` when the extension consumes S/4 APIs via destinations (Step 6b)
+- `sap-btp-best-practices` — `/btp-architecture-review` at hand-off for larger side-by-side landscapes
+
+**Optional**: Apify MCP (JIT lookup), `mcp-sap-docs` (preferred over Apify when installed — incl. `sap_community_search` + `abap_feature_matrix`), `@sap/cds-mcp` (CAP docs + staged-model introspection), `context7` (non-SAP libs), plus situational SHOULD plugins listed in [`./INTEGRATIONS.md`](./INTEGRATIONS.md).
 
 ## When NOT to use
 

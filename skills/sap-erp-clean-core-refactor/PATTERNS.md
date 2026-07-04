@@ -1064,7 +1064,7 @@ Target: only released APIs (`state=released` in the API release contract). Curat
 
 | Situation | Recipe | Effort |
 |---|---|---|
-| Stable Z-API (class/interface/CDS) consumed by other Z code | **Wrap-and-release**: verify stability (`SAPContext(action="impact")` fan-in + owner sign-off) → `SAPManage(action="set_api_state", contract="C1")` → every consumer drops to A | S |
+| Stable Z-API (class/interface/CDS) consumed by other Z code | **Wrap-and-release**: verify stability (`SAPContext(action="impact")` fan-in + owner sign-off) → `/api-style-review` (sap-api-style plugin) on the surface — a released contract freezes naming/design debt → `SAPManage(action="set_api_state", contract="C1")` → every consumer drops to A | S |
 | Unavoidable unreleased SAP dependency | **Tier-2 wrapper** (SAP 3-tier extensibility model): isolate the dependency in a dedicated wrapper package, release the *wrapper's* API (C1), track the SAP successor for later swap | M |
 | Classic BAPI usage (fine on-prem, unreleased in cloud) | Wrap behind a Z-interface now (cheap), swap the implementation to the released OData API when extracting side-by-side | S + later M |
 | CDS views built on classic DDIC views / unreleased base views | Rebase onto released `I_*` interface views; keep field aliases to avoid consumer churn | M |

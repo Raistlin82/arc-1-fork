@@ -87,6 +87,11 @@ The user reviews under the staging dir, then promotes to the real CAP project (r
 
 Generated CAP project is **sandbox**. Manual next steps (not in this skill):
 
+Before deploying, run the two readiness gates on the staged project:
+1. `/cap-deployment-checklist` (sap-cap-capire plugin) — CAP-side deploy readiness
+2. `/btp-app-readiness-review` (sap-btp-developer-guide plugin) — BTP-side readiness (services, roles, entitlements)
+3. Optional, for larger landscapes (multiple extensions on one subaccount): `/btp-architecture-review` (sap-btp-best-practices)
+
 ```bash
 cd <target>/.target-cap-staging
 npm install
@@ -94,6 +99,8 @@ cds deploy --to hana    # or sqlite for dev
 mbt build               # build MTA archive
 cf deploy mta_archives/<archive>.mtar
 ```
+
+If the deployed app cannot reach its S/4 destination, diagnose with `/btp-destination-diagnose` (sap-btp-connectivity plugin).
 
 For audit / hardening / CI gates of the generated CAP project, see [`Raistlin82/sap-cap-toolkit`](https://github.com/Raistlin82/sap-cap-toolkit).
 
@@ -115,4 +122,7 @@ From [secondsky/sap-skills](https://github.com/secondsky/sap-skills):
 - `sap-btp-developer-guide` (MUST) — BTP deployment for Step 6
 - `sap-fiori-tools` (SHOULD) — Fiori Elements scaffolding for Step 5
 
-Plus ARC-1 MCP (mandatory — system probe + source read in Steps 1-2).
+- `sap-api-style` (SHOULD) — `/api-style-review` on the generated `service.cds` (Step 4)
+- `sapui5-linter` (SHOULD) — `/ui5-linter-check` + `/ui5-linter-fix-plan` on the Step 5 UI
+
+Plus ARC-1 MCP (mandatory — system probe + source read in Steps 1-2) and `@sap/cds-mcp` (recommended — authoritative CAP docs via `search_docs` + staged-model introspection via `search_model` in Steps 3-4).

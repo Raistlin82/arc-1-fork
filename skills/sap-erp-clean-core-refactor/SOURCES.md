@@ -61,8 +61,15 @@ When the consuming environment has these MCP servers configured, the skill prefe
 
 | MCP server | Replaces Apify for | When preferred |
 |---|---|---|
-| `mcp-sap-docs` | help.sap.com, abap-atc-cr-cv-s4hc queries | When `mcp__sap-docs__*` tools are available |
+| `mcp-sap-docs` — `sap_get_object_details` | abap-atc-cr-cv-s4hc queries (release states + successors) | When `mcp__sap-docs__*` tools are available |
+| `mcp-sap-docs` — `sap_community_search` | `community-sap-com` + `blogs-sap-com` rows | Always when available — free vs ~€0.01/page |
+| `mcp-sap-docs` — `sap_discovery_center_search` / `sap_discovery_center_service` | `discovery-center` row (SPA scrape) | Always when available |
+| `mcp-sap-docs` — `abap_feature_matrix` | help.sap.com language-availability lookups | Step 1 bootstrap + Step 6a "can I use this syntax on this release?" |
+| `mcp-sap-docs` — `search` / `fetch` | `help-sap-*` rows | When the query is doc-shaped rather than page-shaped |
+| `@sap/cds-mcp` — `search_docs` / `search_model` | `cap-cloud-sap` row; plus staged-CAP-model introspection Apify can't do | When the finding concerns the CAP side (Step 6b, `modernize-abap-cap-*`) |
 | `context7` | Generic library docs (non-SAP) | When the lookup is about an npm package or non-SAP library |
+
+With `mcp-sap-docs` + `@sap/cds-mcp` both connected, Tier 2 shrinks to the genuinely page-shaped lookups (`api-sap-com` service lifecycle pages, `learning-sap-com`) — the typical refactor cost drops accordingly.
 
 ## When-to-use heuristic — what source for what finding
 

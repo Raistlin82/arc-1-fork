@@ -93,6 +93,8 @@ Write `<target>/db/schema.cds` in CAP pretty-print format. Validate via:
 npx cds compile <target>/db/schema.cds --to edmx > /dev/null && echo "OK"
 ```
 
+With `@sap/cds-mcp` connected, cross-check doubtful mappings against the authoritative docs (`search_docs`, e.g. "temporal aspect", "localized entity") and introspect the staged model with `search_model` — cheaper than compile-error roundtrips.
+
 ### Step 6 — Migration notes
 
 Write `<target>/docs/schema-notes.md` with:

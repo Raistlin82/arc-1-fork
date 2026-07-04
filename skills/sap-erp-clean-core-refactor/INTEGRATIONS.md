@@ -57,7 +57,7 @@ Use this document to:
 | 4a — Cache-first lookup | (filesystem read) | — | — | — | 30d TTL stable, 7d community/blogs |
 | 4b — Tier 1 git lookup | (filesystem grep) | — | — | git clones: `abap-atc-cr-cv-s4hc`, `SAP-samples`, `cloud-sdk` | Free, fast, authoritative for object classification |
 | 4b — Tier 2 JIT Apify | — | — | — | `apify/website-content-crawler`, `apify/puppeteer-scraper` | Per-page cost ~€0.005-0.02; user pays |
-| 4b — Tier 4 MCP-server lookup | — | — | — | `mcp-sap-docs`, `context7` | Preferred when installed (free) |
+| 4b — Tier 4 MCP-server lookup | — | — | — | `mcp-sap-docs` (`sap_get_object_details`, `sap_community_search`, `sap_discovery_center_search`, `abap_feature_matrix`), `@sap/cds-mcp` (`search_docs`/`search_model`), `context7` | Preferred when installed (free); `sap_community_search` supersedes the paid community/blog Apify rows |
 | 4c — Cite + cache | (filesystem write) | — | — | — | `.cache/sap-clean-core/<topic-hash>/<source>-<date>.md` |
 | 4d — Budget exhaustion fallback | — | **`explain-abap-code`** (single-object deep dive) | — | — | Reduces human research effort ~50% |
 | 4d-quater — Pattern mining | **`SAPRead(VERSIONS)`**, **`SAPRead(VERSION_SOURCE)`** | — | — | — | Mine customer's own history for refactor patterns. ⚠️ Reduces rewrite effort 30-50% on customers with established conventions |
@@ -81,12 +81,17 @@ Use this document to:
 | 6a-0 — Mechanical quickfixes first | `SAPDiagnose(action="quickfix")` → `SAPDiagnose(action="apply_quickfix")` | — | — | — | Burn down ATC noise before any hand rewrite |
 | 6a — Rewrite in-place: read + write | `SAPRead(VERSIONS)`, `SAPWrite(action="update")`, `SAPActivate(scope="object")` | **`generate-rap-logic`** (when rewrite goes to RAP behavior pool), **`generate-rap-service-researched`** (full RAP stack, rare) | **`sap-abap`** (language patterns), **`sap-abap-cds`** (CDS views if introduced) | — | Pattern-mined via Step 4d-quater |
 | 6a — Format | `SAPLint(action="format")` | — | — | — | Apply project formatter from `system-info.md` |
+| 6a — Cloud-readiness review | — | — | **`sap-abap`** `/abap-cloud-review` | — | Cheap LLM review pass before the ATC round-trip |
 | 6a — ATC regression | `SAPDiagnose(action="atc")` | — | — | — | Gate: blocks loop if regression |
 | 6a — Unit test regression | `SAPDiagnose(action="unittest")` | — | — | — | Gate: blocks loop on test failure |
 | 6a — Review edit as diff | `SAPRead(action="diff")` | — | — | — | Active-vs-previous version diff of the rewrite |
+| 6d — API design review | — | — | **`sap-api-style`** `/api-style-review` | — | Run BEFORE releasing: a C1 contract freezes naming/design debt |
 | 6d — Release API contract | `SAPManage(action="set_api_state", contract="C1")` | — | — | — | `release_api` arm: release a stable Z dependency so consumers drop to Level A (ARC-1 ≥ 0.9.24; contract support is release-dependent) |
 | 6a — Rollback if regression | `SAPRead(type="VERSIONS")` → `SAPRead(type="VERSION_SOURCE")` → `SAPWrite(action="update")` | — | — | — | Restore the pre-rewrite version from SAP's version history (no git needed) |
-| 6b — Side-by-side scaffold | — | **`modernize-abap-to-btp-cap`** chain, **`convert-ui5-to-fiori-elements`** (UI) | **`sap-cap-capire`** (4 agents: cap-cds-modeler, cap-service-developer, cap-performance-debugger, cap-project-architect), **`sap-btp-developer-guide`**, **`sap-fiori-tools`** + `sapui5` (UI), **`sap-btp-cloud-platform`** (service binding) | — | Per-extension CAP project under `bs/<name>/` |
+| 6b — Side-by-side scaffold | — | **`modernize-abap-to-btp-cap`** chain, **`convert-ui5-to-fiori-elements`** (UI) | **`sap-cap-capire`** (4 agents: cap-cds-modeler, cap-service-developer, cap-performance-debugger, cap-project-architect), **`sap-btp-developer-guide`**, **`sap-fiori-tools`** + `sapui5` (UI), **`sap-btp-cloud-platform`** (service binding) | `@sap/cds-mcp` (staged-model introspection) | Per-extension CAP project under `bs/<name>/` |
+| 6b — UI quality gate | — | — | **`sapui5-linter`** `/ui5-linter-check` → `/ui5-linter-fix-plan` | — | When the extension has a UI5/FE frontend |
+| 6b — Destination diagnostics | — | — | **`sap-btp-connectivity`** `/btp-destination-diagnose` | — | When the extension consumes S/4 APIs via destinations |
+| 6b-post — Hand-off gates | — | — | **`sap-cap-capire`** `/cap-deployment-checklist`, **`sap-btp-developer-guide`** `/btp-app-readiness-review`, `sap-btp-best-practices` `/btp-architecture-review` (larger landscapes) | — | Deploy-readiness gates for the generated CAP project, before `cf deploy` |
 | 6c — Document Level B keeper | `SAPWrite(type="SKTD", action="create"\|"update")` | **`sap-object-documenter`** | — | — | Markdown rationale + ATC exemption update |
 | 6.5 — Transport requirement check | `SAPTransport(action="check")` | — | — | — | Ensure deps reachable |
 | 6.5 — Transport create / reuse | `SAPTransport(action="create"|"reassign")` | — | — | — | One TR per phase or per cluster |
@@ -129,15 +134,17 @@ The table below shows **which secondsky plugins this skill enforces as MUST / SH
 
 | Plugin | Severity | Step where invoked |
 |---|---|---|
-| `sap-abap` | **MUST** | Step 6a rewrite_in_place (every ABAP rewrite consults its language patterns) |
+| `sap-abap` | **MUST** | Step 6a rewrite_in_place (every ABAP rewrite consults its language patterns) + `/abap-cloud-review` post-rewrite gate |
 | `sap-abap-cds` | **MUST** | Step 6a when rewrite introduces CDS views |
-| `sap-cap-capire` (with 4 agents) | **MUST** | Step 6b side-by-side scaffold |
-| `sap-btp-developer-guide` | **MUST** | Step 1c target resolution, Step 6b scaffold |
+| `sap-cap-capire` (with 4 agents) | **MUST** | Step 6b side-by-side scaffold + `/cap-deployment-checklist` hand-off gate |
+| `sap-btp-developer-guide` | **MUST** | Step 1c target resolution, Step 6b scaffold + `/btp-app-readiness-review` hand-off gate |
+| `sap-api-style` | SHOULD | Step 6d `/api-style-review` before every `release_api`; Step 6b `service.cds` design review |
 | `sapui5` (with 4 agents) | SHOULD | Step 6b when extension has UI |
 | `sap-fiori-tools` | SHOULD | Step 6b Fiori Elements UI generation |
-| `sapui5-linter` | SHOULD | Step 6b post-scaffold UI quality gate |
+| `sapui5-linter` | SHOULD | Step 6b post-scaffold UI quality gate (`/ui5-linter-check` → `/ui5-linter-fix-plan`) |
 | `sap-btp-cloud-platform` | SHOULD | Step 6b service binding |
-| `sap-btp-connectivity` | SHOULD | Step 6b when extension uses destinations |
+| `sap-btp-connectivity` | SHOULD | Step 6b when extension uses destinations (`/btp-destination-diagnose`) |
+| `sap-btp-best-practices` | OPTIONAL | Hand-off `/btp-architecture-review` for larger side-by-side landscapes |
 | `sap-cloud-sdk` | SHOULD | Step 6b when extension uses Cloud SDK |
 | `sap-cloud-sdk-ai` | OPTIONAL | Step 6b when extension is AI-heavy |
 | `sap-btp-cloud-logging` | OPTIONAL | Step 6b production observability |
@@ -154,7 +161,6 @@ Plugins **NOT** used by this skill (out of scope):
 - `sap-sqlscript`, `sap-hana-ml`, `sap-hana-cloud-data-intelligence`, `sap-hana-cli` — HANA-native dev
 - `sap-datasphere`, `sap-sac-*` — analytics
 - `sap-ai-core` — AI infrastructure
-- `sap-api-style` — API design guidelines
 
 ## Cost model — by integration layer
 
