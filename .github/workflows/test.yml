@@ -93,6 +93,9 @@ jobs:
       - name: Check size and schema budgets
         run: npm run check:sizes
 
+      - name: Check skill tool references
+        run: npm run check:skill-refs
+
       - name: npx package smoke test
         run: npm run test:npx-smoke
 

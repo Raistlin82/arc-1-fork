@@ -638,7 +638,7 @@ Repeat the pattern for each `<child_projection_X>`. Each child gets:
 The SRVB needs republishing for the new annotations to surface in `$metadata`:
 
 ```text
-SAPWrite(action="publish_srvb", name="<V4_SRVB>")
+SAPActivate(action="publish_srvb", name="<V4_SRVB>")
 ```
 
 ### 4d. Verify annotations land in `$metadata`
@@ -946,7 +946,7 @@ ARC-1 calls used:
   - SAPRead(type=SRVB, name=<V4_SRVB>)
   - SAPWrite(action=update, type=DDLS, ...) × <m> projections
   - SAPActivate(type=DDLS, ...)
-  - SAPWrite(action=publish_srvb, name=<V4_SRVB>)
+  - SAPActivate(action=publish_srvb, name=<V4_SRVB>)
   - (Optional) SAPWrite(action=update, type=BDEF, ...) + SAPActivate for BDEF precheck
 
 Fiori MCP calls used:
@@ -966,7 +966,7 @@ UI5 MCP calls used:
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `$metadata` reflects no annotations after `SAPWrite update DDLS` | DDLS reactivated but SRVB wasn't republished | `SAPWrite(action="publish_srvb", name="<V4_SRVB>")` |
+| `$metadata` reflects no annotations after `SAPWrite update DDLS` | DDLS reactivated but SRVB wasn't republished | `SAPActivate(action="publish_srvb", name="<V4_SRVB>")` |
 | `mcp__fiori-mcp__list_functionalities` returns empty / fails | Server not registered, or `npx` cache stale | Verify `.cursor/mcp.json`; in a fresh shell, `npx --yes @sap-ux/fiori-mcp-server@latest fiori-mcp` should print server-ready logs |
 | Generator fails with "service unreachable" | The `<V4_service_URL>` is gated by 403 because of the V4 routing group | Surface the `/n/IWFND/MAINT_SERVICE` manual step from `migrate-segw-to-rap.md` Phase 6 |
 | Generator succeeds but FE app shows a blank shell | `mainEntity` passed without annotated CDS | Re-check Phase 4 — every entity in the `@UI.Facet` chain needs at least `@UI.LineItem` and (for OP root) `@UI.HeaderInfo` |
