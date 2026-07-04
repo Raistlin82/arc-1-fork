@@ -27,17 +27,17 @@ Use this document to:
 
 | Sub-step | ARC-1 MCP | arc-1 skills | secondsky plugin | External | Notes |
 |---|---|---|---|---|---|
-| 1a — ARC-1 connectivity probe | `SAPSearch(package_lookup, "<pkg>")` | — | — | — | Cheap call to verify the server responds + auth works |
+| 1a — ARC-1 connectivity probe | `SAPSearch(query="<pkg>")` | — | — | — | Cheap call to verify the server responds + auth works |
 | 1b — Apify MCP availability | — | — | — | `mcp__apify__*` | Degrades to manual mode if absent |
 | 1c — Resolve `$TARGET` | — | — | `sap-btp-developer-guide` (target landscape reference) | — | Default `btp-cf` |
 | 1d — Init local cache | (bash) | — | — | — | `.cache/sap-clean-core/` gitignored |
-| 1e — Bootstrap system context | `SAPManage(probe_features)` + `SAPRead(SKTD)` | **`bootstrap-system-context`** | — | — | One-time per system; produces `system-info.md` |
+| 1e — Bootstrap system context | `SAPManage(action="probe")` + `SAPRead(type="SKTD")` | **`bootstrap-system-context`** | — | — | One-time per system; produces `system-info.md` |
 
 ### Step 2 — Inventory
 
 | Sub-step | ARC-1 MCP | arc-1 skills | secondsky plugin | External | Notes |
 |---|---|---|---|---|---|
-| 2a — Package enumeration | `SAPSearch(package_tree, root=<pkg>)` | — | — | — | Recursive sub-package walk |
+| 2a — Package enumeration | `SAPRead(type="DEVC", name="<pkg>")` | — | — | — | Recursive sub-package walk (re-read each subpackage) |
 | 2b — Object enumeration | `SAPSearch(tadir_lookup, devclass=<pkg>)` | — | — | — | All object types per package |
 | 2c — Namespace filter | (post-processing) | — | — | — | Keep only `Z*`, `Y*`, customer namespace |
 | 2d — Unused detection | `SAPQuery(SCMON / SUSG)` (requires `SAP_ALLOW_FREE_SQL=true`) | **`sap-unused-code`** | — | — | Last 6 months runtime hits |
@@ -47,7 +47,7 @@ Use this document to:
 
 | Sub-step | ARC-1 MCP | arc-1 skills | secondsky plugin | External | Notes |
 |---|---|---|---|---|---|
-| 3a — ATC run | `SAPLint(action="run_atc", target_level="A")` | **`sap-clean-core-atc`** | — | — | Per-object Level A/B/C/D |
+| 3a — ATC run | `SAPDiagnose(action="atc", variant="ABAP_CLOUD_READINESS")` | **`sap-clean-core-atc`** | — | — | Per-object Level A/B/C/D. ⚠️ ATC skips `$TMP` — transportable packages only |
 | 3b — Augment with finding categories | (post-processing) | — | — | — | non-released-api / direct-db-access / modification / enhancement-point |
 
 ### Step 4 — JIT documentation lookup + decision
@@ -77,14 +77,17 @@ Use this document to:
 |---|---|---|---|---|---|
 | 6-pre — Generate regression tests (CLAS/FUGR) | — | **`generate-abap-unit-test`** | `sap-abap` (test patterns reference) | — | Capture current behaviour as baseline |
 | 6-pre — Generate regression tests (DDLS) | — | **`generate-cds-unit-test`** | `sap-abap-cds` (CDS Test Double Framework patterns) | — | For CDS views |
+| 6a-0 — Mechanical quickfixes first | `SAPDiagnose(action="quickfix")` → `SAPDiagnose(action="apply_quickfix")` | — | — | — | Burn down ATC noise before any hand rewrite |
 | 6a — Rewrite in-place: read + write | `SAPRead(VERSIONS)`, `SAPWrite(action="update")`, `SAPActivate(scope="object")` | **`generate-rap-logic`** (when rewrite goes to RAP behavior pool), **`generate-rap-service-researched`** (full RAP stack, rare) | **`sap-abap`** (language patterns), **`sap-abap-cds`** (CDS views if introduced) | — | Pattern-mined via Step 4d-quater |
 | 6a — Format | `SAPLint(action="format")` | — | — | — | Apply project formatter from `system-info.md` |
-| 6a — ATC regression | `SAPLint(action="run_atc")` | — | — | — | Gate: blocks loop if regression |
-| 6a — Unit test regression | `SAPDiagnose(action="run_unit_tests")` | — | — | — | Gate: blocks loop on test failure |
+| 6a — ATC regression | `SAPDiagnose(action="atc")` | — | — | — | Gate: blocks loop if regression |
+| 6a — Unit test regression | `SAPDiagnose(action="unittest")` | — | — | — | Gate: blocks loop on test failure |
+| 6a — Review edit as diff | `SAPRead(action="diff")` | — | — | — | Active-vs-previous version diff of the rewrite |
+| 6d — Release API contract | `SAPManage(action="set_api_state", contract="C1")` | — | — | — | `release_api` arm: release a stable Z dependency so consumers drop to Level A (ARC-1 ≥ 0.9.24; contract support is release-dependent) |
 | 6a — Rollback if regression | `SAPGit(revert)` | — | — | — | Requires `SAP_ALLOW_GIT_WRITES=true` |
 | 6b — Side-by-side scaffold | — | **`modernize-abap-to-btp-cap`** chain, **`convert-ui5-to-fiori-elements`** (UI) | **`sap-cap-capire`** (4 agents: cap-cds-modeler, cap-service-developer, cap-performance-debugger, cap-project-architect), **`sap-btp-developer-guide`**, **`sap-fiori-tools`** + `sapui5` (UI), **`sap-btp-cloud-platform`** (service binding) | — | Per-extension CAP project under `bs/<name>/` |
-| 6c — Document Level B keeper | `SAPWrite(action="attach_sktd")` | **`sap-object-documenter`** | — | — | Markdown rationale + ATC exemption update |
-| 6.5 — Transport requirement check | `SAPTransport(action="requirement_check")` | — | — | — | Ensure deps reachable |
+| 6c — Document Level B keeper | `SAPWrite(type="SKTD", action="create"\|"update")` | **`sap-object-documenter`** | — | — | Markdown rationale + ATC exemption update |
+| 6.5 — Transport requirement check | `SAPTransport(action="check")` | — | — | — | Ensure deps reachable |
 | 6.5 — Transport create / reuse | `SAPTransport(action="create"|"reassign")` | — | — | — | One TR per phase or per cluster |
 | 6.5 — gCTS / abapGit commit | `SAPGit(commit)` | — | — | — | Optional; with `SAP_ALLOW_GIT_WRITES=true` |
 
@@ -92,8 +95,9 @@ Use this document to:
 
 | Sub-step | ARC-1 MCP | arc-1 skills | secondsky plugin | External | Notes |
 |---|---|---|---|---|---|
-| 7a — ATC final check | `SAPLint(action="run_atc")` (whole package) | — | — | — | Cumulative regression |
-| 7b — Unit test full run | `SAPDiagnose(action="run_unit_tests")` (whole package) | — | — | — | All tests including pre-existing |
+| 7a — ATC final check | `SAPDiagnose(action="atc")` (whole package) | — | — | — | Cumulative regression |
+| 7b — Unit test full run | `SAPDiagnose(action="unittest")` (whole package) | — | — | — | All tests including pre-existing |
+| 7b-bis — Pre-release transport gate | `SAPTransport(summary)` + `SAPRead(action="diff")` | **`sap-transport-review`** | — | — | Per-object diffs + risk flags before release |
 | 7c — Cross-check against CAP audit | — | [`sap-cap-clean-core-enforce`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-clean-core-enforce/SKILL.md) (other branch) | — | — | Verify BTP-side compliance |
 | 7d — Session learnings | — | **`analyze-chat-session`** | — | — | Propose new skill traps for future runs |
 
@@ -104,17 +108,17 @@ The table below shows **what fraction of ARC-1 MCP capabilities the skill curren
 | ARC-1 MCP tool | Engagement in this skill |
 |---|---|
 | `SAPRead` (source + VERSIONS + VERSION_SOURCE + SKTD) | 🟢 Step 2 (inventory), Step 4d-quater (mining), Step 6a (pre-write VERSIONS check), Step 6c (read SKTD) |
-| `SAPSearch` (tadir_lookup + package_tree + where_used + full-text) | 🟢 Step 2 (enumerate), Step 6 (where_used for unused removal) |
-| `SAPWrite` (update + delete + attach_sktd + batch_create) | 🟢 Step 6a (update), Step 6c (attach_sktd), Step 6 unused (delete) |
+| `SAPSearch` (object + tadir_lookup + source_code full-text) | 🟢 Step 2 (enumerate), Step 6 (where-used via `SAPNavigate(references)` for unused removal) |
+| `SAPWrite` (update + delete + SKTD create/update + batch_create) | 🟢 Step 6a (update), Step 6c (attach_sktd), Step 6 unused (delete) |
 | `SAPActivate` | 🟢 Step 6a (post-write activation) |
 | `SAPNavigate` (go-to-definition, find references) | 🟡 Implicit in `SAPContext`; not directly called |
 | `SAPQuery` (free SQL, off by default) | 🟡 Used by `sap-unused-code` (delegate) — requires `SAP_ALLOW_FREE_SQL=true` |
-| `SAPTransport` | 🟢 Step 6.5 (requirement_check + create + reassign) |
+| `SAPTransport` | 🟢 Step 6.5 (check + create + reassign), Step 7b-bis (summary) |
 | `SAPGit` | 🟡 Step 6a rollback + Step 6.5 commit (both opt-in via `SAP_ALLOW_GIT_WRITES=true`) |
 | `SAPContext` (impact + reverse-deps + CDS impact) | 🟢 Step 2e (MOST IMPORTANT call — drives risk multipliers) |
-| `SAPLint` (run_atc + format + get_formatter_settings) | 🟢 Step 3 (classification), Step 6a (pre+post regression + format) |
-| `SAPDiagnose` (syntax + unit tests + ATC + quickfix + dumps + profiler) | 🟢 Step 6a (run_unit_tests), Step 7 (full run) |
-| `SAPManage` (capability detection) | 🟢 Step 1e (via `bootstrap-system-context`) |
+| `SAPLint` (lint + format + get_formatter_settings) | 🟢 Step 6a (format + local lint) |
+| `SAPDiagnose` (atc + unittest + quickfix/apply_quickfix + cds_testcases + syntax + dumps + traces) | 🟢 Step 3 (ATC classification), Step 6a-0 (quickfixes), Step 6a (unittest), Step 7 (full run) |
+| `SAPManage` (probe + set_api_state) | 🟢 Step 1e (via `bootstrap-system-context`), Step 6d (`release_api` — release a Z API contract, C0–C4) |
 
 **Overall**: the skill engages all 12 ARC-1 tools at least once. `SAPNavigate` is the only one used implicitly (via `SAPContext`); explicit calls are not needed for the refactor workflow.
 
@@ -169,5 +173,5 @@ Plugins **NOT** used by this skill (out of scope):
 - [`./SKILL.md`](./SKILL.md) — main protocol; this document is the integration deep-dive.
 - [`./SOURCES.md`](./SOURCES.md) — authoritative SAP source catalog (Tier 1-4).
 - [`sap-cap-fiori-battle-tested-patterns`](./PATTERNS.md) — broader companion plugin map (Category 8) for the CAP-side toolkit.
-- [ARC-1 README](https://github.com/marianfoo/arc-1) — full MCP capability reference.
+- [ARC-1 README](https://github.com/arc-mcp/arc-1) — full MCP capability reference.
 - [secondsky/sap-skills](https://github.com/secondsky/sap-skills) — 32-plugin SAP skill catalog.

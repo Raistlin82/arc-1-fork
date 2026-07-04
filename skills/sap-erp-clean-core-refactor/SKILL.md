@@ -50,6 +50,8 @@ After plan emission, edit `docs/refactor/<date>-clean-core-plan.md` to override 
 
 **Side-by-side outcome** = Level A on the ERP side (the Z object disappears; logic lives on BTP under separate Clean Core gate).
 
+**`release_api` shortcut (C/D → A without a rewrite).** When an object is C or D *only because it consumes another Z/Y object* that has no released API contract, the cheapest path is releasing the dependency itself: `SAPManage(action="set_api_state", contract="C1")` (ARC-1 ≥ 0.9.24). Contracts C0–C4 are type- and release-dependent — don't pre-judge; send the default and let SAP's error list the supported ones. The same move completes a B→A escalation: after a rewrite stabilizes a Z-API (CDS view, class), release it so every consumer drops to Level A. Check the dependency is genuinely stable first (`SAPContext(action="impact")` fan-in + owner sign-off) — a released contract is a compatibility promise.
+
 ## Workflow
 
 ### Step 1 — Pre-flight
@@ -62,7 +64,8 @@ After plan emission, edit `docs/refactor/<date>-clean-core-plan.md` to override 
 
 ### Step 2 — Inventory + impact analysis
 
-- Enumerate Z*/Y* objects: `SAPSearch(package_tree)` + `SAPSearch(tadir_lookup)`.
+- Enumerate Z*/Y* objects: `SAPRead(type="DEVC", name="<pkg>")` (walk subpackages recursively) + `SAPSearch(searchType="tadir_lookup")`.
+- Cheap red-flag pre-scan: `SAPRead(…, grep="EXEC SQL|CALL 'SYSTEM'|CALL TRANSACTION|SUBMIT ")` per object — spots forbidden statements without downloading full sources; feeds the classification step's triage order (worst first).
 - Dead-code: delegate to [`../sap-unused-code/SKILL.md`](../sap-unused-code/SKILL.md) (requires `SAP_ALLOW_FREE_SQL=true`).
 - **Impact analysis** for every non-A candidate: `SAPContext(action="impact")` → fan-in count drives effort × risk:
 
@@ -108,16 +111,20 @@ Per object, ask confirmation. Then dispatch:
 
 | Decision | Action |
 |---|---|
-| `rewrite_in_place` | (1) Generate regression test via [`../generate-abap-unit-test/SKILL.md`](../generate-abap-unit-test/SKILL.md) or [`../generate-cds-unit-test/SKILL.md`](../generate-cds-unit-test/SKILL.md). (2) `SAPWrite(action="update")` + `SAPActivate` + `SAPLint(format+run_atc)` + `SAPDiagnose(run_unit_tests)`. (3) Rollback via `SAPGit` if regression. For RAP behavior pool delegate to [`../generate-rap-logic/SKILL.md`](../generate-rap-logic/SKILL.md) |
+| `rewrite_in_place` | (0) Mechanical findings first: `SAPDiagnose(action="quickfix")` → `apply_quickfix` — burn down ATC noise before hand-rewriting. (1) Generate regression test via [`../generate-abap-unit-test/SKILL.md`](../generate-abap-unit-test/SKILL.md) or [`../generate-cds-unit-test/SKILL.md`](../generate-cds-unit-test/SKILL.md) (CDS on 8.16+: seed from `SAPDiagnose(action="cds_testcases")`). (2) `SAPWrite(action="update")` + `SAPActivate` + `SAPLint(action="format")` + `SAPDiagnose(action="atc")` + `SAPDiagnose(action="unittest")`. (3) Review the edit as a diff: `SAPRead(action="diff")` active-vs-previous. (4) Rollback via `SAPGit` if regression. For RAP behavior pool delegate to [`../generate-rap-logic/SKILL.md`](../generate-rap-logic/SKILL.md) |
 | `extract_to_side_by_side` | Delegate to [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-cap/SKILL.md). ABAP source stays deprecated-tagged until QA confirms parity. UI side: [`../convert-ui5-to-fiori-elements/SKILL.md`](../convert-ui5-to-fiori-elements/SKILL.md) |
 | `keep_at_level_b` | Delegate to [`../sap-object-documenter/SKILL.md`](../sap-object-documenter/SKILL.md) (SKTD rationale + ATC exemption) |
-| `remove_unused` | Stakeholder sign-off → `SAPSearch(where_used)` → `SAPWrite(action="delete")` |
+| `remove_unused` | Stakeholder sign-off → `SAPNavigate(action="references")` last-check → `SAPWrite(action="delete")` |
 
-Transport: `SAPTransport(requirement_check → create → reassign)`. Optional `SAPGit` commit if `SAP_ALLOW_GIT_WRITES=true`.
+New decision arm — `release_api`: `SAPManage(action="set_api_state", contract="C1")` on the unreleased Z dependency (see Decision tree note). Idempotent; SAP's "No changes were made" is a no-op success.
+
+Transport: `SAPTransport(check → create → reassign)`. Optional `SAPGit` commit if `SAP_ALLOW_GIT_WRITES=true`.
 
 ### Step 7 — Verify
 
-Cumulative `SAPLint(run_atc)` + `SAPDiagnose(run_unit_tests)` on the whole package. Net ATC regression aborts the loop. Optional `analyze-chat-session` at session end for learnings.
+Cumulative `SAPDiagnose(action="atc")` + `SAPDiagnose(action="unittest")` on the whole package. Net ATC regression aborts the loop. Before releasing the transport, gate the changed set with [`../sap-transport-review/SKILL.md`](../sap-transport-review/SKILL.md) (per-object diffs + risk flags). Optional `analyze-chat-session` at session end for learnings.
+
+> **ATC skips `$TMP`/local objects** — zero findings on a local package means "not checked", not "clean". Classification and regression gates only work on transportable packages (see [`../sap-clean-core-atc/SKILL.md`](../sap-clean-core-atc/SKILL.md)).
 
 ## Cost
 
