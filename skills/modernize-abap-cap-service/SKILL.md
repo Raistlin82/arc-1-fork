@@ -51,7 +51,7 @@ Exception class → HTTP code defaults:
 
 ### Step 1 — Enumerate
 
-`SAPSearch(tadir_lookup, devclass=<pkg>, object IN ('FUGR','PROG','CLAS'))`.
+`SAPSearch(searchType="tadir_lookup", packageName="<pkg>", objectTypes=["FUGR","PROG","CLAS"])`.
 
 Filter out:
 - Helper / utility classes already covered by `migrate-custom-code` (those rewrite in-place, not exposed).
@@ -61,9 +61,10 @@ Filter out:
 ### Step 2 — Read source + signatures
 
 Per FM / method / report:
-- `SAPRead(type='FUNC', name=<fm>)` — I/O parameters + raising classes.
-- `SAPRead(type='CLAS', name=<cls>)` — public methods + types.
-- `SAPContext(action='impact', target=<obj>)` — caller fan-in.
+- `SAPRead(type="FUNC", name="<fm>", group="<fugr>", includeSignature=true)` — I/O parameters + raising classes (FUNC reads require the enclosing function group).
+- Whole-group sweep: `SAPRead(type="FUGR", name="<fugr>", expand_includes=true)` — FM bodies live in nested `LZ…U01` includes; without the flag you get only the group shell.
+- `SAPRead(type="CLAS", name="<cls>", format="structured")` — public methods + types.
+- `SAPContext(action="impact", type="<type>", name="<obj>")` — caller fan-in.
 
 ### Step 3 — Decide service shape
 

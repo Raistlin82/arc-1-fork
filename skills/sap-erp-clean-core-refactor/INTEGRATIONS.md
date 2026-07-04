@@ -70,6 +70,7 @@ Use this document to:
 |---|---|---|---|---|---|
 | 5a — Generate plan markdown | (filesystem write) | — | — | — | `docs/refactor/<date>-clean-core-plan.md` |
 | 5b — Per-object decision rows | (templating) | — | — | — | Object / Start Level / Target Level / Decision / Replacement / Effort / Risk / KB evidence |
+| 5c — Stakeholder dossier (`--report=dossier`) | — | **`sap-migration-dossier`** | — | — | HTML/JSON/CSV/graph + review cards; plan markdown stays the editable source of truth |
 
 ### Step 6 — Execute (opt-in)
 
@@ -84,7 +85,7 @@ Use this document to:
 | 6a — Unit test regression | `SAPDiagnose(action="unittest")` | — | — | — | Gate: blocks loop on test failure |
 | 6a — Review edit as diff | `SAPRead(action="diff")` | — | — | — | Active-vs-previous version diff of the rewrite |
 | 6d — Release API contract | `SAPManage(action="set_api_state", contract="C1")` | — | — | — | `release_api` arm: release a stable Z dependency so consumers drop to Level A (ARC-1 ≥ 0.9.24; contract support is release-dependent) |
-| 6a — Rollback if regression | `SAPGit(revert)` | — | — | — | Requires `SAP_ALLOW_GIT_WRITES=true` |
+| 6a — Rollback if regression | `SAPRead(type="VERSIONS")` → `SAPRead(type="VERSION_SOURCE")` → `SAPWrite(action="update")` | — | — | — | Restore the pre-rewrite version from SAP's version history (no git needed) |
 | 6b — Side-by-side scaffold | — | **`modernize-abap-to-btp-cap`** chain, **`convert-ui5-to-fiori-elements`** (UI) | **`sap-cap-capire`** (4 agents: cap-cds-modeler, cap-service-developer, cap-performance-debugger, cap-project-architect), **`sap-btp-developer-guide`**, **`sap-fiori-tools`** + `sapui5` (UI), **`sap-btp-cloud-platform`** (service binding) | — | Per-extension CAP project under `bs/<name>/` |
 | 6c — Document Level B keeper | `SAPWrite(type="SKTD", action="create"\|"update")` | **`sap-object-documenter`** | — | — | Markdown rationale + ATC exemption update |
 | 6.5 — Transport requirement check | `SAPTransport(action="check")` | — | — | — | Ensure deps reachable |
@@ -97,7 +98,7 @@ Use this document to:
 |---|---|---|---|---|---|
 | 7a — ATC final check | `SAPDiagnose(action="atc")` (whole package) | — | — | — | Cumulative regression |
 | 7b — Unit test full run | `SAPDiagnose(action="unittest")` (whole package) | — | — | — | All tests including pre-existing |
-| 7b-bis — Pre-release transport gate | `SAPTransport(summary)` + `SAPRead(action="diff")` | **`sap-transport-review`** | — | — | Per-object diffs + risk flags before release |
+| 7b-bis — Pre-release transport gate | `SAPTransport(action="list", summary=true)` + `SAPRead(action="diff")` | **`sap-transport-review`** | — | — | Per-object diffs + risk flags before release |
 | 7c — Cross-check against CAP audit | — | [`sap-cap-clean-core-enforce`](https://github.com/Raistlin82/sap-cap-toolkit/blob/main/skills/sap-cap-clean-core-enforce/SKILL.md) (other branch) | — | — | Verify BTP-side compliance |
 | 7d — Session learnings | — | **`analyze-chat-session`** | — | — | Propose new skill traps for future runs |
 

@@ -35,6 +35,7 @@ Examples:
 | `--push-to-a=A,B,C` | Selective B→A for listed objects only |
 | `--force-refresh` | Bypass the 30-day cache; re-query sources |
 | `--budget=N` | Per-finding Apify lookup budget (default 5) |
+| `--report=dossier` | Emit the plan through [`../sap-migration-dossier/SKILL.md`](../sap-migration-dossier/SKILL.md) (HTML/JSON/CSV/graph + review cards) instead of the plain markdown plan |
 
 After plan emission, edit `docs/refactor/<date>-clean-core-plan.md` to override any decision before `execute`.
 
@@ -47,6 +48,13 @@ After plan emission, edit `docs/refactor/<date>-clean-core-plan.md` to override 
 | C | **A** | `rewrite_in_place` via released API (or `extract_to_side_by_side` if no equivalent; `keep_at_level_b` if only data-access) |
 | D | **B** | `rewrite_in_place` via BAdI / enhancement-point (or `extract_to_side_by_side` if BAdI not feasible or `--target-level=A`) |
 | B | **B** | `keep_at_level_b` (default). Escalates to A only with `--aggressive` / `--push-to-a` / `--target-level=A` |
+
+**System-type modifier** — the tree above assumes an on-prem/private-cloud system. Resolve the system type once in Step 1 (`bootstrap-system-context` probe → `system-info.md`) and apply:
+
+| Where the code must live | Compliance floor | Effect on the tree |
+|---|---|---|
+| BTP ABAP Environment / S/4HANA Public Cloud | **A only** — Level B is non-compliant there (see `sap-clean-core-atc`, "BTP vs On-Premise") | `keep_at_level_b` is NOT an option. D → `extract_to_side_by_side` (or full rewrite to A); C → A mandatory; every B row escalates as if `--target-level=A` were set |
+| S/4HANA on-prem / Private Cloud (goal = survive upgrades) | A + B both compliant | Table applies as written; C → B is an acceptable cheaper stop when no released equivalent exists |
 
 **Side-by-side outcome** = Level A on the ERP side (the Z object disappears; logic lives on BTP under separate Clean Core gate).
 
@@ -105,13 +113,15 @@ Plus: inventory summary, side-by-side extension catalog (per `extract` outcome),
 
 **User reviews the plan and edits any decision** before `execute`.
 
+With `--report=dossier` (or whenever the plan must be shared with stakeholders who won't read raw markdown), delegate emission to [`../sap-migration-dossier/SKILL.md`](../sap-migration-dossier/SKILL.md): it already produces inventory + usage + ATC + clean-core review cards with Markdown/HTML/JSON/CSV/graph outputs. Feed it the per-object decision table from this step as extra input; keep `docs/refactor/<date>-clean-core-plan.md` as the editable source of truth for `execute`.
+
 ### Step 6 — Execute (opt-in)
 
 Per object, ask confirmation. Then dispatch:
 
 | Decision | Action |
 |---|---|
-| `rewrite_in_place` | (0) Mechanical findings first: `SAPDiagnose(action="quickfix")` → `apply_quickfix` — burn down ATC noise before hand-rewriting. (1) Generate regression test via [`../generate-abap-unit-test/SKILL.md`](../generate-abap-unit-test/SKILL.md) or [`../generate-cds-unit-test/SKILL.md`](../generate-cds-unit-test/SKILL.md) (CDS on 8.16+: seed from `SAPDiagnose(action="cds_testcases")`). (2) `SAPWrite(action="update")` + `SAPActivate` + `SAPLint(action="format")` + `SAPDiagnose(action="atc")` + `SAPDiagnose(action="unittest")`. (3) Review the edit as a diff: `SAPRead(action="diff")` active-vs-previous. (4) Rollback via `SAPGit` if regression. For RAP behavior pool delegate to [`../generate-rap-logic/SKILL.md`](../generate-rap-logic/SKILL.md) |
+| `rewrite_in_place` | (0) Mechanical findings first: `SAPDiagnose(action="quickfix")` → `apply_quickfix` — burn down ATC noise before hand-rewriting. (1) Generate regression test via [`../generate-abap-unit-test/SKILL.md`](../generate-abap-unit-test/SKILL.md) or [`../generate-cds-unit-test/SKILL.md`](../generate-cds-unit-test/SKILL.md) (CDS on 8.16+: seed from `SAPDiagnose(action="cds_testcases")`). (2) `SAPWrite(action="update")` + `SAPActivate` + `SAPLint(action="format")` + `SAPDiagnose(action="atc")` + `SAPDiagnose(action="unittest")`. (3) Review the edit as a diff: `SAPRead(action="diff")` active-vs-previous. (4) Rollback if regression: restore the pre-rewrite source from version history — `SAPRead(type="VERSION_SOURCE")` + `SAPWrite(action="update")`. For RAP behavior pool delegate to [`../generate-rap-logic/SKILL.md`](../generate-rap-logic/SKILL.md) |
 | `extract_to_side_by_side` | Delegate to [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-cap/SKILL.md). ABAP source stays deprecated-tagged until QA confirms parity. UI side: [`../convert-ui5-to-fiori-elements/SKILL.md`](../convert-ui5-to-fiori-elements/SKILL.md) |
 | `keep_at_level_b` | Delegate to [`../sap-object-documenter/SKILL.md`](../sap-object-documenter/SKILL.md) (SKTD rationale + ATC exemption) |
 | `remove_unused` | Stakeholder sign-off → `SAPNavigate(action="references")` last-check → `SAPWrite(action="delete")` |

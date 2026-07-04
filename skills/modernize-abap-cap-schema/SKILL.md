@@ -49,16 +49,20 @@ Sub-skill of [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-
 | MEINS | `Association to Units` | when associated with quantity field |
 | LANG (SPRAS) | `Association to Languages` | |
 | CLNT | `String(3)` | client field — usually omitted in BTP CAP |
+| DEC(15) as `TIMESTAMP` / DEC(21,7) as `TIMESTAMPL` | `Timestamp` | detect via data element, not raw DEC — classic ABAP timestamps are DECs |
+| DF16_DEC / DF34_DEC / DF16_RAW / DF34_RAW | `Decimal` | decfloat; note precision in schema-notes |
+| ACCP | `String(6)` | posting period YYYYMM; keep as string |
+| PREC / CUKY standalone (no amount sibling) | `String(2)` / `String(5)` | orphan reference fields — flag for review |
 
 ## Workflow
 
 ### Step 1 — Enumerate tables
 
-`SAPSearch(tadir_lookup, devclass=<pkg>, object='TABL')` → list of Z tables.
+`SAPSearch(searchType="tadir_lookup", packageName="<pkg>", objectType="TABL")` → list of Z tables.
 
 ### Step 2 — Read DDIC details (per table)
 
-`SAPRead(type='TABL', name=<table>)` — fields + types + keys + foreign keys + domain references.
+`SAPRead(type="TABL", name="<table>", format="structured")` — fields + types + keys + foreign keys + domain references.
 
 For complex domains / data elements: drill in only when the DDIC type alone is insufficient (e.g. fixed value lists → `@assert.range`).
 
@@ -99,6 +103,8 @@ Write `<target>/docs/schema-notes.md` with:
 
 ## Gotchas
 
+- **`.INCLUDE` / `.APPEND` structures**: flatten the included fields into the entity (CAP has no DDIC-style include); record the original include name in `schema-notes.md` so repeated includes across tables can become a shared aspect.
+- **Conversion exits (ALPHA, CUNIT, …)** on domains: CAP does not run them. Leading-zero keys (`ALPHA`) must be normalized at data-migration time and documented — otherwise FK joins silently miss.
 - **MANDT (client) field**: drop on BTP CAP (no client concept). Flag if data needs cross-client merge.
 - **`@AbapCatalog` annotations** (DDIC): do NOT carry over; CAP has its own (`@cds.persistence.skip`, `@assert.range`, etc.).
 - **Domain fixed values**: map to `@assert.range` if ≤10 values, otherwise emit a CodeList entity.
