@@ -1081,6 +1081,77 @@ Target: only released APIs (`state=released` in the API release contract). Curat
 4. `SAPRead(action="diff")` — review the rewrite as a diff before transport release.
 5. Data-access recipes only, on hot objects: no performance regression — `debug-slow-sql` ladder (`SAPDiagnose(action="odata_perf")` / `SAPDiagnose(action="cds_sql")`); a released `I_*` view with the wrong access path can be slower than the SELECT it replaced.
 
+### 9.5 — Effort model (person-days, AI-assisted chain)
+
+Planning estimates for the plan's Effort column, calibrated on the full pipeline (baseline
+tests, gates, human diff confirmation included). Manual work without the chain runs 2-4×
+higher. S/M/L mapping: **S ≈ 0.25–0.5 · M ≈ 1–2 · L ≈ 3+ person-days**.
+
+**Estimation formula**: `Total = Fixed run costs (table 1) + Σ per-unit scenario (table 2, base × fan-in band) adjusted by extra conditions (table 3)`
+
+#### 9.5.1 — Fixed run costs (ALWAYS incurred, per package — sized for ~100 units, ~70% non-A)
+
+| Item | When | Person-days | Scales with |
+|---|---|---|---|
+| `bootstrap-system-context` | once per SYSTEM, not per package | 0.1–0.25 | — |
+| `plan` run: inventory + clustering + classification + impact | once per package | 0.5–1 | # TADIR rows (machine-dominated) |
+| Understanding pass (`explain-abap-code`, Step 4-0) | every non-A unit | 1.5–3.5 | ≈0.02–0.05/unit; machine-dominated, human skims the analysis docs |
+| Human plan review (the gate) | once per package | 0.5–1 | # units + decision overrides |
+| As-found baseline (`setup-abap-mirror` + `sap-object-documenter` batch) | once, before any write | 0.5–1 | # units (machine-dominated) |
+| Phase 0 mechanical burn-down + ATC refresh + its TR review | once per package | 0.5–1 | # findings (lights-out; human reviews the TR) |
+| Final verification (cumulative ATC + unittest + perf on hot rewrites) | once per package | 0.5–1 | # touched units |
+| `sap-transport-review` pre-release gate | per release cluster | 0.25–0.5 each | # TRs |
+
+**Fixed subtotal for a ~100-unit package: ≈ 4.5–9.5 person-days** — before any per-unit work. Units whose findings were ONLY mechanical are DONE after Phase 0 at no extra per-unit cost.
+
+#### 9.5.2 — Per-unit scenarios (fan-in bands precomputed; fan-in = distinct consumers per `SAPContext(action="impact")`)
+
+| Scenario (logical unit) | From → To | Base (fan-in ≤3) | Fan-in 4–10 (×2) | Fan-in 11–50 (×4) | Fan-in 50+ |
+|---|---|---|---|---|---|
+| 1:1 released-API substitution (9.2 table) | C → A | 0.25–0.5 | 0.5–1 | 1–2 | dedicated plan |
+| Direct SELECTs → released `I_*` views | C → A | 0.5–2 | 1–4 | 2–8 | dedicated plan |
+| CDS rebase onto released `I_*` base views | C → A | 1–2 | 2–4 | 4–8 | dedicated plan |
+| CLAS using internals (no GUI) | D → B | 0.5–1.5 | 1–3 | 2–6 | dedicated plan |
+| PROG + ≤2 includes (<1k LOC) | D → B | 0.5–1 | 1–2 | 2–4 | dedicated plan |
+| PROG + 4–8 includes | D → B | 1–3 | 2–6 | 4–12 | dedicated plan |
+| User exit / modification → BAdI | D → B | 1–3 | 2–6 | 4–12 | dedicated plan |
+| FUGR ≤5 FMs | D → B | 1–2 | 2–4 | 4–8 | dedicated plan |
+| FUGR 10+ FMs or with dynpros | D → B | 3–5 | 6–10 | 12–20 | dedicated plan |
+| Z-clone of SAP standard (diff + enhancement + retire) | D → B/A | 2–5 | 4–10 | dedicated plan | dedicated plan |
+| Analytical report → star schema + query | C/D → A | 2–4 | n/a — entry point | n/a | n/a |
+| Transactional ALV report → RAP + FE | C/D → A | 3–8 | n/a — entry point | n/a | n/a |
+| SEGW single-root → RAP | C/D → A | 2–5 | n/a — entry point | n/a | n/a |
+| SEGW multi-entity/draft → RAP | C/D → A | 5–10 | n/a — entry point | n/a | n/a |
+| Side-by-side extract, schema+service only | D/C → A (ERP side) | 3–5 | n/a — entry point | n/a | n/a |
+| Side-by-side extract + FE UI | D/C → A | 5–10 | n/a — entry point | n/a | n/a |
+| Side-by-side extract + freestyle UI | D/C → A | 8–15 | n/a — entry point | n/a | n/a |
+| `release_api` (wrap-and-release) | B → A | 0.25–0.5 | 0.5–1 (capped ×2) | 0.5–1 (capped ×2) | 0.5–1 — releasing breaks no consumer; only sign-off grows |
+| Tier-2 wrapper + release | B → A | 0.5–1 | 1–2 (capped ×2) | 1–2 (capped ×2) | 1–2 |
+| `keep_at_level_b` (SKTD + exemption) | B → B | 0.1–0.25 | n/a — no code change | n/a | n/a |
+| `remove_unused` | any → removed | 0.1 (+ sign-off latency) | n/a — fan-in is 0 by definition | n/a | n/a |
+
+Fan-in multiplies effort because **the cost of a refactor is not writing the code — it is
+not breaking the consumers**: wider regression baseline, signature constraints (adapters),
+consumer-side verification, transport sequencing. At 50+ the honest answer is usually not a
+bigger rewrite but `release_api` on the stabilized interface, or a dedicated project.
+
+#### 9.5.3 — Extra conditions (apply on top)
+
+| Condition | Adjustment |
+|---|---|
+| `--aggressive` / generalized B→A push | +30–50% |
+| No existing tests AND hard-to-test unit (hard-coded dependencies) | +20–30% (baseline cost) |
+| Dynpro/GUI to replace | +50–100% |
+| Fan-in 50+ on a rewrite row | mandatory architectural review (`research_required`) before any estimate |
+
+#### 9.5.4 — Worked example (package of 100 units)
+
+15 already A (no action) · 10 unused (10 × 0.1 = 1) · 35 mechanical-only (covered by Phase 0, ≈0)
+· 25 simple rewrites at ~0.75 avg (= 19) · 10 complex rewrites, half at ×2 fan-in, ~3 avg (= 30)
+· 3 `release_api` (= 1) · 2 side-by-side with FE UI, ~7 avg (= 14) → per-unit ≈ 65
++ fixed run costs ≈ 5–9 → **≈ 70–75 person-days total**, of which the largest single lever is
+the 2 side-by-side extractions — exactly what the plan's sequencing surfaces before you commit.
+
 ---
 
 ## How to Use This Skill
