@@ -127,6 +127,8 @@ Write `docs/refactor/<date>-clean-core-plan.md` with one row per logical unit (m
 
 | Object | Start Level | Target Level | Decision | Replacement / Pattern | Effort | Risk | KB evidence |
 
+Effort is estimated per [`PATTERNS.md §9.5`](./PATTERNS.md) (person-day model: fixed run costs + per-unit scenario × fan-in band + extra conditions); the plan header carries the fixed-cost subtotal and the grand total so stakeholders see both.
+
 Plus: inventory summary, side-by-side extension catalog (per `extract` outcome), suggested sequencing (quick wins → in-place phase 1 → in-place phase 2 → side-by-side parallel), research backlog, source citations.
 
 **User reviews the plan and edits any decision** before `execute`.
