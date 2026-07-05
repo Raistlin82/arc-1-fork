@@ -121,6 +121,7 @@ flowchart TD
 | 1f Transport-conflict scan | `sap-transport-overview` — objects locked in someone else's open TR would stall Phase 5 | **arc-1** | Deterministic |
 | 2 Inventory | `SAPRead(type="DEVC")` recursive, `SAPSearch(searchType="tadir_lookup")`, red-flag `grep` pre-scan | **MCP** ARC-1 | Deterministic |
 | 2e Impact | `SAPContext(action="impact")` per candidate — fan-in drives the risk × effort multipliers | **MCP** ARC-1 | Deterministic (data); multiplier table is mechanical |
+| 2f Cluster into logical units | `SAPContext(action="structure")` + `SAPRead(type="FUGR", expand_includes=true)` — main + includes / FUGR + FMs + `LZ…` / RAP stack / SEGW set = **one unit**; shared includes get one coordinated decision. Classification, decisions and plan rows are per unit, never per bare include | **MCP** ARC-1 | Deterministic (structure data); unit boundaries are mechanical rules |
 | 2d Dead code (optional) | `sap-unused-code` — needs `SAP_ALLOW_FREE_SQL` | **arc-1** | Deterministic (SCMON/SUSG evidence) |
 | 3 Classification A–D | `sap-clean-core-atc` → `SAPDiagnose(action="atc")` + `sap_get_object_details` per SAP reference; worst-level roll-up | **arc-1** + **MCP** sap-docs | Deterministic (ATC findings + dataset lookup + mechanical roll-up) |
 | 4 JIT evidence lookup | `mcp-sap-docs` (`sap_community_search`, `sap_discovery_center_search`, `abap_feature_matrix`), `@sap/cds-mcp`, `context7` | **MCP** | Deterministic retrieval, Generative synthesis |

@@ -43,6 +43,7 @@ Use this document to:
 | 2c — Namespace filter | (post-processing) | — | — | — | Keep only `Z*`, `Y*`, customer namespace |
 | 2d — Unused detection | `SAPQuery(SCMON / SUSG)` (requires `SAP_ALLOW_FREE_SQL=true`) | **`sap-unused-code`** | — | — | Last 6 months runtime hits |
 | 2e — Impact analysis | **`SAPContext(action="impact")`** | — | — | — | ⚠️ **MOST IMPORTANT MCP CALL**. Fan-in count drives effort × risk multipliers |
+| 2f — Cluster into logical units | `SAPContext(action="structure")` + `SAPRead(type="FUGR", expand_includes=true)` | **`explain-abap-code`** (stubborn units), **`sap-object-documenter`** (batch unit docs) | — | — | Main + includes / FUGR / RAP stack = ONE unit; shared includes get one coordinated decision; classification + plan rows are per unit, never per bare include |
 
 ### Step 3 — Classification
 

@@ -39,7 +39,9 @@ Examples:
 
 After plan emission, edit `docs/refactor/<date>-clean-core-plan.md` to override any decision before `execute`.
 
-## Decision tree (per object)
+## Decision tree (per logical unit)
+
+"Object" below means the **logical unit** from Step 2 (main + includes / FUGR / RAP stack) — a bare include never gets its own decision.
 
 | Start Level | Default Target | Path |
 |---|---|---|
@@ -78,6 +80,17 @@ After plan emission, edit `docs/refactor/<date>-clean-core-plan.md` to override 
 - Enumerate Z*/Y* objects: `SAPRead(type="DEVC", name="<pkg>")` (walk subpackages recursively) + `SAPSearch(searchType="tadir_lookup")`.
 - Cheap red-flag pre-scan: `SAPRead(…, grep="EXEC SQL|CALL 'SYSTEM'|CALL TRANSACTION|SUBMIT ")` per object — spots forbidden statements without downloading full sources; feeds the classification step's triage order (worst first).
 - Dead-code: delegate to [`../sap-unused-code/SKILL.md`](../sap-unused-code/SKILL.md) (requires `SAP_ALLOW_FREE_SQL=true`).
+- **Cluster into logical units.** TADIR granularity lies: a legacy "object" is usually N rows (main program + its includes, function group + FMs + `LZ…` includes, a CDS/RAP stack). Classification and decisions operate on the **compilation unit**, never on a bare include:
+
+| TADIR rows | Logical unit | How to resolve membership |
+|---|---|---|
+| PROG main + INCL includes | one unit | `SAPContext(action="structure")` / `deps` on the main — never naming conventions |
+| FUGR + FUNCs + `LZ…` includes | one unit | `SAPRead(type="FUGR", expand_includes=true)`; dynpros are NOT reachable via ADT — flag for manual review |
+| CLAS (+ CCDEF/CCIMP/testclasses) | one unit | ADT already treats the class as the unit |
+| DDLS + DCLS + DDLX + BDEF + SRVD + SRVB | one unit (RAP/CDS stack) | `SAPContext(action="impact")` sibling detection |
+| SEGW MPC/DPC/`*_EXT` + model | one unit | routed to `migrate-segw-to-rap` as a whole |
+
+  An include referenced by 2+ mains is a **shared component**: it gets ONE decision, coordinated across the units that use it (the `SAPContext(action="impact")` fan-in surfaces these). ATC runs on the unit's main object; includes inherit its findings; the A–D roll-up is the worst level across the unit; the plan emits **one row per unit**, listing its members.
 - **Impact analysis** for every non-A candidate: `SAPContext(action="impact")` → fan-in count drives effort × risk:
 
 | Fan-in | Risk × | Strategy |
