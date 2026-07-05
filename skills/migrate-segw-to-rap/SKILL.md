@@ -20,7 +20,7 @@ resettable package.
 | Setting | Default | Rationale |
 |---|---|---|
 | Discovery strategy | MPC class source (Tier 1) | ARC-1 reads it natively; richer than `$metadata` |
-| Target package | User-provided. If absent, create a child of the source package via `SAPManage(action="create_package")`; default name `<source_package>_RAP`. Only fall back to `$TMP` if the user explicitly asks. | Keeps the migration output isolated and resettable. |
+| Target package | User-provided. If absent, create a child of the source package via `SAPManage(action="create_package", name="<source_package>_RAP", description="RAP migration outputs for <legacy_service>", superPackage="<source_package>", transport="<transport>")`; default name `<source_package>_RAP`. Only fall back to `$TMP` if the user explicitly asks. | Keeps the migration output isolated and resettable. |
 | Target transport | User-provided existing, or auto-created via `SAPTransport(action="create", description="RAP migration of <legacy_service>", package="<target_package>")`. | Required for non-`$TMP` packages. |
 | OData version on target | V4 | Current SAP standard; FE-ready |
 | RAP scenario | Managed with internal numbering | Simplest read-mostly; matches legacy SEGW behaviour |
@@ -529,10 +529,14 @@ prevents a specific failure mode in the next.
 ```text
 SAPWrite(action="batch_create", objects=[
   { type: "TABL", name: "ZDM_PROJECT_D",   source: "<draft table source — see template below>", package: "<target_package>", transport: "<transport>" },
-  { type: "TABL", name: "ZDM_TASK_D",      source: "<...>", package: "<target_package>", transport: "<transport>" },
-  { type: "TABL", name: "ZDM_TIMEENTRY_D", source: "<...>", package: "<target_package>", transport: "<transport>" }
+  { type: "TABL", name: "ZDM_TASK_D",      source: "<task draft table source>", package: "<target_package>", transport: "<transport>" },
+  { type: "TABL", name: "ZDM_TIMEENTRY_D", source: "<time entry draft table source>", package: "<target_package>", transport: "<transport>" }
 ])
-SAPActivate(action="activate", objects=[ {type:"TABL", name:"ZDM_PROJECT_D"}, ... ])
+SAPActivate(action="activate", objects=[
+  {type:"TABL", name:"ZDM_PROJECT_D"},
+  {type:"TABL", name:"ZDM_TASK_D"},
+  {type:"TABL", name:"ZDM_TIMEENTRY_D"}
+])
 ```
 
 **Draft table template** — three rules learned in Run 2:
@@ -625,10 +629,13 @@ dats_tims_to_tstmp(
 >    activator resolves the cross-references in a single pass. This is the recommended
 >    pattern when ARC-1 supports it — single tool call, no recovery dance:
 >    ```text
->    SAPWrite(action="batch_create", activateAtEnd=true, objects=[...])
+>    SAPWrite(action="batch_create", activateAtEnd=true, objects=[
+>      {type:"DDLS", name:"ZR_DM_PROJECT", source:"<root source>"},
+>      {type:"DDLS", name:"ZI_DM_TASK", source:"<child source>"}
+>    ], package="<target_package>", transport="<transport>")
 >    ```
 > 2. **Per-file `SAPWrite(action="create")`** for each root, then a **single
->    `SAPActivate(action="activate", objects=[...])` batch** at the end (after every DDL
+>    `SAPActivate(action="activate", objects=[{type:"DDLS", name:"ZR_DM_PROJECT"}, {type:"DDLS", name:"ZI_DM_TASK"}])` batch** at the end (after every DDL
 >    source has landed). Works on every ARC-1 release.
 > 3. Manual bottom-up: `SAPWrite create` parent → `SAPActivate` child first → activate
 >    parent last. More tool calls; rarely needed.
@@ -1120,7 +1127,7 @@ it. To clear the transport too:
 
 ```text
 SAPTransport(action="release_recursive", id="<transport>")
-SAPTransport(action="create", description="ARC-1 RAP migration outputs (resettable)")
+SAPTransport(action="create", description="ARC-1 RAP migration outputs (resettable)", package="<target_package>")
 ```
 
 …then update the transport ID in this skill's smart defaults.
@@ -1157,7 +1164,7 @@ SAPTransport(action="create", description="ARC-1 RAP migration outputs (resettab
 | Phase 6 Step 2/3 — CDS genuinely rejects `@Semantics.systemDateTime.localInstanceLastChangedAt` or `@Semantics.businessDate.*` as "unknown annotation" | The system is pre-7.55 (before draft support). On **7.58 these are valid** — verified live on S/4HANA 2023; SAP's own generator emits `localInstanceLastChangedAt` on 758 | On 7.58 keep them. Only on a genuinely older release (< 7.55) fall back to `createdAt`/`lastChangedAt` and omit the local-instance / businessDate annotations. |
 | Phase 6 Step 3 — CDS rejects "inappropriate provider contract on `ZC_DM_<child>`" | `provider contract transactional_interface` was put on a child projection | Remove the contract from `ZC_DM_TASK` / `ZC_DM_TIMEENTRY`. The contract goes only on the *root* projection (`ZC_DM_PROJECT`). Children declare bare `as projection on …` and use `redirected to parent` for upward navigation. |
 | Phase 6 Step 5 — BDEF activation rejects with `"key field PROJECTID expected at position 2, found PROJECT_ID"` (or similar field-name mismatch on a draft table) | Draft table was written with snake_case field names (`project_id`, `start_date`) instead of the BO-alias-normalized names (`projectid`, `startdate`) | Rewrite the draft TABL with field names matching the BO aliases: drop underscores. Active table can keep snake_case (BDEF mapping bridges); draft table cannot. Use `update + activate` via SAPWrite — Run 2 confirmed this works. |
-| Phase 6a — `SAPQuery` returns HTTP 400 on a long `WHERE obj_name IN ('a','b','c',…)` filter | ARC-1 ≥ 0.10.0 auto-chunks simple long `IN (…)` literal lists (PR #254). Older builds and complex filters (`NOT IN`, multi-SELECT, subqueries) still hit 400. | Prefer `SAPSearch(searchType="tadir_lookup", names=[...])` for cross-package live-object checks without SQL. If SQL scope is allowed and you need ghost-row evidence, use `source="both"`; only then the `splitBrain` warning array surfaces ADT/DB divergence. As broader-sweep fallback, `SAPQuery` with `devclass = '<package>'`. |
+| Phase 6a — `SAPQuery` returns HTTP 400 on a long `WHERE obj_name IN ('a','b','c',…)` filter | ARC-1 ≥ 0.10.0 auto-chunks simple long `IN (…)` literal lists (PR #254). Older builds and complex filters (`NOT IN`, multi-SELECT, subqueries) still hit 400. | Prefer `SAPSearch(searchType="tadir_lookup", names=["<name1>", "<name2>"])` for cross-package live-object checks without SQL. If SQL scope is allowed and you need ghost-row evidence, use `source="both"`; only then the `splitBrain` warning array surfaces ADT/DB divergence. As broader-sweep fallback, `SAPQuery` with `devclass = '<package>'`. |
 
 ---
 

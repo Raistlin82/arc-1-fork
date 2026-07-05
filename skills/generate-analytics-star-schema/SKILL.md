@@ -70,7 +70,7 @@ The element list classifies fields. Decide for each:
 For each dimension field, check whether a reusable dimension view already exists before generating a new one:
 
 ```
-SAPSearch(query="*<dimension_keyword>*", searchType="object")
+SAPSearch(searchType="object", query="*<dimension_keyword>*", maxResults=50)
 ```
 Then keep only `DDLS` rows; normal object-name search does not apply an `objectType` filter.
 
@@ -81,8 +81,8 @@ If a released `#DIMENSION` view exists (e.g. `I_Country`, `I_CalendarDate`), reu
 Ground the generation in current docs:
 
 ```
-search("CDS analytical model cube Analytics.dataCategory CUBE dimension representativeKey")
-search("ObjectModel.foreignKey.association text association Semantics.text")
+search(query="CDS analytical model cube Analytics.dataCategory CUBE dimension representativeKey", includeOnline=true, includeSamples=false, abapFlavor="<cloud|standard>")
+search(query="ObjectModel.foreignKey.association text association Semantics.text", includeOnline=true, includeSamples=false, abapFlavor="<cloud|standard>")
 ```
 
 Cite the doc IDs in your summary. Key facts (7.58):
@@ -204,7 +204,7 @@ SAPWrite(action="batch_create", activateAtEnd=true, objects=[
 
 Order the array dependencies-first (text → dimension → cube) so that even if `activateAtEnd` falls back to per-object activation on an older release, the chain still resolves. With `activateAtEnd=true`, ARC-1 writes all three as inactive drafts and fires one terminal activation over the whole graph.
 
-If `batch_create` with `activateAtEnd` is not honored (older release), fall back to: create each object with `SAPWrite(action="create", ...)` then a single `SAPActivate(objects=[...])` over all created objects.
+If `batch_create` with `activateAtEnd` is not honored (older release), fall back to: create each object with `SAPWrite(action="create", type="<type>", name="<name>", source="<source>", package="<package>", transport="<transport>")` then a single `SAPActivate(objects=[{type:"DDLS", name:"<view>"}, {type:"DDLS", name:"<dependent_view>"}])` over all created objects.
 
 ## Step 6: Verify
 

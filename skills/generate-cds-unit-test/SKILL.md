@@ -51,7 +51,7 @@ Returns a formatted listing of all fields with key markers, aliases, association
 ### 1c. Get dependency context (tables, views, associations)
 
 ```
-SAPContext(type="DDLS", name="<entity_name>")
+SAPContext(action="deps", type="DDLS", name="<entity_name>")
 ```
 
 Automatically extracts all data sources (FROM, JOIN), associations, compositions, and projection bases from the CDS DDL. For each dependency, fetches the full source with type fallback (DDLS → TABL → STRU). This gives you:
@@ -62,7 +62,7 @@ Automatically extracts all data sources (FROM, JOIN), associations, compositions
 For deeper dependency graphs (e.g., a consumption view → interface view → table), use `depth=2`:
 
 ```
-SAPContext(type="DDLS", name="<entity_name>", depth=2)
+SAPContext(action="deps", type="DDLS", name="<entity_name>", depth=2)
 ```
 
 ### 1d. (Optional) Read metadata extensions and behavior definition
@@ -127,12 +127,12 @@ If the user says "all" or doesn't respond with preferences, generate all.
 Use mcp-sap-docs to get the latest CDS Test Double Framework patterns. This ensures generated code follows SAP best practices.
 
 ```
-search("CDS test double framework cl_cds_test_environment")
+search(query="CDS test double framework cl_cds_test_environment", includeOnline=true, includeSamples=true, abapFlavor="<cloud|standard>")
 ```
 
 Also fetch:
 ```
-search("ABAP Unit cl_abap_unit_assert")
+search(query="ABAP Unit cl_abap_unit_assert", includeOnline=true, includeSamples=false, abapFlavor="<cloud|standard>")
 ```
 
 Use the returned documentation to inform the generated code patterns. Key things to verify:
@@ -293,7 +293,7 @@ Show the user:
 If tests fail:
 1. Analyze the failure message
 2. Determine if it's a test data issue, assertion issue, or CDS logic issue
-3. Fix the test method using `SAPWrite(action="edit_method", ...)`
+3. Fix the test method using `SAPWrite(action="edit_method", type="CLAS", name="<test_class_name>", method="<ltc_class>~<failing_method>", source="<fixed_method_body>", transport="<transport>")`
 4. Re-activate and re-run
 
 ## Error Handling
@@ -307,7 +307,7 @@ If tests fail:
 | `GET_DOUBLE` fails for a data source | Data source name doesn't match | Check CDS DDL for exact data source names (case-sensitive!) |
 | Assertion fails with unexpected values | Test data or expected result wrong | Re-check CDS logic, adjust test data or assertion |
 | Activation error: "test relation not found" | `@testing` annotation points to wrong entity | Fix entity name in `"! @testing` comment |
-| Class exists already | Test class already created | Use `SAPWrite(action="update", ...)` instead |
+| Class exists already | Test class already created | Use `SAPWrite(action="update", type="CLAS", name="<test_class_name>", source="<generated_source>", transport="<transport>")` instead |
 
 ## Notes
 

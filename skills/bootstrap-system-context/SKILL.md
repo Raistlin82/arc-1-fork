@@ -135,7 +135,7 @@ _Generated: <ISO timestamp>_ · _Source: ARC-1_
 
 - Target ABAP dialect: **<abapVersion>** — do not use syntax beyond this level without verifying per object.
 - System type is **<onprem / btp>**:
-  - If `btp`: prefer released APIs (check with `SAPRead(type="API_STATE", ...)`); avoid non-cloud object types (PROG, INCL, FUGR).
+  - If `btp`: prefer released APIs (check with `SAPRead(type="API_STATE", name="<object>", objectType="<type>")`); avoid non-cloud object types (PROG, INCL, FUGR).
   - If `onprem`: full type range available; still prefer released APIs for forward compatibility.
 - Transports <enabled / disabled>: <if disabled, note that writes stay on `$TMP`>.
 - RAP stack <available / not available>: <if not available, skip RAP generation skills>.

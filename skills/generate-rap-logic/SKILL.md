@@ -38,7 +38,7 @@ Read the behavior definition, CDS view, and behavior pool to understand the comp
 SAPRead(type="BDEF", name="<bdef_name>")
 ```
 
-⚠️ **FAIL-FAST GATE**: If the BDEF read fails with 404, the object may not exist — verify the name via `SAPSearch`. If it fails with 415, check `SAPManage(action="probe")` for system info and inform the user about the issue.
+⚠️ **FAIL-FAST GATE**: If the BDEF read fails with 404, the object may not exist — verify the name via `SAPSearch(searchType="object", query="<bdef_name>", maxResults=10)`. If it fails with 415, check `SAPManage(action="probe")` for system info and inform the user about the issue.
 
 Parse the BDEF source to identify:
 - **Scenario**: managed / unmanaged / abstract
@@ -67,7 +67,7 @@ SAPRead(type="DCLS", name="<interface_view>_DCL")
 ### 1c. Get dependency context
 
 ```
-SAPContext(type="DDLS", name="<interface_view>", action="deps")
+SAPContext(action="deps", type="DDLS", name="<interface_view>")
 ```
 
 Understand underlying tables, associations, and related entities. Useful for cross-entity validations or determinations that read associated data.
@@ -124,8 +124,8 @@ If the BDEF declares action/determination/validation handlers that do not exist 
 1. Run `SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="<bp_class>", bdefName="<bdef_name>")` to list missing signatures.
 2. If signatures are missing, rerun with `autoApply=true` to inject declarations plus empty method stubs into class sections when possible.
 3. If unresolved, try MCP quick-fix flow:
-   - `SAPDiagnose(action="quickfix", ...)`
-   - `SAPDiagnose(action="apply_quickfix", ...)`
+   - `SAPDiagnose(action="quickfix", type="CLAS", name="<bp_class>", source="<current_source>", line=<error_line>, column=<error_col>)`
+   - `SAPDiagnose(action="apply_quickfix", type="CLAS", name="<bp_class>", source="<current_source>", line=<error_line>, column=<error_col>, proposalUri="<proposal_uri>", proposalUserContent="<proposal_user_content>")`
 4. If still unresolved, use ADT quick-fix to generate the missing `METHODS ... FOR ...` signature.
 5. Re-read method list with `SAPRead(type="CLAS", name="<bp_class>", method="*")` before writing bodies.
 
@@ -275,7 +275,9 @@ If you want the generated method body to follow SAP's formatter settings before 
 SAPLint(action="format", source="<generated_method_code>", name="<bp_class>")
 ```
 
-Before calling `edit_method`, confirm the target method exists in `SAPRead(..., method="*")`. If it does not exist yet, run `scaffold_rap_handlers` first, then quick-fix flow (`quickfix` + `apply_quickfix`) or ADT quick-fix fallback.
+Use the formatted source returned by `SAPLint(action="format")` as the `source` value in the subsequent `SAPWrite(action="edit_method")`; formatting does not persist anything by itself.
+
+Before calling `edit_method`, confirm the target method exists in `SAPRead(type="CLAS", name="<bp_class>", method="*")`. If it does not exist yet, run `scaffold_rap_handlers` first, then quick-fix flow (`quickfix` + `apply_quickfix`) or ADT quick-fix fallback.
 
 Write each method implementation using method-level surgery:
 
@@ -530,10 +532,10 @@ ENDMETHOD.
 |---|---|---|
 | 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS endpoint not responding as expected | Check `SAPManage(action="probe")` for system info. Verify ICF service activation. Try creating the object in ADT to confirm system capability. |
 | Method not found in behavior pool | Class name in BDEF doesn't match actual class | Check `implementation in class` in BDEF source, verify class exists |
-| Missing `METHODS ... FOR ...` handler signature | BDEF declaration exists but class signature not generated yet | Run `SAPWrite(action="scaffold_rap_handlers", ...)` first (optionally `autoApply=true`), then `SAPDiagnose(action="quickfix")` + `apply_quickfix` or ADT quick-fix, then retry `edit_method` |
+| Missing `METHODS ... FOR ...` handler signature | BDEF declaration exists but class signature not generated yet | Run `SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="<bp_class>", bdefName="<bdef_name>", autoApply=true)` first, then `SAPDiagnose(action="quickfix", type="CLAS", name="<bp_class>", source="<current_source>", line=<error_line>, column=<error_col>)` + `apply_quickfix` or ADT quick-fix, then retry `edit_method` |
 | Syntax error: `<entity>` unknown in `READ ENTITIES` | Wrong entity name or alias | Use the exact alias from the BDEF `define behavior for ... alias <Alias>` |
 | Syntax error: field `<Field>` unknown | Field alias doesn't match CDS view | Check CDS view field aliases — BDEF uses CDS aliases, not table field names |
-| Activation fails | BDEF and class are incompatible | Activate BDEF and class together: `SAPActivate(objects=[...])` |
+| Activation fails | BDEF and class are incompatible | Activate BDEF and class together: `SAPActivate(objects=[{type:"BDEF", name:"<bdef>"}, {type:"CLAS", name:"<bp_class>"}])` |
 | `FAILED` / `REPORTED` structure mismatch | Wrong alias used in `failed-<alias>` or `reported-<alias>` | Use the lowercase entity alias from BDEF (e.g., `failed-travel`, not `failed-Travel`) |
 | `IN LOCAL MODE` missing | Missing clause causes authorization check | Always use `IN LOCAL MODE` for internal reads/writes within the behavior pool |
 | `%tky` not available | Method signature doesn't provide transactional key | Check method signature — determinations use `keys`, validations use `keys` |
@@ -555,7 +557,7 @@ ENDMETHOD.
 - **Feature control**: No end-to-end dynamic feature control (`instance_features` / `global_features`). Add manually, especially when the UI should disable actions or updates.
 - **Authorization**: No `authorization master` implementation. Add authorization checks manually.
 - **Cross-BO logic**: No inter-business-object operations. Each determination/validation operates within its own BO.
-- **Message class creation**: Uses hardcoded text for messages. For production services, create a message class afterward: `SAPWrite(action="create", type="MSAG", name="Z<MSG_CLASS>", ...)` and replace `new_message_with_text()` with `new_message()` referencing the message class.
+- **Message class creation**: Uses hardcoded text for messages. For production services, create a message class afterward with `SAPWrite(action="create", type="MSAG", name="Z<MSG_CLASS>", package="<package>", transport="<transport>", messages=[{number:"001", shortText:"<message text>"}])` and replace `new_message_with_text()` with `new_message()` referencing the message class.
 
 ### When to Use This Skill
 

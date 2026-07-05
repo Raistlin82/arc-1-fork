@@ -7,13 +7,13 @@ description: ATC-driven S/4HANA custom code migration — runs ATC readiness che
 
 ATC-driven S/4HANA custom code migration assistant with automated fix proposals.
 
-This skill replicates SAP Joule's "Custom Code Migration" capability by combining ARC-1 (SAP system access) with mcp-sap-docs (documentation & best practices). It runs ATC readiness checks, groups and explains findings, and generates replacement code following modern ABAP patterns.
+This skill replicates SAP Joule's "Custom Code Migration" capability by combining ARC-1 (SAP system access) with the SAP documentation MCP (`search`, `fetch`, `sap_get_object_details`, `sap_search_objects`, `sap_community_search`, when exposed). It runs ATC readiness checks, groups and explains findings, and generates replacement code following modern ABAP patterns.
 
 ## Smart Defaults (apply silently, do NOT ask)
 
 | Setting | Default | Rationale |
 |---|---|---|
-| Object type | Auto-detect via SAPSearch | Don't make user look up the type |
+| Object type | Auto-detect via `SAPSearch(searchType="object", query="<object_name>")` | Don't make user look up the type |
 | ATC variant | System default | Use what's configured on the system |
 | Scope | `fix` (explain + fix proposals) | Most actionable output |
 | Priority filter | All priorities (start with Priority 1 errors) | Don't miss anything, but fix most critical first |
@@ -25,9 +25,17 @@ The user provides an object or package to check (e.g., `ZCL_SALES_HANDLER`, `Z_R
 Only the **object name** is required. If the user provides just an object name, auto-detect the type and proceed with the default variant and fix scope.
 
 Optionally, the user may specify:
-- **Object type** (default: auto-detect via SAPSearch)
+- **Object type** (default: auto-detect via `SAPSearch(searchType="object", query="<object_name>", maxResults=10)`)
 - **Target release variant** (e.g., `S4HANA_2023`, `S4HANA_READINESS`; default: system default)
 - **Scope** — `explain` (findings only) or `fix` (explain + fix proposals; default: `fix`)
+
+If the user provides an object name without a type, resolve it before running ATC:
+
+```
+SAPSearch(searchType="object", query="<object_name>", maxResults=10)
+```
+
+Use an exact-name match. If multiple exact matches exist, ask the user which type to use. If the input is a package, skip object search and use `SAPRead(type="DEVC", name="<package_name>")`.
 
 ## Step 1: Run ATC Readiness Check
 
@@ -107,22 +115,33 @@ Show the code context around each finding (the line with the issue and a few lin
 
 ### 3b. Search documentation for migration guidance
 
+Use the SAP documentation MCP through tool discovery. The currently supported general documentation call is `search(query=...)`; use `fetch(id=...)` only with IDs returned by `search`.
+
 ```
-search("<checkTitle> S/4HANA migration")
-search("<deprecated_api> replacement ABAP")
+search(query="<checkTitle> S/4HANA migration", includeOnline=true, includeSamples=false, abapFlavor="<cloud|standard>")
+search(query="<deprecated_api> replacement ABAP", includeOnline=true, includeSamples=false, abapFlavor="<cloud|standard>")
 ```
 
 For specific simplification items:
 
 ```
-search("<simplification_item_id> simplification list")
+search(query="<simplification_item_id> simplification list", includeOnline=true, includeSamples=false)
 ```
 
-### 3c. Search SAP Notes (if SAP Notes MCP is available)
+For SAP object replacements, prefer released-object lookup over keyword search:
 
 ```
-sap_notes_search(q="<checkTitle>")
-sap_notes_search(q="<deprecated_api> replacement")
+sap_get_object_details(object_type="<type>", object_name="<deprecated_api>", system_type="<target>", target_clean_core_level="A")
+sap_search_objects(query="<business capability or successor keyword>", system_type="<target>", clean_core_level="A", limit=10)
+```
+
+### 3c. Search SAP Notes / community only through exposed tools
+
+There is no guaranteed dedicated SAP Notes tool. Do not call a Notes-specific function unless tool discovery exposes it in the current runtime. Use the unified docs search instead, and escalate to community search only for exact errors or workaround hunting:
+
+```
+search(query="<checkTitle> SAP Note S/4HANA", includeOnline=true, includeSamples=false)
+sap_community_search(query="<exact error text or obscure migration symptom>")
 ```
 
 ### 3d. Present explanation for each finding
@@ -191,7 +210,24 @@ Use these replacement patterns when generating fixes:
 
 ## Step 5: Apply Selected Fixes
 
-### 5a. Apply fixes
+### 5a. Normalize and pre-check the candidate source
+
+For full-source fixes, run deterministic candidate transforms first. Both calls return candidate source; they do not persist anything:
+
+```
+SAPLint(action="lint_and_fix", source="<candidate_source>", name="<object_name>")
+SAPLint(action="format", source="<candidate_after_lint_fix>", name="<object_name>")
+```
+
+Then syntax-check the exact source you intend to write:
+
+```
+SAPDiagnose(action="syntax", type="<type>", name="<object_name>", source="<fixed_source>")
+```
+
+If syntax errors are introduced, do not write. Show the diff, explain the error, and fall back to manual correction.
+
+### 5b. Apply fixes
 
 For method-level fixes in classes:
 
@@ -205,7 +241,7 @@ For full-source updates (programs, functions):
 SAPWrite(action="update", type="<type>", name="<object_name>", source="<fixed_source>", transport="<transport>")
 ```
 
-### 5b. Validate after each batch of fixes
+For `edit_method`, if you only have a method body rather than full class source, the pre-write `source="<fixed_source>"` syntax check above is not applicable. Write the method body, then validate the saved class immediately:
 
 ```
 SAPDiagnose(action="syntax", type="<type>", name="<object_name>")
@@ -259,7 +295,7 @@ Next steps:
 
 | Error | Cause | Fix |
 |---|---|---|
-| ATC variant not found | Variant doesn't exist on this system | Run default ATC, list available variants with `SAPDiagnose(action="atc")` |
+| ATC variant not found | Variant doesn't exist on this system | Re-run default ATC on the same object without `variant`: `SAPDiagnose(action="atc", type="<type>", name="<object_name>")` |
 | Object locked by another user | Object is being edited elsewhere | Inform user, suggest trying later or contacting the lock holder |
 | Fix causes new syntax error | Generated replacement code is incorrect | Revert to original source, show the diff, suggest manual correction |
 | No mcp-sap-docs available | Documentation MCP not configured | Explain findings using ATC finding text only, recommend user check SAP Help Portal |

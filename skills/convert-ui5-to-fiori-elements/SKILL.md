@@ -1,6 +1,6 @@
 ---
 name: convert-ui5-to-fiori-elements
-description: Generate a Fiori Elements V4 LROP app (list report + object page) driven by @UI.* annotations on a V4 RAP service, using the Fiori MCP server's 3-step (list_functionalities → get_functionality_details → execute_functionality) workflow. Use when asked to "build a Fiori Elements app", "generate LROP from this V4 service", "convert to annotation-driven UI", or "scaffold Fiori Elements V4".
+description: Generate a Fiori Elements V4 LROP app (list report + object page) driven by @UI.* annotations on a V4 RAP service, using the Fiori MCP server's 3-step workflow when that MCP is exposed. Use when asked to "build a Fiori Elements app", "generate LROP from this V4 service", "convert to annotation-driven UI", or "scaffold Fiori Elements V4".
 ---
 
 # Convert legacy UI5 JS app ➜ Fiori Elements V4 (annotation-first)
@@ -31,6 +31,10 @@ This skill depends on:
   BDEF, SRVD, SRVB published, V4 routing group registered in `/n/IWFND/MAINT_SERVICE`).
 - The legacy app (`<source_app>/`) still being readable — Phase 1 mines its features even
   though the legacy app itself is not modified.
+- Tool discovery for optional UI tooling. Use `mcp__SAPUI5_MCP_Server__*` and Fiori MCP tools only
+  when they are exposed in the current runtime. If they are absent, do not call them; either run the
+  branch in degraded/manual mode with local project scripts (`npm run build`, `npx tsc --noEmit`,
+  app-specific lint scripts) or stop and report the missing MCP capability.
 
 > **Independent of `modernize-ui5-app.md`.** This skill does not require the modern TS app to
 > exist. The legacy app is the single source of truth for user-visible features; the FE app
@@ -141,7 +145,8 @@ real jobs:
    FE renders an equivalent UX.
 2. **Apply** those annotations to the RAP CDS projection (the service the SRVB exposes).
 3. **Generate** the FE list-report + object-page project via the **SAP Fiori MCP server**
-   (`@sap-ux/fiori-mcp-server`), and wire **extensions** for anything FE templates can't express.
+   (`@sap-ux/fiori-mcp-server`) when exposed, or use the documented local/manual fallback, and wire
+   **extensions** for anything FE templates can't express.
 
 ## Smart defaults (apply silently — do NOT ask before research)
 
@@ -151,7 +156,7 @@ real jobs:
 | Target FE app | `<fe_app>/` — default name `modern-fe-app/` if user gives no path (mirrors the workspace pattern `legacy-ui5-app/` → `modern-ui5-app/` → `modern-fe-app/`) | Fiori MCP generates here; folder must exist and be empty (or empty subfolders) |
 | FE floorplan | List Report + Object Page (LROP V4) when the BO has a clear root + child facets | Maps cleanly to the typical RAP composition root + children. OVP only if the user explicitly asks. |
 | Template | `lropv4` | Default unless the user asks otherwise |
-| Generator | **SAP Fiori MCP server (`@sap-ux/fiori-mcp-server`)** via the `list_functionalities` → `get_functionality_details` → `execute_functionality` sequence | First-party SAP tool; understands FE V4 patterns natively |
+| Generator | **SAP Fiori MCP server (`@sap-ux/fiori-mcp-server`)** via the `list_functionalities` → `get_functionality_details` → `execute_functionality` sequence, only when exposed by tool discovery | First-party SAP tool; understands FE V4 patterns natively. If absent, mark the branch degraded/manual instead of calling a missing tool |
 | App namespace | `<source_namespace>.fe` | Keeps the legacy and FE apps distinguishable (and the modern TS app too, if `modernize-ui5-app` was also run as the alternate path) |
 | UI5 version | Latest 1.x release (e.g. `1.147.2`) unless user specifies | LTS-track; latest FE V4 features available |
 | Language | TypeScript | Modern default; extension files use type-safe APIs |
@@ -159,7 +164,7 @@ real jobs:
 | Main entity | Root entity alias exposed by the SRVB (e.g. the alias on `define root view entity ... alias <X>`) | The LR+OP floorplan is rooted at a single entity |
 | Annotations location | **In CDS via `SAPWrite update DDLS`** — not in a local annotation file inside the FE app | The annotations belong to the service; FE app reads them through `$metadata`. Local annotation files are an antipattern for RAP-bound apps. |
 | Extension language | TypeScript (controller extensions) | Match the rest of the chain |
-| Validation | `mcp__SAPUI5_MCP_Server__run_ui5_linter` + `run_manifest_validation` + `tsc --noEmit` all green | The hard acceptance criteria |
+| Validation | If exposed: `mcp__SAPUI5_MCP_Server__run_ui5_linter` + `mcp__SAPUI5_MCP_Server__run_manifest_validation`; always run TypeScript/build checks available in the project (`npx tsc --noEmit`, `npm run build`/app scripts) | MCP checks are hard gates only when the MCP is installed; never call absent UI5 tools |
 | Acceptance | FE app runs end-to-end against the V4 service. Browser smoke covers every feature inventoried in Phase 1 — reproduced through annotations or extension hooks. | Concrete deliverable |
 
 ## Input
@@ -172,7 +177,7 @@ The user provides:
 - **Root entity alias** (e.g. `Project`). Default: infer from the SRVB's `$metadata`.
 - **App namespace** (default: `<source_namespace>.fe`).
 - **Transport** for the CDS annotation writes (default: same transport used by
-  `migrate-segw-to-rap`, or auto-create via `SAPTransport(action="create")`).
+  `migrate-segw-to-rap`, or auto-create via `SAPTransport(action="create", description="FE annotation updates for <app>", package="<package>")`).
 - **UI5 version** (default: latest 1.x).
 
 If only the legacy app path and V4 URL are provided, apply smart defaults and surface the plan
@@ -231,14 +236,13 @@ Assert both folders are populated. Stop with explicit reason if either is missin
 legacy app is the single source of truth for both the annotation plan (Phase 1+2) and the
 extension list (Phase 2b).
 
-### 0d. SAP Fiori MCP server reachable
+### 0d. SAP Fiori MCP capability gate
 
 ```text
 mcp__fiori-mcp__list_functionalities
 ```
 
-If this call fails, the Fiori MCP server isn't configured in this chat. Surface the
-configuration block and stop:
+Use tool discovery first. If `mcp__fiori-mcp__list_functionalities` is not exposed, do not call any `mcp__fiori-mcp__*` function. Mark FE generation as degraded/manual and either use the local generator fallback in Phase 5d or stop and report the missing capability. If the user wants the MCP path, surface the configuration block:
 
 ```jsonc
 // .cursor/mcp.json (or equivalent)
@@ -257,7 +261,8 @@ configuration block and stop:
 (Source: [@sap-ux/fiori-mcp-server README on
 github.com/SAP/open-ux-tools](https://github.com/SAP/open-ux-tools/tree/main/packages/fiori-mcp-server).)
 
-Optional companion: `mcp__SAPUI5_MCP_Server__*` for post-generation lint + manifest validation.
+Optional companion: `mcp__SAPUI5_MCP_Server__*` for post-generation lint + manifest validation,
+only when those tools are exposed by tool discovery.
 
 ### 0e. Connection Manager (optional)
 
@@ -654,9 +659,9 @@ to inspect.
 
 ---
 
-## Phase 5 — Generate the FE app via the SAP Fiori MCP server
+## Phase 5 — Generate the FE app via the SAP Fiori MCP server when exposed
 
-This is the "use Fiori MCP to create the app" step. The Fiori MCP server exposes a
+This is the "use Fiori MCP to create the app" step when the Fiori MCP is exposed by tool discovery. The Fiori MCP server exposes a
 three-tool dance — `list_functionalities` → `get_functionality_details` → `execute_functionality`.
 Each step narrows scope. Do not skip steps even if you think you know the params.
 
@@ -675,6 +680,10 @@ References:
 mcp__fiori-mcp__list_functionalities
 ```
 
+Call this only when `mcp__fiori-mcp__list_functionalities` is exposed. If it is absent, skip to
+the local generator fallback or stop with a missing-capability report. Do not guess the namespace
+or schema; use the exact tool name and input shape returned by tool discovery.
+
 Inspect the response for a functionality that matches "create a new Fiori elements application
 for an external OData V4 service". The exact name in the response depends on the server version
 — look for keywords like `create`, `fiori-elements`, `list-report`, `lropv4`, `external-service`.
@@ -691,9 +700,9 @@ If the server doesn't have a matching functionality:
 
 ### 5b. Get parameter requirements for the chosen functionality
 
-```text
-mcp__fiori-mcp__get_functionality_details(name="<the-functionality-name-from-5a>")
-```
+Call the exposed `mcp__fiori-mcp__get_functionality_details` tool only after a successful
+`list_functionalities` response, using the exact functionality name returned there and the live
+input schema from tool discovery.
 
 The response lists required + optional parameters. For the LROP-for-external-service flow,
 typical required parameters include:
@@ -711,20 +720,13 @@ mapping, **stop and ask the user**. Do not invent values.
 
 ### 5c. Execute the generator
 
-```text
-mcp__fiori-mcp__execute_functionality(
-  name="<the-functionality-name-from-5a>",
-  parameters={
-    serviceUrl: "<V4_service_URL>",
-    mainEntity: "<root_alias>",
-    targetPath: "<fe_app>",
-    namespace:  "<source_namespace>.fe",
-    appName:    "<short-app-id>",
-    ui5Version: "<ui5-version>",
-    language:   "typescript"
-  }
-)
-```
+Call the exposed `mcp__fiori-mcp__execute_functionality` tool with the exact schema discovered
+from `get_functionality_details`. The parameter values must come from Phase 0a and Phase 5b:
+`serviceUrl=<V4_service_URL>`, root entity `<root_alias>`, target folder `<fe_app>`, namespace
+`<source_namespace>.fe`, app id `<short-app-id>`, user-selected UI5 version, and
+`language=typescript`.
+
+Call this only after `get_functionality_details` confirms the parameter shape for the selected functionality.
 
 Wait for the generator to finish. Verify the structure:
 
@@ -830,20 +832,21 @@ Register the extension in `<fe_app>/webapp/manifest.json`:
 }
 ```
 
-Run the linter after each extension scaffold:
+Run the linter after each extension scaffold when the UI5 MCP exposes a lint tool. Use the live
+schema from tool discovery and restrict the check to the generated extension file.
 
-```text
-mcp__SAPUI5_MCP_Server__run_ui5_linter(files=["<fe_app>/webapp/ext/ObjectPageExt.ts"])
-```
+If the UI5 MCP is not exposed, do not call it. Use the app's local lint/typecheck scripts where available and mark the missing UI5 MCP validation in the report.
 
 Repeat for every entry in the extension map. Keep extensions small — one concern per class.
 
-If a feature classification is ambiguous (annotation? extension?), use the Fiori MCP's docs
-search to resolve:
+If a feature classification is ambiguous (annotation? extension?), use Fiori MCP docs search only when exposed. Otherwise use the SAP docs MCP `search(query=...)` / `fetch(id=...)` workflow:
 
 ```text
-mcp__fiori-mcp__search_docs(query="custom validation before action Fiori elements V4")
+search(query="custom validation before action Fiori elements V4", includeOnline=true, includeSamples=false)
 ```
+
+When `mcp__fiori-mcp__search_docs` is exposed, it can be used with the same query before the
+SAP docs MCP fallback. If it is absent, do not call it.
 
 This pulls the authoritative SAP guidance and prevents speculation.
 
@@ -854,12 +857,13 @@ This pulls the authoritative SAP guidance and prevents speculation.
 ### 7a. Static checks
 
 ```text
-mcp__SAPUI5_MCP_Server__run_ui5_linter
-mcp__SAPUI5_MCP_Server__run_manifest_validation
+mcp__SAPUI5_MCP_Server__run_ui5_linter                 # only if exposed
+mcp__SAPUI5_MCP_Server__run_manifest_validation        # only if exposed
 Bash: cd <fe_app> && npx tsc --noEmit
+Bash: cd <fe_app> && npm run build                     # if the generated app defines it
 ```
 
-All three must return clean.
+All exposed/available checks must return clean. If an MCP-specific check is unavailable, report it as "not installed" instead of attempting the call.
 
 ### 7b. Dev server
 
@@ -914,8 +918,9 @@ If any step fails:
 - For an annotation issue, return to Phase 4 and adjust the CDS, re-activate, `publish_srvb`,
   rerun the smoke step.
 - For an extension issue, debug the controller extension in browser DevTools.
-- For an FE rendering issue that looks like a tool bug, run
-  `mcp__fiori-mcp__search_docs(query="<exact symptom>")` to find the authoritative reference.
+- For an FE rendering issue that looks like a tool bug, use `mcp__fiori-mcp__search_docs` only
+  when exposed; otherwise use SAP docs MCP `search(query="<exact symptom>", includeOnline=true,
+  includeSamples=false)` to find the authoritative reference.
 
 ### 7d. Final report
 
@@ -944,18 +949,18 @@ ARC-1 calls used:
   - SAPManage(action=probe)
   - SAPRead(type=DDLS, name=<root_projection>)
   - SAPRead(type=SRVB, name=<V4_SRVB>)
-  - SAPWrite(action=update, type=DDLS, ...) × <m> projections
-  - SAPActivate(type=DDLS, ...)
+  - SAPWrite(action=update, type=DDLS, name=<root_projection>, source=<annotated_source>, transport=<transport>) × <m> projections
+  - SAPActivate(type=DDLS, name=<root_projection>)
   - SAPActivate(action=publish_srvb, name=<V4_SRVB>)
-  - (Optional) SAPWrite(action=update, type=BDEF, ...) + SAPActivate for BDEF precheck
+  - (Optional) SAPWrite(action=update, type=BDEF, name=<bdef>, source=<bdef_source>, transport=<transport>) + SAPActivate(type=BDEF, name=<bdef>) for BDEF precheck
 
-Fiori MCP calls used:
+Fiori MCP calls used (only when exposed; otherwise report "not exposed/skipped"):
   - mcp__fiori-mcp__list_functionalities
-  - mcp__fiori-mcp__get_functionality_details(name=<chosen>)
-  - mcp__fiori-mcp__execute_functionality(...)
-  - mcp__fiori-mcp__search_docs(...) × <n> (during extension scaffolding)
+  - mcp__fiori-mcp__get_functionality_details with the exact functionality name returned by list_functionalities
+  - mcp__fiori-mcp__execute_functionality with the live schema returned by get_functionality_details
+  - mcp__fiori-mcp__search_docs with the exact query used during extension scaffolding, only if exposed
 
-UI5 MCP calls used:
+UI5 MCP calls used (only when exposed; otherwise report "not exposed/skipped"):
   - mcp__SAPUI5_MCP_Server__run_ui5_linter × <n>
   - mcp__SAPUI5_MCP_Server__run_manifest_validation
 ```
@@ -1014,7 +1019,7 @@ UI5 MCP calls used:
 - Controller extensions are the escape hatch — when in doubt about whether something needs one,
   ask the user. The FE template can express more than people expect; only escalate when truly
   necessary.
-- Reach for `mcp__fiori-mcp__search_docs` (or the active SAP docs MCP `search` tool with `topic="fiori-elements"`)
+- Reach for `mcp__fiori-mcp__search_docs` only when exposed; otherwise use the active SAP docs MCP `search(query="...", includeOnline=true)`
   before guessing annotation syntax. SAP's annotation reference is the authoritative source.
 - If `mcp__fiori-mcp__list_functionalities` returns capabilities you didn't expect (e.g.
   "add page to existing app", "modify manifest"), surface them in the plan — they may simplify

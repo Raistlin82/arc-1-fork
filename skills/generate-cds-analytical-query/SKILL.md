@@ -38,7 +38,7 @@ Optionally:
 ### 1a. Find the cube (if the user gave a description, not a name)
 
 ```
-SAPSearch(query="<keyword>*", searchType="object")
+SAPSearch(searchType="object", query="<keyword>*", maxResults=50)
 ```
 Then keep only `DDLS` results; `objectType` filters `source_code` / `tadir_lookup`, not normal name search.
 
@@ -68,8 +68,8 @@ This returns every field with key markers and types. Use it to classify each ele
 Ground the generation in current docs — do NOT rely on memory for annotation names:
 
 ```
-search("CDS analytical query provider contract analytical_query transient view")
-search("AnalyticsDetails.query.axis ROWS COLUMNS FREE")
+search(query="CDS analytical query provider contract analytical_query transient view", includeOnline=true, includeSamples=false, abapFlavor="<cloud|standard>")
+search(query="AnalyticsDetails.query.axis ROWS COLUMNS FREE", includeOnline=true, includeSamples=false, abapFlavor="<cloud|standard>")
 ```
 
 Cite the doc IDs you used in your final summary. Key facts the docs confirm (7.58):
@@ -200,4 +200,4 @@ Confirm the query is live and the projected elements appear. Report success with
 
 - This skill **only creates the query layer**. To build the underlying cube + dimensions + texts, use `generate-analytics-star-schema` first — the two skills chain: star-schema produces the cube, this skill projects on it.
 - For a transactional (RAP) service rather than analytics, use `generate-rap-service` instead.
-- BTP ABAP and on-prem 7.58 both support this; on 7.57 verify the exact provider-contract form via `search()` first.
+- BTP ABAP and on-prem 7.58 both support this; on 7.57 verify the exact provider-contract form via `search(query="CDS analytical query provider contract analytical_query transient view", includeOnline=true, includeSamples=false, abapFlavor="<cloud|standard>")` first.

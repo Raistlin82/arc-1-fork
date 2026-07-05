@@ -13,7 +13,7 @@ This skill replicates SAP Joule's "Explain Code" capability by combining ARC-1 (
 
 | Setting | Default | Rationale |
 |---|---|---|
-| Object type | Auto-detect via SAPSearch | Don't make user look up the type |
+| Object type | Auto-detect via `SAPSearch(searchType="object", query="<object_name>")` | Don't make user look up the type |
 | Depth | Overview | Start high-level, user can ask for detail |
 | ATC | No | Only run if user asks about code quality |
 | Dependencies | Fetch via SAPContext | Always get the dependency graph |
@@ -37,7 +37,7 @@ Optionally, the user may specify:
 If the user didn't specify a type, search for the object:
 
 ```
-SAPSearch(query="<object_name>")
+SAPSearch(searchType="object", query="<object_name>", maxResults=10)
 ```
 
 Use the first result's type. If ambiguous (multiple matches), ask the user.
@@ -123,7 +123,7 @@ This returns the main source plus every nested include (recursively, depth/count
 ## Step 2: Get Dependency Context
 
 ```
-SAPContext(type="<type>", name="<object_name>")
+SAPContext(action="deps", type="<type>", name="<object_name>")
 ```
 
 This automatically extracts all dependencies and fetches compressed public API contracts for each. It provides:
@@ -134,7 +134,7 @@ This automatically extracts all dependencies and fetches compressed public API c
 For complex objects with deep dependency chains, use `depth=2`:
 
 ```
-SAPContext(type="<type>", name="<object_name>", depth=2)
+SAPContext(action="deps", type="<type>", name="<object_name>", depth=2)
 ```
 
 If SAPContext fails (e.g., unsupported type), fall back to manual reads of key dependencies identified in the source code.
@@ -145,7 +145,7 @@ If SAPContext fails (e.g., unsupported type), fall back to manual reads of key d
 SAPContext(action="impact", type="DDLS", name="<root_cds>")
 ```
 
-`action="impact"` (DDLS only) returns the downstream blast radius — projection views, consumption views, and services that build on the behavior. This is the "dependencies / who consumes this" answer for a behavior definition. For the handler class internals, run `SAPContext(type="CLAS", name="<ZBP_NAME>")`.
+`action="impact"` (DDLS only) returns the downstream blast radius — projection views, consumption views, and services that build on the behavior. This is the "dependencies / who consumes this" answer for a behavior definition. For the handler class internals, run `SAPContext(action="deps", type="CLAS", name="<ZBP_NAME>")`.
 
 ## Step 3: (Optional) Run ATC Check
 
@@ -172,19 +172,20 @@ Group findings by priority:
 For unfamiliar SAP APIs found in the source code:
 
 ```
-search("<class_or_function_name> ABAP documentation")
+search(query="<class_or_function_name> ABAP documentation", includeOnline=true, includeSamples=false, abapFlavor="<cloud|standard>")
 ```
 
 For ATC findings that need explanation:
 
 ```
-search("<checkTitle> simplification item S/4HANA")
+search(query="<checkTitle> simplification item S/4HANA", includeOnline=true, includeSamples=false, abapFlavor="<cloud|standard>")
 ```
 
-For SAP Notes if available:
+For SAP Notes, do not assume a dedicated Notes tool exists. Use the unified docs search; for obscure runtime symptoms or workarounds, use community search:
 
 ```
-sap_notes_search(q="<finding_or_api_name>")
+search(query="<finding_or_api_name> SAP Note", includeOnline=true, includeSamples=false)
+sap_community_search(query="<exact error text or obscure symptom>")
 ```
 
 Use documentation results to enrich the explanation with official SAP context.
@@ -251,7 +252,7 @@ From ATC results:
 
 Offer the user next steps:
 - "Want me to explain a specific method in detail?"
-- "Want me to get SAP quickfix proposals for the ATC findings?" (→ `SAPDiagnose(action="quickfix")`)
+- "Want me to get SAP quickfix proposals for the ATC findings?" (→ `SAPDiagnose(action="quickfix", type="<type>", name="<object_name>", source="<current_source>", line=<finding_line>, column=0)`)
 - "Want me to apply SAP's quickfix for <finding>?" (uses SAP-verified fix proposals + `apply_quickfix`)
 - "Want me to analyze the ATC findings and suggest fixes?" (→ migrate-custom-code skill)
 - "Want me to generate unit tests for this class?" (→ generate-abap-unit-test skill)

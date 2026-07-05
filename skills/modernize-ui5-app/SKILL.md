@@ -37,14 +37,14 @@ legacy JS app + the same V4 RAP service produced by `migrate-segw-to-rap`.
 
 | MCP | Used for | When |
 |---|---|---|
-| **UI5 MCP** (`mcp__SAPUI5_MCP_Server__*`) | Authoritative TS conversion guidelines, general UI5 guidelines, app scaffolding, API reference lookups, linter, manifest validator, version info | Throughout — this is the primary MCP for this skill |
+| **UI5 MCP** (`mcp__SAPUI5_MCP_Server__*`) | Authoritative TS conversion guidelines, general UI5 guidelines, app scaffolding, API reference lookups, linter, manifest validator, version info | Primary path only when exposed by tool discovery. If absent, do not call these tools; use SAP docs MCP + `ui5_version_diff` and local npm scripts as a degraded path |
 | **SAP docs MCP** (active namespace from tool discovery, e.g. `mcp__mcp_sap_docs__*` or `mcp__abap_mcp_server__*`) | OData V4 binding patterns, draft handling, control documentation, UI5 release deltas via `ui5_version_diff` when exposed | When V2→V4 binding behaviour is non-obvious (e.g. composite key on draft, `$expand=_Tasks`, action invocation), or when deciding upgrade/deprecation impacts |
 | **arc-1 MCP** | OPTIONAL — service binding URL lookup, status-code semantics | Only if the V4 URL isn't readily available (e.g. you can't read the FE app's manifest); skip otherwise |
 | **fiori-mcp** | NOT USED | This is a freestyle TS app, not Fiori Elements — no annotations to generate |
 
-**There is no "convert to TS" tool** in the UI5 MCP. Conversion is mechanical and driven by
-`mcp__SAPUI5_MCP_Server__get_typescript_conversion_guidelines`, which returns the authoritative
-playbook. You call it once at the start and follow it verbatim.
+**There is no "convert to TS" tool** in the UI5 MCP. When the UI5 MCP is exposed, conversion is mechanical and driven by `mcp__SAPUI5_MCP_Server__get_typescript_conversion_guidelines`, which returns the authoritative playbook. You call it once at the start and follow it verbatim. If the UI5 MCP is absent, do not call it; proceed only with the degraded local workflow and record that MCP-specific guidance/validation was unavailable.
+
+**Capability invariant:** every `mcp__SAPUI5_MCP_Server__*`, browser, Chrome, or preview MCP reference in this skill is optional. First confirm the exact tool exists through tool discovery, then call it with the live schema exposed in the current session. If the tool is absent, do not call a historical or guessed MCP name.
 
 **Also use the active SAP docs MCP `search` tool during the run** whenever a UI5 best-practice is non-obvious
 or contested (FCL routing, V4 binding semantics, draft handling, accessibility, theming). The
@@ -148,9 +148,11 @@ the right specific type**. Common ones for this skill's surface:
 > use `ListBase$SelectionChangeEvent` from `sap/m/ListBase` and TypeScript accepts it for
 > both controls' `selectionChange` events without casts.
 
-If you can't find a specific event type for a UI5 ≥ 1.115 control, call
-`mcp__SAPUI5_MCP_Server__get_api_reference(query="sap.m.<Control>#<eventName>")` to confirm
-the typed name exists. Do not fall back to the generic `Event`.
+If you can't find a specific event type for a UI5 >= 1.115 control, first run tool discovery.
+Only when `mcp__SAPUI5_MCP_Server__get_api_reference` is exposed, call it with the live
+schema to confirm the typed name exists. If the UI5 MCP is absent, use SAP docs MCP
+`search(query="sap.m.<Control> <eventName> event type", includeOnline=true, includeSamples=false)`.
+Do not fall back to the generic `Event`.
 
 ### Trap 4: `onApprove(event: Button$PressEvent)` — declare with no parameter
 
@@ -293,7 +295,7 @@ warning, but they do the wrong thing. The naming conventions differ across packa
 is `strictSSL: false` in `ui5-middleware-simpleproxy`, `ignoreCertErrors: true` in
 `fiori-tools-proxy`, and other names elsewhere. Don't extrapolate from one to another.
 
-**Recipe:**
+**Recipe when the UI5 MCP is exposed:**
 
 ```text
 Bash: cat <target>/node_modules/<package-name>/README.md
@@ -313,16 +315,11 @@ mirror.
 **Why investigate:** events are inherited — they're defined on a parent class and reused by
 subclasses. Looking for `Table$SelectionChangeEvent` returns nothing because `selectionChange`
 is defined on `ListBase`, not `Table`. The Trap 3 table covers the events this skill commonly
-hits; for anything else, ask the UI5 MCP.
+hits; for anything else, use the UI5 MCP when exposed, otherwise use SAP docs MCP search.
 
-**Recipe:**
-
-```text
-mcp__SAPUI5_MCP_Server__get_api_reference(
-  projectDir="<absolute target>",
-  query="sap.m.<Control>#<eventName>"
-)
-```
+**Recipe when the UI5 MCP is exposed:** call
+`mcp__SAPUI5_MCP_Server__get_api_reference` with the live schema from tool discovery and query
+`sap.m.<Control>#<eventName>`.
 
 Read the result for: (a) which class actually defines the event (= which module to import
 from), (b) the canonical event type name. If `query` returns nothing, search broader
@@ -397,15 +394,10 @@ correctness). They're orthogonal. The right order is `eslint --fix` first (clean
 TS-level noise), then `ui5-linter` (catches the UI5-specific issues), then `tsc` (any
 remaining type errors).
 
-If `ui5-linter` complains about a finding you don't understand, request context:
-
-```text
-mcp__SAPUI5_MCP_Server__run_ui5_linter(
-  projectDir="<absolute target>",
-  filePatterns=["<the file>"],
-  provideContextInformation=true
-)
-```
+If `ui5-linter` complains about a finding you don't understand, request context only when the
+UI5 MCP exposes `mcp__SAPUI5_MCP_Server__run_ui5_linter`. Use the live schema from tool discovery,
+scope it to the file with the finding, and enable context information if that field exists. If it
+is absent, use local lint output and SAP docs MCP search for the specific rule/API instead.
 
 The `provideContextInformation: true` flag returns API-reference excerpts and documentation
 links explaining each finding.
@@ -419,7 +411,7 @@ specific theme?"
 **Why investigate:** SAPUI5 has version-specific guidelines. The MCP returns the authoritative
 list for the project's version.
 
-**Recipe — start with the two pinned guideline tools:**
+**Recipe when the UI5 MCP is exposed — start with the two pinned guideline tools:**
 
 ```text
 mcp__SAPUI5_MCP_Server__get_guidelines              # general UI5 dev rules
@@ -429,8 +421,10 @@ mcp__SAPUI5_MCP_Server__get_typescript_conversion_guidelines   # TS-specific rul
 If the answer isn't in those, escalate to sap-docs:
 
 ```text
-search(query="<your question>")  # via the active SAP docs MCP namespace
+search(query="<your question>", includeOnline=true, includeSamples=false)  # active SAP docs MCP namespace
 ```
+
+If the UI5 MCP is absent, skip the guideline MCP calls and use the SAP docs MCP query directly.
 
 ### Pattern H — You've debugged the same problem twice this run
 
@@ -524,8 +518,8 @@ pass, then verify with a second grep that returns empty.
 | Forms | `sap.ui.layout.form.Form` + `ColumnLayout` if any | Never `SimpleForm` (UI5 guideline §4) |
 | Casts | Real control types (`as Button`), never `as any` / `as unknown as ...` | Per TS conversion §General Rules |
 | Tests | OPA5 + QUnit skipped from first cut | Promoted to follow-up if Run 1 is green |
-| Linter | `mcp__SAPUI5_MCP_Server__run_ui5_linter` → 0 findings | Hard acceptance criterion |
-| Manifest validation | `mcp__SAPUI5_MCP_Server__run_manifest_validation` → 0 errors | Hard acceptance criterion |
+| Linter | If exposed: `mcp__SAPUI5_MCP_Server__run_ui5_linter` → 0 findings; otherwise use the app's local lint script if present | Hard gate only when the tool/script exists; never call absent MCP tools |
+| Manifest validation | If exposed: `mcp__SAPUI5_MCP_Server__run_manifest_validation` → 0 errors; otherwise rely on build/browser smoke and report degraded validation | Hard gate only when the MCP exists |
 | Type check | `npm run ts-typecheck` (script added to package.json) → 0 errors | Hard acceptance criterion |
 
 ## Input
@@ -555,14 +549,13 @@ Assert: `manifest.json` parses; `webapp/controller/` and `webapp/view/` both exi
 one `*.controller.js` and one `*.view.xml` are present. If any of these fail, stop with
 *"`<legacy>` does not look like a UI5 app — check the path."*
 
-### 0b. UI5 MCP server reachable
+### 0b. UI5 MCP capability gate
 
-```text
-mcp__SAPUI5_MCP_Server__get_version_info(frameworkName="SAPUI5")
-```
-
-Assert: returns at least `1.147.x` in the version map. If the tool errors, stop with *"UI5
-MCP server is not configured; configure it in `.cursor/mcp.json` before running this skill."*
+Use tool discovery first. If `mcp__SAPUI5_MCP_Server__get_version_info` is exposed, call it
+with the live schema and assert the target UI5 release is available. If the UI5 MCP is not
+exposed, do not call any `mcp__SAPUI5_MCP_Server__*` function. Continue only in degraded mode
+with SAP docs MCP (`search`, `fetch`, `ui5_version_diff`) plus local project scripts, and
+report that UI5 MCP validation/scaffolding was unavailable.
 
 ### 0c. Pull the authoritative guidelines (do this BEFORE writing any code)
 
@@ -570,6 +563,8 @@ MCP server is not configured; configure it in `.cursor/mcp.json` before running 
 mcp__SAPUI5_MCP_Server__get_typescript_conversion_guidelines
 mcp__SAPUI5_MCP_Server__get_guidelines
 ```
+
+Call these only when exposed by tool discovery.
 
 Read both responses fully. They are the source of truth for:
 
@@ -789,22 +784,15 @@ If the user confirmed wipe-and-rewrite:
 Bash: rm -rf <target>/* <target>/.[!.]*  # safely empty <target>/ while keeping the folder
 ```
 
-### 3b. Scaffold via UI5 MCP
+### 3b. Scaffold via UI5 MCP when exposed
 
-Call `create_ui5_app` directly into `<target>/` (NOT into a sub-folder):
+Call `mcp__SAPUI5_MCP_Server__create_ui5_app` directly into `<target>/` (NOT into a sub-folder)
+only when the UI5 MCP is exposed. Use the live schema from tool discovery and map these values:
+namespace `<source_namespace>.modern`, base path `<absolute path to target>`, no nested app
+directory, SAPUI5, UI5 version `1.147.2` unless the user selected another version, TypeScript
+enabled, no git initialization, and npm install enabled when supported.
 
-```text
-mcp__SAPUI5_MCP_Server__create_ui5_app(
-  appNamespace = "<source_namespace>.modern",
-  basePath = "<absolute path to target>",
-  createAppDirectory = false,
-  framework = "SAPUI5",
-  frameworkVersion = "1.147.2",
-  typescript = true,
-  initializeGitRepository = false,
-  runNpmInstall = true
-)
-```
+If `create_ui5_app` is not exposed, do not call it. Use the repository's existing app template or the local UI5/Fiori generator path already configured for the project, then keep the same validation gates that are available locally.
 
 > `oDataV4Url` is intentionally **omitted** here — the V4 service is behind a proxy with
 > credentials, so URL validation will fail. The data source is added manually in Phase 4.
@@ -958,13 +946,10 @@ Write the merged manifest:
 Write: <target>/webapp/manifest.json
 ```
 
-Validate:
-
-```text
-mcp__SAPUI5_MCP_Server__run_manifest_validation(manifestPath="<absolute path>/webapp/manifest.json")
-```
-
-Fix anything it flags before moving on.
+Validate with `mcp__SAPUI5_MCP_Server__run_manifest_validation` only when the UI5 MCP is exposed.
+Use the live schema from tool discovery and pass the absolute `<target>/webapp/manifest.json`
+path. If absent, validate through `npm run build` / browser smoke and report manifest MCP
+validation as unavailable. Fix anything it flags before moving on.
 
 ### 4b. ui5.yaml — add proxy + ensure transpile middleware
 
@@ -1305,12 +1290,9 @@ public onPress(event: List$SelectionChangeEvent): void {
 forces `as` casts on every `getParameter` / `getParameters` call. If a specific event type
 doesn't seem to exist, search for it first:
 
-```text
-mcp__SAPUI5_MCP_Server__get_api_reference(
-  projectDir="<target>",
-  query="sap.m.SearchField#liveChange"
-)
-```
+Call `mcp__SAPUI5_MCP_Server__get_api_reference` only when the UI5 MCP is exposed, using the live
+schema and query `sap.m.SearchField#liveChange`. Otherwise use
+`search(query="sap.m.SearchField liveChange event type", includeOnline=true, includeSamples=false)`.
 
 For OData V4 context-aware events, use `sap.ui.model.odata.v4.Context`:
 
@@ -1521,17 +1503,11 @@ Write: <target>/webapp/view/<X>.view.xml
 Write: <target>/webapp/controller/<X>.controller.ts
 ```
 
-After each pair, run the linter against just the new file:
-
-```text
-mcp__SAPUI5_MCP_Server__run_ui5_linter(
-  projectDir="<absolute target>",
-  filePatterns=["webapp/controller/<X>.controller.ts", "webapp/view/<X>.view.xml"],
-  provideContextInformation=true
-)
-```
-
-Fix findings before advancing. **Do not** accumulate lint debt across views.
+After each pair, run the linter against just the new files when the UI5 MCP exposes
+`mcp__SAPUI5_MCP_Server__run_ui5_linter`. Use the live schema from tool discovery, scope it to
+`webapp/controller/<X>.controller.ts` and `webapp/view/<X>.view.xml`, and request context when
+supported. If absent, run the app's local lint/typecheck scripts after each pair. Fix findings
+before advancing. **Do not** accumulate lint debt across views.
 
 ### 6e. i18n migration (with rename: masterX → mainX)
 
@@ -1582,26 +1558,19 @@ After auto-fix, re-read any file with remaining manual findings (usually 1-2).
 
 ### 7b. UI5 linter
 
-```text
-mcp__SAPUI5_MCP_Server__run_ui5_linter(
-  projectDir="<absolute target>",
-  provideContextInformation=false   # avoid bloating output on the full-project run
-)
-```
-
-Expected: zero findings. Common false-positives are rare; most findings have a real fix
-suggested in the tool output. Use the `fix=true` argument **only** after the user confirms the
-suggested fixes look correct.
+Call `mcp__SAPUI5_MCP_Server__run_ui5_linter` only when the UI5 MCP is exposed. Use the live
+schema from tool discovery for a full-project lint of `<absolute target>` and avoid verbose
+context output when the schema supports that switch. Expected: zero findings. Common
+false-positives are rare; most findings have a real fix suggested in the tool output. Use an
+auto-fix argument only after the user confirms the suggested fixes look correct and the live
+schema exposes such an option.
 
 ### 7c. Manifest validation
 
-```text
-mcp__SAPUI5_MCP_Server__run_manifest_validation(
-  manifestPath="<absolute target>/webapp/manifest.json"
-)
-```
-
-Expected: zero errors. Warnings about unused i18n keys are OK.
+Call `mcp__SAPUI5_MCP_Server__run_manifest_validation` only when the UI5 MCP is exposed. Use the
+live schema from tool discovery and validate `<absolute target>/webapp/manifest.json`. Expected:
+zero errors. Warnings about unused i18n keys are OK. If absent, report manifest MCP validation as
+unavailable and rely on the build + browser smoke gates.
 
 ### 7d. TypeScript type check
 
@@ -1653,32 +1622,29 @@ the canonical URL).
 
 ### 8d. Browser-render verification (CRITICAL — this is the real acceptance gate)
 
-Run one of the following depending on which MCP is available. If none are, ask the user to
-verify manually.
+Run one of the following depending on which browser automation capability is exposed. Use tool
+discovery for the current session's browser/Chrome/preview tools; do not call historical or
+guessed MCP names unless they are actually exposed.
 
-**Option A — Chrome MCP** (preferred):
-
-```text
-mcp__Claude_in_Chrome__navigate(url="http://localhost:8080/index.html")
-mcp__Claude_in_Chrome__get_page_text       # must include project titles from V4
-mcp__Claude_in_Chrome__javascript_tool(
-  code="document.querySelector('.sapFFCL').clientHeight"
-)
-# Expected: a number > 400 (a normal dev viewport is ~600-1000 tall)
-```
-
-**Option B — Claude_Preview MCP**:
+**Option A — current browser/Chrome automation tool** (preferred when exposed):
 
 ```text
-mcp__Claude_Preview__preview_start(url="http://localhost:8080/index.html")
-mcp__Claude_Preview__preview_screenshot    # confirm two columns visible
-mcp__Claude_Preview__preview_eval(
-  expression="document.querySelector('.sapFFCL').clientHeight"
-)
+Navigate to http://localhost:8080/index.html with the exposed browser/Chrome tool.
+Read visible page text; it must include project titles from V4.
+Evaluate: document.querySelector('.sapFFCL')?.clientHeight
+Expected: a number > 400 in a normal dev viewport.
 ```
 
-**Option C — manual** (if neither MCP is available): ask the user to open the URL and confirm
-the two-column rendering before declaring the skill done.
+**Option B — preview tool**:
+
+```text
+Start the exposed preview tool at http://localhost:8080/index.html.
+Capture a screenshot and confirm two columns are visible.
+Evaluate: document.querySelector('.sapFFCL')?.clientHeight
+```
+
+**Option C — manual** (if no browser/preview tool is exposed): ask the user to open the URL and
+confirm the two-column rendering before declaring the skill done.
 
 Verification targets:
 
@@ -1711,7 +1677,7 @@ Manifest:       valid
 TypeCheck:      clean
 Smoke:          200 OK on index.html + manifest.json + $metadata; UI renders Master list
 
-UI5 MCP calls:  <count> (get_typescript_conversion_guidelines, get_guidelines,
+UI5 MCP calls:  <count or "not exposed/skipped"> (get_typescript_conversion_guidelines, get_guidelines,
                 create_ui5_app, run_ui5_linter ×N, run_manifest_validation,
                 get_api_reference ×M where needed)
 sap-docs:       <count> (only when V2 ➜ V4 patterns needed lookup)
@@ -1781,8 +1747,9 @@ What's next:
 - **Apply the naming overrides silently.** "main" not "master"; no Hungarian prefixes. Don't
   preserve the legacy naming for "consistency" — the legacy naming is part of what we're
   modernizing.
-- **Always call `get_typescript_conversion_guidelines` and `get_guidelines` first.** Their
-  content is large and version-specific; do not paraphrase from memory.
+- **When UI5 MCP is exposed, always call `get_typescript_conversion_guidelines` and `get_guidelines` first.** Their
+  content is large and version-specific; do not paraphrase from memory. If the UI5 MCP is absent,
+  use SAP docs MCP search + `ui5_version_diff` and report degraded guidance.
 - **Use sap-docs MCP for ad-hoc best-practice lookups during the run.** When uncertain about
   routing config, V4 binding behaviour, draft semantics, FCL layout values, etc., search
   with the active SAP docs MCP namespace and fetch the specific topic. Don't guess.

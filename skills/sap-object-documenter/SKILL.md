@@ -25,7 +25,7 @@ The user provides **one of**:
 
 - **Package** (e.g., `Z_SALES_EXTENSIONS`) — document every custom object in it
 - **Object list** — comma-separated (e.g., `ZCL_SALES_HANDLER, ZR_POSTING_JOB`)
-- **Type + prefix** — e.g., "document all Z* classes" → runs `SAPSearch(query="Z*")`, then filters returned rows to `CLAS`
+- **Type + prefix** — e.g., "document all Z* classes" → runs `SAPSearch(searchType="object", query="Z*", maxResults=100)`, then filters returned rows to `CLAS`
 
 And optionally:
 - **Output path** — default: `docs/custom-code/<package_or_group>.md`
@@ -46,7 +46,7 @@ SAPRead(type="DEVC", name="<package>")
 Resolve each:
 
 ```
-SAPSearch(query="<name>")
+SAPSearch(searchType="object", query="<name>", maxResults=10)
 ```
 
 Filter to document-worthy types: `CLAS, INTF, FUGR, PROG, DDLS, BDEF, SRVD, TABL`. Skip generated proxies, transport objects, and test include classes.
@@ -57,7 +57,7 @@ Run these in parallel for each object:
 
 ```
 SAPRead(type="<type>", name="<name>")             # Source
-SAPContext(type="<type>", name="<name>", depth=1) # Dependencies (CLAS/INTF/PROG/FUNC/DDLS only; BTP: CLAS/INTF/DDLS)
+SAPContext(action="deps", type="<type>", name="<name>", depth=1) # Dependencies (CLAS/INTF/PROG/FUNC/DDLS only; BTP: CLAS/INTF/DDLS)
 ```
 
 For object types SAPContext doesn't support (FUGR, BDEF, SRVD, TABL, DOMA, DTEL), skip the dependency call and list the "obvious" callers/dependencies by regex-scanning the source for `CL_*`, `IF_*`, `SAP*` and `CALL FUNCTION '...'`. Note the degraded confidence in the "Dependencies" section.
@@ -103,7 +103,7 @@ If SAPLint fails or object isn't lintable (e.g., CDS view, table), skip this sec
 For objects whose name or structure references an SAP app component (FI, SD, MM, etc.), enrich with component context:
 
 ```
-search("<component_code> application component")
+search(query="<component_code> application component", includeOnline=true, includeSamples=false)
 ```
 
 Example: `ZCL_FI_GL_POSTING` → search `"FI-GL general ledger"` to get the SAP application-component description for the doc header.

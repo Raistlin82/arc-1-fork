@@ -120,5 +120,5 @@ Write to disk only if asked; otherwise return inline.
 ## Follow-up Options
 
 - "Review the actual changes in one of these?" → [sap-transport-review](../sap-transport-review/SKILL.md).
-- "Release the ready ones?" → `SAPTransport(action="release")` / `release_recursive`.
-- "Clean up the empty/stale ones?" → `SAPTransport(action="delete")`.
+- "Release the ready ones?" → `SAPTransport(action="release_recursive", id="<id>")` (or `SAPTransport(action="release", id="<id>")` for a single request/task).
+- "Clean up the empty/stale ones?" → `SAPTransport(action="delete", id="<id>")`.

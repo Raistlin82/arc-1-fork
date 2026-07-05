@@ -94,24 +94,10 @@ Extract and note:
 Search for existing RAP artifacts to understand the system's established patterns. This is critical for consistency.
 
 ```
-SAPSearch(query="BDEF Z*", maxResults=20)
+SAPSearch(searchType="object", query="Z*", maxResults=100)
 ```
 
-```
-SAPSearch(query="SRVD Z*", maxResults=20)
-```
-
-```
-SAPSearch(query="SRVB Z*", maxResults=20)
-```
-
-```
-SAPSearch(query="DCLS Z*", maxResults=20)
-```
-
-```
-SAPSearch(query="DDLX Z*", maxResults=20)
-```
+Filter the returned rows by object type (`BDEF`, `SRVD`, `SRVB`, `DCLS`, `DDLX`). Normal object-name search does not apply an `objectType` filter; `objectType` is for `source_code` and `tadir_lookup`.
 
 **If NO Z* BDEFs are found**, you MUST still ground yourself in at least one real system example before writing any code. Use this deterministic fallback:
 
@@ -122,11 +108,11 @@ SAPRead(type="TABL", name="SCARR")
 This shows you the system's actual TABL annotation pattern (enhancement category, delivery class, data maintenance, client handling). Then read one activated CDS view:
 
 ```
-SAPSearch(query="DDLS I_*", maxResults=5)
+SAPSearch(searchType="object", query="I_*", maxResults=20)
 SAPRead(type="DDLS", name="<first_result>")
 ```
 
-This shows CDS conventions (client field handling, alias style, annotation patterns). **Do NOT proceed to Phase 4 until at least one real system table and one CDS view are in context.** Writing from memory of documentation alone is the #1 cause of wasted retries.
+Filter the search results to `DDLS` before reading the first representative CDS view. This shows CDS conventions (client field handling, alias style, annotation patterns). **Do NOT proceed to Phase 4 until at least one real system table and one CDS view are in context.** Writing from memory of documentation alone is the #1 cause of wasted retries.
 
 If results are found, read 2-3 representative RAP stacks to extract the team's patterns:
 
@@ -151,7 +137,7 @@ SAPRead(type="SRVB", name="<found_service_binding>")
 ```
 
 ```
-SAPContext(type="DDLS", name="<found_interface_view>", action="impact")
+SAPContext(action="impact", type="DDLS", name="<found_interface_view>")
 ```
 
 ```
@@ -195,7 +181,7 @@ Use this to learn:
 If the user mentioned existing tables or business objects, read them:
 
 ```
-SAPSearch(query="<mentioned_table_or_object>")
+SAPSearch(searchType="object", query="<mentioned_table_or_object>", maxResults=10)
 ```
 
 ```
@@ -203,13 +189,13 @@ SAPRead(type="TABL", name="<found_table>")
 ```
 
 ```
-SAPContext(type="TABL", name="<found_table>")
+SAPContext(action="structure", type="TABL", name="<found_table>")
 ```
 
 Also search for related SAP standard objects in the domain:
 
 ```
-SAPSearch(query="<domain_keyword>", maxResults=10)
+SAPSearch(searchType="object", query="<domain_keyword>", maxResults=10)
 ```
 
 Check if there are existing CDS views or tables the new service should build on rather than duplicating data.
@@ -217,7 +203,7 @@ Check if there are existing CDS views or tables the new service should build on 
 If building on existing objects on a BTP system, check their API release state for Clean Core compliance:
 
 ```
-SAPRead(type="API_STATE", name="<found_table_or_view>", objectType="TABL")
+SAPRead(type="API_STATE", name="<found_table_or_view>", objectType="<type>")
 ```
 
 If an object is deprecated (C2) or not released, avoid building on it — search for its released successor instead.
@@ -225,13 +211,13 @@ If an object is deprecated (C2) or not released, avoid building on it — search
 To understand what already depends on a found CDS object, use CDS-specific impact instead of generic where-used:
 
 ```
-SAPContext(type="DDLS", name="<found_view>", action="impact")
+SAPContext(action="impact", type="DDLS", name="<found_view>")
 ```
 
 Use generic reverse dependencies only for non-DDLS objects:
 
 ```
-SAPContext(type="CLAS", name="<found_class>", action="usages")
+SAPNavigate(action="references", type="CLAS", name="<found_class>")
 ```
 
 ### 1d. Code Guidelines & Quality Standards
@@ -280,7 +266,7 @@ search(query="RAP service definition provider contracts odata_v4_ui odata_v4_web
 search(query="<business_domain> RAP example SAP", includeSamples=true, abapFlavor="<cloud|standard>")
 ```
 
-For example, if the user wants a travel app: `search("RAP travel booking managed scenario example")`
+For example, if the user wants a travel app: `search(query="RAP travel booking managed scenario example", includeSamples=true, abapFlavor="<cloud|standard>")`
 
 **Architecture decisions** — search only for topics relevant to this service:
 
@@ -651,13 +637,19 @@ After approval, create the artifacts. Use batch creation when possible.
 **ALWAYS try `batch_create` first.** Do not start with sequential creates. `batch_create` creates all objects in one call — put dependencies first in the array (tables → views → DCLS → class → BDEFs → service definition).
 
 ```
-SAPWrite(action="batch_create", objects=[...], package="<package>", transport="<transport>")
+SAPWrite(action="batch_create", objects=[
+  {type:"TABL", name:"Z<ROOT>_D", source:"<table_source>"},
+  {type:"DDLS", name:"ZI_<entity>", source:"<interface_view_source>"}
+], package="<package>", transport="<transport>")
 ```
 
 **For composition-linked DDLS or other interdependent siblings** (parent's `composition [0..*] of ZR_CHILD` where the child is also in the same batch), pass `activateAtEnd=true` so ARC-1 writes inactive drafts for every object first and then issues ONE terminal `activateBatch`. SAP's activator sees the whole graph at once and resolves cross-references between siblings. Per-object inline activation would fail on the parent with `"data source ZR_CHILD does not exist or is not active"` because the child is still inactive when the parent gets activated.
 
 ```
-SAPWrite(action="batch_create", activateAtEnd=true, objects=[...], package="<package>", transport="<transport>")
+SAPWrite(action="batch_create", activateAtEnd=true, objects=[
+  {type:"DDLS", name:"ZI_<entity>", source:"<root_view_source>"},
+  {type:"DDLS", name:"ZI_<child>", source:"<child_view_source>"}
+], package="<package>", transport="<transport>")
 ```
 
 If some generated objects need explicit per-item routing, put `package` and `transport` on the individual objects. Item-level values override the top-level batch values and are required when a recovered plan mixes packages:
@@ -775,9 +767,9 @@ At this point the service is previewable and stable.
 10. Generate missing behavior handler signatures:
    - First preference: `SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="ZBP_I_<entity>", bdefName="ZI_<entity>")` to list missing signatures.
    - Then rerun with `autoApply=true` to inject declarations plus empty implementation stubs into class sections (`main`, `definitions`, `implementations`) when possible.
-   - Next fallback: `SAPDiagnose(action="quickfix", ...)` + `SAPDiagnose(action="apply_quickfix", ...)` if proposals are available.
+   - Next fallback: `SAPDiagnose(action="quickfix", type="CLAS", name="ZBP_I_<entity>", source="<current_source>", line=<error_line>, column=<error_col>)` + `SAPDiagnose(action="apply_quickfix", type="CLAS", name="ZBP_I_<entity>", source="<current_source>", line=<error_line>, column=<error_col>, proposalUri="<proposal_uri>", proposalUserContent="<proposal_user_content>")` if proposals are available.
    - Fallback: ADT quick-fix in editor if no MCP quick-fix proposal is exposed.
-11. Implement method bodies with `SAPWrite(action="edit_method", ...)` (avoid full-class rewrites when behavior pools are unstable).
+11. Implement method bodies with `SAPWrite(action="edit_method", type="CLAS", name="ZBP_I_<entity>", method="<handler_class>~<method>", source="<method_body>", transport="<transport>")` (avoid full-class rewrites when behavior pools are unstable).
 12. Add `strict ( 2 )` and authorization handlers only after signatures and method bodies are active.
 13. Add draft last. Prefer generated draft tables (ADT quick-fix) over hand-written draft table definitions.
 14. Create/activate DCLS and DDLX after BO logic is green.
@@ -803,7 +795,7 @@ Use the source code templates from the plan. Adapt them based on research findin
 - **Follow existing patterns**: If existing RAP projects use a specific annotation style or field naming pattern, match it exactly
 - **Draft**: Include draft table, draft actions in interface BDEF, `use draft` in projection BDEF
 - **Service exposure**: Ensure the service definition provider contract matches the planned binding type
-- **ABAP formatting**: Run `SAPLint(action="format", source="<abap_source>", name="<class_name>")` on generated ABAP classes before writing them if you want SAP-native keyword case/indentation
+- **ABAP formatting**: Run `SAPLint(action="format", source="<abap_source>", name="<class_name>")` on generated ABAP classes before writing them if you want SAP-native keyword case/indentation. The call returns formatted source; pass that returned text to `SAPWrite`.
 
 ### 4d. Post-Creation Validation
 
@@ -934,7 +926,7 @@ Offer follow-up actions based on the plan:
 5. **Generate unit tests** → use `generate-abap-unit-test` skill
 6. **Add compositions** for child entities (if multi-entity scenario planned for Phase 2)
 7. **Register in FLP** (if FLP feature available) → use SAPManage:
-  - `SAPManage(action="flp_create_catalog", catalogId="Z_<ENTITY>_C", title="<Entity> Catalog")`
+  - `SAPManage(action="flp_create_catalog", domainId="Z_<ENTITY>_C", title="<Entity> Catalog")`
   - `SAPManage(action="flp_create_tile", catalogId="Z_<ENTITY>_C", tile={id:"Z_<ENTITY>_T", title:"<Entity>", semanticObject:"<Entity>", semanticAction:"manage"})`
   - `SAPManage(action="flp_create_group", groupId="Z_<ENTITY>_G", title="<Entity>")`
   - `SAPManage(action="flp_add_tile_to_group", groupId="Z_<ENTITY>_G", catalogId="Z_<ENTITY>_C", tileInstanceId="Z_<ENTITY>_T")`
@@ -1032,7 +1024,7 @@ Fall back to sequential creation (Phase 4b). Report which objects succeeded and 
 | Error | Cause | Fix |
 |---|---|---|
 | 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS endpoint not responding as expected | Check `SAPManage(action="probe")` for system info. Verify ICF service activation. Try creating the object in ADT to confirm system capability. |
-| `Resource X does already exist` on create | Prior stub or name collision | Switch immediately to `SAPWrite(action="update", ...)` and resend the full source. Do not retry `create` with the same payload. |
+| `Resource X does already exist` on create | Prior stub or name collision | Switch immediately to `SAPWrite(action="update", type="<type>", name="<name>", source="<full_source>", transport="<transport>")` and resend the full source. Do not retry `create` with the same payload. |
 | Feature not supported | System version too old | Adapt plan to available features |
 | Activation error | Dependency order wrong | Use batch activation or sequential in dependency order |
 | Lint blocks write | Code doesn't match lint rules | Adjust generated code to pass lint, or check if lint config is too strict |
@@ -1046,7 +1038,7 @@ Fall back to sequential creation (Phase 4b). Report which objects succeeded and 
 | `not a suitable draft persistency ... there is no "X" field` | Hand-written draft table column naming mismatch | Generate draft table via quick-fix (preferred), or follow CDS-name derivation exactly. |
 | `Annotation 'UI.headerInfo.X' used at wrong position` in DDLX | Unsupported annotation scope in DDLX on 7.5x | Move `@UI.headerInfo`, `@Search.searchable`, `@ObjectModel.*` to projection DDLS source. |
 | `Multiple entries with same name 'X' not allowed` in DDLX | Duplicate annotation blocks on same field | Consolidate field annotations into one block. |
-| `[?/011]` while updating behavior pool class | Full-class behavior-pool write path unstable for `METHODS ... FOR ...` | Use `SAPWrite(action="scaffold_rap_handlers", ...)` first (optionally `autoApply=true`), then quick-fix fallback, then patch bodies with `SAPWrite(action="edit_method", ...)`. |
+| `[?/011]` while updating behavior pool class | Full-class behavior-pool write path unstable for `METHODS ... FOR ...` | Use `SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="ZBP_I_<entity>", bdefName="ZI_<entity>", autoApply=true)` first, then quick-fix fallback, then patch bodies with `SAPWrite(action="edit_method", type="CLAS", name="ZBP_I_<entity>", method="<handler_class>~<method>", source="<method_body>", transport="<transport>")`. |
 
 ---
 

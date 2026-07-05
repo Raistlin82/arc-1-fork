@@ -88,14 +88,14 @@ Choose the sides by what the user is reviewing:
 |---|---|---|
 | **In-flight** ("what I'm about to activate/release") | `active` → `inactive` | The reliable diff. No draft → "no pending changes" (clean). |
 | **Since my last release** (dev's recent work) | `<last released revision id>` → `active` (or `inactive` if still draft) | "What changed after my last request." Last-released revision = newest `VERSIONS` entry carrying a transport title; captures both activated-since-release and pending edits. |
-| **Released transport** ("what did this TR change") | `<pre-transport revision id>` → `active` | Get ids from `SAPRead(type="VERSIONS", name=…)`; SAP only snapshots on **release**. |
+| **Released transport** ("what did this TR change") | `<pre-transport revision id>` → `active` | Get ids from `SAPRead(type="VERSIONS", name="<name>", objectType="<type>")`; SAP only snapshots on **release**. |
 | **Specific revisions** | `<id\|uri>` → `<id\|uri\|active>` | From a VERSIONS response. |
 
 **Snapshot-sparsity reality (important):** ABAP cuts a version snapshot only when a transport is
 *released*. So for an open/unreleased transport, objects usually have just the active version (+ maybe
 an inactive draft) — there is no "before" revision to diff against. Handle it honestly:
 
-1. For each object, `SAPRead(type="VERSIONS", name=…, objectType=…)`. If ≥2 revisions exist, diff the
+1. For each object, `SAPRead(type="VERSIONS", name="<name>", objectType="<type>")`. If ≥2 revisions exist, diff the
    pre-change revision → `active`.
 2. If only 1 revision (the common case for unreleased work), fall back to `active` → `inactive` (shows
    the pending edit) and label it "pending (unactivated)".
@@ -104,9 +104,9 @@ an inactive draft) — there is no "before" revision to diff against. Handle it 
 
 ## Step 4 (optional): impact + quality — only when asked or the change is risky
 
-- **Impact** (a changed `DDLS`/`BDEF`/`SRVD` can break consumers): `SAPContext(action="impact", type="DDLS", name="<view>")` → projection views, BDEFs, service defs/bindings, ABAP consumers that depend on it.
-- **Quality**: `SAPDiagnose(action="atc", ...)` per changed object → new ATC findings the change introduces; or `SAPLint(action="lint", source=…, name=…)` for a fast local pass after reading the changed source.
-- **Pre-release validity**: for unactivated work, `SAPActivate` (or `SAPDiagnose action="syntax"`) confirms the draft even compiles before you stake a release on it.
+- **Impact** (a changed `DDLS`/`BDEF`/`SRVD` can break consumers): resolve the bound/root CDS view first, then run `SAPContext(action="impact", type="DDLS", name="<view>")` → projection views, BDEFs, service defs/bindings, ABAP consumers that depend on it.
+- **Quality**: `SAPDiagnose(action="atc", type="<type>", name="<name>")` per changed object → new ATC findings the change introduces; or `SAPLint(action="lint", source="<source>", name="<name>")` for a fast local pass after reading the changed source.
+- **Pre-release validity**: for unactivated work, `SAPDiagnose(action="syntax", type="<type>", name="<name>", version="inactive")` confirms the draft compiles before you stake a release on it; then activate with `SAPActivate(type="<type>", name="<name>")` or a batch `SAPActivate(objects=[{type:"<type>", name:"<name>"}])`.
 
 ## Step 5: Write the report
 
@@ -174,7 +174,7 @@ Write to disk (default `docs/reviews/transport-<id>-<date>.md`) only if asked; o
 
 ## Follow-up Options
 
-- "Activate / release this once it looks right?" → `SAPActivate`, then `SAPTransport(action="release")`.
+- "Activate / release this once it looks right?" → `SAPActivate(type="<type>", name="<name>")`, then `SAPTransport(action="release_recursive", id="<id>")`.
 - "Who breaks if I change this CDS?" → `SAPContext(action="impact", type="DDLS", name="<view>")` (or re-run with `+impact`).
 - "Document these objects properly?" → [sap-object-documenter](../sap-object-documenter/SKILL.md).
 - "Clean-core readiness of the changed objects?" → [sap-clean-core-atc](../sap-clean-core-atc/SKILL.md).

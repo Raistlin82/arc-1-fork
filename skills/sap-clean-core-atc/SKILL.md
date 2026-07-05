@@ -54,7 +54,7 @@ Filter results to keep only `PROG | CLAS | INTF | FUGR | FUNC | DDLS | BDEF | SR
 For each name, resolve the type:
 
 ```
-SAPSearch(query="<name>")
+SAPSearch(searchType="object", query="<name>", maxResults=10)
 ```
 
 Use the first exact match.
@@ -66,7 +66,7 @@ For each custom object, collect the list of SAP-shipped objects it references.
 ### 2a. Use SAPContext for dependency extraction
 
 ```
-SAPContext(type="<type>", name="<object_name>", depth=1)
+SAPContext(action="deps", type="<type>", name="<object_name>", depth=1)
 ```
 
 SAPContext returns a dependency list. Keep only dependencies whose names do NOT start with Z/Y/customer-namespace — those are SAP references. Record each as `(objectType, objectName)`.

@@ -63,7 +63,7 @@ Returns all methods with their signatures and visibility (public/protected/priva
 ### 1c. Get dependency context
 
 ```
-SAPContext(type="CLAS", name="<class_name>")
+SAPContext(action="deps", type="CLAS", name="<class_name>")
 ```
 
 Automatically extracts all dependencies and fetches compressed public API contracts for each. This gives you:
@@ -76,7 +76,7 @@ Automatically extracts all dependencies and fetches compressed public API contra
 For complex classes with deep dependency chains, use `depth=2`:
 
 ```
-SAPContext(type="CLAS", name="<class_name>", depth=2)
+SAPContext(action="deps", type="CLAS", name="<class_name>", depth=2)
 ```
 
 ### 1d. (Optional) Read existing test classes
@@ -142,11 +142,11 @@ If the user says "all" or doesn't respond with preferences, generate all.
 Use mcp-sap-docs to get the latest ABAP Unit and test double patterns.
 
 ```
-search("ABAP Unit cl_abap_unit_assert")
+search(query="ABAP Unit cl_abap_unit_assert", includeOnline=true, includeSamples=false, abapFlavor="<cloud|standard>")
 ```
 
 ```
-search("test double interface mock ABAP")
+search(query="test double interface mock ABAP", includeOnline=true, includeSamples=true, abapFlavor="<cloud|standard>")
 ```
 
 Use the returned documentation to inform the generated code patterns. Key things to verify:
@@ -376,7 +376,7 @@ If tests fail:
 | Activation error | Syntax error in generated code — typo, wrong type, missing variable declaration | Read activation error, fix syntax, re-activate |
 | `cl_abap_testdouble` not found | Test double framework not available on system (older releases) | Use local test double class pattern instead |
 | Method not found on CUT | Method is private or protected — not callable from test | Test only public methods; for protected, use `FRIENDS` clause |
-| `testclasses`/CCAU include missing | Fresh class has no ABAP Unit include yet | Use `SAPWrite(action="update", type="CLAS", include="testclasses", source=...)`; ARC-1 auto-initializes it |
+| `testclasses`/CCAU include missing | Fresh class has no ABAP Unit include yet | Use `SAPWrite(action="update", type="CLAS", name="<class_under_test>", include="testclasses", source="<generated_testclasses_include>", transport="<transport>")`; ARC-1 auto-initializes it |
 | Method not found in `edit_method` | The local `ltc_*` method does not exist yet, or the wrong local class name was used | First write the full `testclasses` include with `update include="testclasses"`, then use `edit_method` for existing methods |
 
 ## Notes

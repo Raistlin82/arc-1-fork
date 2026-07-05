@@ -144,7 +144,7 @@ Keep only objects of runtime types (PROG, CLAS, FUGR, FUNC) with Z/Y prefix. (Ta
 Use one broad name search, then filter the returned rows by runtime type:
 
 ```
-SAPSearch(query="<prefix>*", searchType="object")
+SAPSearch(searchType="object", query="<prefix>*", maxResults=100)
 ```
 Then keep only `PROG`, `CLAS`, and `FUGR` rows from the result. Normal object-name search does not apply an `objectType` filter; `objectType` is for `source_code` and `tadir_lookup`.
 
@@ -237,7 +237,7 @@ ZCL_LEGACY_HELPER       CLAS  Z_FI_CUSTOM       2023-11-03 (MARIAN / A4HK900031)
 ...
 ```
 
-"Last change" comes from `SAPRead(type="VERSIONS")`. Old + unused = safest to delete.
+"Last change" comes from `SAPRead(type="VERSIONS", name="<name>", objectType="<type>")`. Old + unused = safest to delete.
 
 ### 6c. LIKELY_UNUSED table with caller hints
 
