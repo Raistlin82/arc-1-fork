@@ -1056,7 +1056,7 @@ Target: only released APIs (`state=released` in the API release contract). Curat
 | `ENQUEUE_*`/`DEQUEUE_*` FMs on own lock objects | `CL_ABAP_LOCK_OBJECT_FACTORY` on the same Z lock object | Lock object stays; only the call style changes |
 | Direct `SY-DATUM`/`SY-UZEIT` in cloud-strict code | `XCO_CP=>SY->DATE( )` / `CL_ABAP_CONTEXT_INFO` | Time-zone-correct by construction |
 | Date/period conversion FMs (`CONVERT_DATE_*`, factory-calendar FMs) | `XCO_CP_TIME` / released calendar CDS (`I_CalendarDate`, …) | Verify per construct — coverage is uneven |
-| Direct SELECT on SAP tables (`VBAK`, `KNA1`, `MARA`, `BSEG`, …) | Released `I_*` CDS views (`I_SalesDocument`, `I_Customer`, `I_Product`, `I_JournalEntry`, …) | THE most frequent C finding; resolve each table via `successorObjects` |
+| Direct SELECT on SAP tables (`VBAK`, `KNA1`, `MARA`, `BKPF`/`BSEG`, …) | Released `I_*` CDS views (`I_SalesDocument`, `I_Customer`, `I_Product`, `I_JournalEntry`/`I_JournalEntryItem`, …) | THE most frequent C finding; resolve each table via `successorObjects` |
 | RFC call to an unreleased FM | Released OData/SOAP API (api.sap.com) consumed via `CL_WEB_HTTP_CLIENT_MANAGER` + `CL_HTTP_DESTINATION_PROVIDER` | Needs destination/communication arrangement |
 | `POPUP_TO_CONFIRM` and dialog FMs | RAP action + Fiori side-effect/confirmation dialog | UI concern moved out of ABAP |
 | `READ_TEXT`/`SAVE_TEXT` (SAPscript long texts) | No generic released successor — model own text entity or app-specific API | Flag `research_required`; frequent side-by-side driver |
@@ -1068,7 +1068,7 @@ Target: only released APIs (`state=released` in the API release contract). Curat
 |---|---|---|
 | Stable Z-API (class/interface/CDS) consumed by other Z code | **Wrap-and-release**: verify stability (`SAPContext(action="impact")` fan-in + owner sign-off) → `/api-style-review` (sap-api-style plugin) on the surface — a released contract freezes naming/design debt → `SAPManage(action="set_api_state", contract="C1")` → every consumer drops to A | S |
 | Unavoidable unreleased SAP dependency | **Tier-2 wrapper** (SAP 3-tier extensibility model): isolate the dependency in a dedicated wrapper package, release the *wrapper's* API (C1), track the SAP successor for later swap | M |
-| Classic BAPI usage (fine on-prem, unreleased in cloud) | Wrap behind a Z-interface now (cheap), swap the implementation to the released OData API when extracting side-by-side | S + later M |
+| Classic BAPI usage | **Check the live release state first** (rule 9.0.2): since S/4HANA 2023 / Cloud 2308 SAP has RELEASED a curated subset of stable BAPIs for ABAP Cloud (C1) — those need no wrapper. For the (still-majority) unreleased ones: wrap behind a Z-interface now (cheap), swap to the released OData API when extracting side-by-side | S + later M |
 | CDS views built on classic DDIC views / unreleased base views | Rebase onto released `I_*` interface views; keep field aliases to avoid consumer churn | M |
 
 `--aggressive` / `--push-to-a` / `--target-level=A` enable this whole table; the default plan applies only the S-effort rows opportunistically.

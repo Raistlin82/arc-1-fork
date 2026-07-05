@@ -12,7 +12,7 @@ Different from [`../migrate-custom-code/SKILL.md`](../migrate-custom-code/SKILL.
 ## Input
 
 ```
-<Z-package> <target-dir> [--cap-runtime=node|java] [--skip=…]
+<Z-package> <target-dir> [--cap-runtime=node] [--skip=…] [--apply]
 ```
 
 Examples:
@@ -24,12 +24,12 @@ Examples:
 | Aspect | Default |
 |---|---|
 | Target | `public_cloud` (Clean Core L-A goal) |
-| CAP runtime | Node.js (Java deferred to v2) |
+| CAP runtime | Node.js — the only supported value (Java deferred to v2) |
 | OData | V4 |
 | Fiori pattern | List Report + Object Page (LROP) |
 | Auth | XSUAA |
 | DB | HANA Cloud prod + SQLite dev |
-| Output mode | Sandbox `./target-cap-staging/` (reversible) |
+| Output mode | Sandbox `.target-cap-staging/` (reversible) |
 | MTA build | `mbt` |
 | Output language | English i18n bundle |
 
@@ -70,7 +70,7 @@ If the source project has a Clean Core CI gate (`scripts/ci/check-s4-compat-cove
 <target>/.target-cap-staging/
 ├── db/schema.cds            (Step 3)
 ├── srv/service.cds          (Step 4)
-├── srv/handlers/            (Step 4)
+├── srv/service.ts           (Step 4)
 ├── app/<namespace>/         (Step 5)
 ├── xs-security.json         (Step 6)
 ├── mta.yaml                 (Step 6)

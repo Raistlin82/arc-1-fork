@@ -39,11 +39,11 @@ Use this document to:
 | Sub-step | ARC-1 MCP | arc-1 skills | secondsky plugin | External | Notes |
 |---|---|---|---|---|---|
 | 2a — Package enumeration | `SAPRead(type="DEVC", name="<pkg>")` | — | — | — | Recursive sub-package walk (re-read each subpackage) |
-| 2b — Object enumeration | `SAPSearch(tadir_lookup, devclass=<pkg>)` | — | — | — | All object types per package |
+| 2b — Object enumeration | `SAPSearch(searchType="tadir_lookup", packageName="<pkg>")` | — | — | — | All object types per package |
 | 2c — Namespace filter | (post-processing) | — | — | — | Keep only `Z*`, `Y*`, customer namespace |
 | 2d — Unused detection | `SAPQuery(SCMON / SUSG)` (requires `SAP_ALLOW_FREE_SQL=true`) | **`sap-unused-code`** | — | — | Last 6 months runtime hits |
-| 2e — Impact analysis | **`SAPContext(action="impact")`** | — | — | — | ⚠️ **MOST IMPORTANT MCP CALL**. Fan-in count drives effort × risk multipliers |
-| 2f — Cluster into logical units | `SAPContext(action="structure")` + `SAPRead(type="FUGR", expand_includes=true)` | **`explain-abap-code`** (stubborn units), **`sap-object-documenter`** (batch unit docs) | — | — | Main + includes / FUGR / RAP stack = ONE unit; shared includes get one coordinated decision; classification + plan rows are per unit, never per bare include |
+| 2e — Cluster into logical units | `SAPContext(action="structure")` + `SAPRead(type="FUGR", expand_includes=true)` | **`explain-abap-code`** (stubborn units), **`sap-object-documenter`** (batch unit docs) | — | — | Main + includes / FUGR / RAP stack = ONE unit; shared includes get one coordinated decision; classification + plan rows are per unit, never per bare include |
+| 2f — Impact analysis (per unit) | **`SAPContext(action="impact")`** | — | — | — | ⚠️ **MOST IMPORTANT MCP CALL**. Fan-in count drives effort × risk multipliers |
 
 ### Step 3 — Classification
 
@@ -56,6 +56,7 @@ Use this document to:
 
 | Sub-step | ARC-1 MCP | arc-1 skills | secondsky plugin | External | Notes |
 |---|---|---|---|---|---|
+| 4-0 — Understanding pass (every non-A unit) | `SAPRead` + `SAPContext(action="deps")` | **`explain-abap-code`** | — | — | Systematic, not a fallback: purpose/flow/deps per unit → `docs/refactor/analysis/<unit>.md`; feeds the decision + Step 6 rewrite context |
 | 4a — Cache-first lookup | (filesystem read) | — | — | — | 30d TTL stable, 7d community/blogs |
 | 4b — Tier 1 git lookup | (filesystem grep) | — | — | git clones: `abap-atc-cr-cv-s4hc`, `SAP-samples`, `cloud-sdk` | Free, fast, authoritative for object classification |
 | 4b — Tier 2 JIT Apify | — | — | — | `apify/website-content-crawler`, `apify/puppeteer-scraper` | Per-page cost ~€0.005-0.02; user pays |
@@ -63,7 +64,7 @@ Use this document to:
 | 4c — Cite + cache | (filesystem write) | — | — | — | `.cache/sap-clean-core/<topic-hash>/<source>-<date>.md` |
 | 4d — Budget exhaustion fallback | — | **`explain-abap-code`** (single-object deep dive) | — | — | Reduces human research effort ~50% |
 | 4d-quater — Pattern mining | **`SAPRead(VERSIONS)`**, **`SAPRead(VERSION_SOURCE)`** | — | — | — | Mine customer's own history for refactor patterns. ⚠️ Reduces rewrite effort 30-50% on customers with established conventions |
-| 4d-bis — Decision tree | (agent reasoning) | — | — | — | Per-object Start Level + flags → Target Level + Decision |
+| 4d-bis — Decision tree | (agent reasoning) | — | — | — | Per-unit Start Level + flags → Target Level + Decision |
 | 4e-4g — Level B escalation | — | — | — | — | `--aggressive` / `--push-to-a` / `--target-level=A` flags |
 
 ### Step 5 — Plan emission
@@ -71,7 +72,7 @@ Use this document to:
 | Sub-step | ARC-1 MCP | arc-1 skills | secondsky plugin | External | Notes |
 |---|---|---|---|---|---|
 | 5a — Generate plan markdown | (filesystem write) | — | — | — | `docs/refactor/<date>-clean-core-plan.md` |
-| 5b — Per-object decision rows | (templating) | — | — | — | Object / Start Level / Target Level / Decision / Replacement / Effort / Risk / KB evidence |
+| 5b — Per-unit decision rows | (templating) | — | — | — | Object / Start Level / Target Level / Decision / Replacement / Effort / Risk / KB evidence |
 | 5c — Stakeholder dossier (`--report=dossier`) | — | **`sap-migration-dossier`** | — | — | HTML/JSON/CSV/graph + review cards; plan markdown stays the editable source of truth |
 
 ### Step 6 — Execute (opt-in)
@@ -80,9 +81,10 @@ Use this document to:
 |---|---|---|---|---|---|
 | 6-pre — Generate regression tests (CLAS/FUGR) | — | **`generate-abap-unit-test`** | `sap-abap` (test patterns reference) | — | Capture current behaviour as baseline |
 | 6-pre — Generate regression tests (DDLS) | — | **`generate-cds-unit-test`** | `sap-abap-cds` (CDS Test Double Framework patterns) | — | For CDS views |
-| 6-pre — Local package snapshot (optional) | (source reads) | **`setup-abap-mirror`** | — | — | abapGit-style baseline for local `git diff` evidence across the whole run |
+| 6-pre — As-found source snapshot | (source reads) | **`setup-abap-mirror`** | — | — | abapGit-style baseline for local `git diff` evidence across the whole run |
+| 6-pre — As-found docs baseline (every plan unit) | (source reads) | **`sap-object-documenter`** | — | — | Batch as-is documentation → `docs/refactor/baseline/<date>/`, BEFORE any write (quickfixes included); regenerate after Step 7 for the "after" picture |
 | **6-0 — Phase 0: package-wide mechanical burn-down** | `SAPDiagnose(action="quickfix")` → `apply_quickfix` + `SAPLint(action="lint_and_fix")` + `SAPLint(action="format")` across all rewrite/mechanical objects | — | — | — | Lights-out, right after plan approval; own transport; `SAPDiagnose(action="atc")` re-run refreshes the plan numbers before the generative loop |
-| 6a-0 — Residual quickfixes (per object) | `SAPDiagnose(action="quickfix")` → `SAPDiagnose(action="apply_quickfix")` | — | — | — | Catches mechanical findings that surface during the rewrite itself (Phase 6-0 already swept the package). Objects with ONLY mechanical findings can go through **`migrate-custom-code`** standalone instead |
+| 6a-0 — Residual quickfixes (per unit) | `SAPDiagnose(action="quickfix")` → `SAPDiagnose(action="apply_quickfix")` | — | — | — | Catches mechanical findings that surface during the rewrite itself (Phase 6-0 already swept the package). Objects with ONLY mechanical findings can go through **`migrate-custom-code`** standalone instead |
 | 6a-alt — SEGW V2 service in inventory | — | **`migrate-segw-to-rap`** | — | — | MPC/DPC classes are generated — reverse-engineer to RAP V4, never hand-rewrite |
 | 6a-alt — Analytical Z report | — | **`generate-analytics-star-schema`** → **`generate-cds-analytical-query`** | — | — | Successor is an embedded-analytics cube + query, not a transactional LROP |
 | 6a — Rewrite in-place: read + write | `SAPRead(VERSIONS)`, `SAPWrite(action="update")`, `SAPActivate(scope="object")` | **`generate-rap-logic`** (when rewrite goes to RAP behavior pool), **`generate-rap-service-researched`** (full RAP stack, rare) | **`sap-abap`** (language patterns), **`sap-abap-cds`** (CDS views if introduced) | — | Pattern-mined via Step 4d-quater |
@@ -94,7 +96,7 @@ Use this document to:
 | 6d — API design review | — | — | **`sap-api-style`** `/api-style-review` | — | Run BEFORE releasing: a C1 contract freezes naming/design debt |
 | 6d — Release API contract | `SAPManage(action="set_api_state", contract="C1")` | — | — | — | `release_api` arm: release a stable Z dependency so consumers drop to Level A (ARC-1 ≥ 0.9.24; contract support is release-dependent) |
 | 6a — Rollback if regression | `SAPRead(type="VERSIONS")` → `SAPRead(type="VERSION_SOURCE")` → `SAPWrite(action="update")` | — | — | — | Restore the pre-rewrite version from SAP's version history (no git needed) |
-| 6b — Side-by-side scaffold | — | **`modernize-abap-to-btp-cap`** chain, **`convert-ui5-to-fiori-elements`** or **`modernize-ui5-app`** (UI: annotation-driven vs freestyle) | **`sap-cap-capire`** (4 agents: cap-cds-modeler, cap-service-developer, cap-performance-debugger, cap-project-architect), **`sap-btp-developer-guide`**, **`sap-fiori-tools`** + `sapui5` (UI), **`sap-btp-cloud-platform`** (service binding) | `@sap/cds-mcp` (staged-model introspection) | Per-extension CAP project under `bs/<name>/` |
+| 6b — Side-by-side scaffold | — | **`modernize-abap-to-btp-cap`** chain, **`convert-ui5-to-fiori-elements`** or **`modernize-ui5-app`** (UI: annotation-driven vs freestyle) | **`sap-cap-capire`** (4 agents: cap-cds-modeler, cap-service-developer, cap-performance-debugger, cap-project-architect), **`sap-btp-developer-guide`**, **`sap-fiori-tools`** + `sapui5` (UI), **`sap-btp-cloud-platform`** (service binding) | `@sap/cds-mcp` (staged-model introspection) | Per-extension CAP project under `<target>/.target-cap-staging/` |
 | 6b — UI quality gate | — | — | **`sapui5-linter`** `/ui5-linter-check` → `/ui5-linter-fix-plan` | — | When the extension has a UI5/FE frontend |
 | 6b — Destination diagnostics | — | — | **`sap-btp-connectivity`** `/btp-destination-diagnose` | — | When the extension consumes S/4 APIs via destinations |
 | 6b-post — Hand-off gates | — | — | **`sap-cap-capire`** `/cap-deployment-checklist`, **`sap-btp-developer-guide`** `/btp-app-readiness-review`, `sap-btp-best-practices` `/btp-architecture-review` (larger landscapes) | — | Deploy-readiness gates for the generated CAP project, before `cf deploy` |
@@ -124,16 +126,16 @@ The table below shows **what fraction of ARC-1 MCP capabilities the skill curren
 | `SAPSearch` (object + tadir_lookup + source_code full-text) | 🟢 Step 2 (enumerate), Step 6 (where-used via `SAPNavigate(references)` for unused removal) |
 | `SAPWrite` (update + delete + SKTD create/update + batch_create) | 🟢 Step 6a (update), Step 6c (attach_sktd), Step 6 unused (delete) |
 | `SAPActivate` | 🟢 Step 6a (post-write activation) |
-| `SAPNavigate` (go-to-definition, find references) | 🟡 Implicit in `SAPContext`; not directly called |
+| `SAPNavigate` (go-to-definition, find references) | 🟢 Step 6 remove_unused (`references` last-check); otherwise implicit via `SAPContext` |
 | `SAPQuery` (free SQL, off by default) | 🟡 Used by `sap-unused-code` (delegate) — requires `SAP_ALLOW_FREE_SQL=true` |
 | `SAPTransport` | 🟢 Step 6.5 (check + create + reassign), Step 7b-bis (summary) |
-| `SAPGit` | 🟡 Step 6a rollback + Step 6.5 commit (both opt-in via `SAP_ALLOW_GIT_WRITES=true`) |
+| `SAPGit` | 🟡 Step 6.5 commit only (opt-in via `SAP_ALLOW_GIT_WRITES=true`) — rollback uses SAP version history, never git |
 | `SAPContext` (impact + reverse-deps + CDS impact) | 🟢 Step 2e (MOST IMPORTANT call — drives risk multipliers) |
 | `SAPLint` (lint + format + get_formatter_settings) | 🟢 Step 6a (format + local lint) |
 | `SAPDiagnose` (atc + unittest + quickfix/apply_quickfix + cds_testcases + syntax + dumps + traces) | 🟢 Step 3 (ATC classification), Step 6a-0 (quickfixes), Step 6a (unittest), Step 7 (full run) |
 | `SAPManage` (probe + set_api_state) | 🟢 Step 1e (via `bootstrap-system-context`), Step 6d (`release_api` — release a Z API contract, C0–C4) |
 
-**Overall**: the skill engages all 12 ARC-1 tools at least once. `SAPNavigate` is the only one used implicitly (via `SAPContext`); explicit calls are not needed for the refactor workflow.
+**Overall**: the skill engages all 12 ARC-1 tools at least once. every tool has at least one explicit call site in the workflow.
 
 ## Coverage assessment — secondsky/sap-skills
 
@@ -151,7 +153,7 @@ The table below shows **which secondsky plugins this skill enforces as MUST / SH
 | `sapui5-linter` | SHOULD | Step 6b post-scaffold UI quality gate (`/ui5-linter-check` → `/ui5-linter-fix-plan`) |
 | `sap-btp-cloud-platform` | SHOULD | Step 6b service binding |
 | `sap-btp-connectivity` | SHOULD | Step 6b when extension uses destinations (`/btp-destination-diagnose`) |
-| `sap-btp-best-practices` | OPTIONAL | Hand-off `/btp-architecture-review` for larger side-by-side landscapes |
+| `sap-btp-best-practices` | SHOULD | Hand-off `/btp-architecture-review` for larger side-by-side landscapes |
 | `sap-cloud-sdk` | SHOULD | Step 6b when extension uses Cloud SDK |
 | `sap-cloud-sdk-ai` | OPTIONAL | Step 6b when extension is AI-heavy |
 | `sap-btp-cloud-logging` | OPTIONAL | Step 6b production observability |

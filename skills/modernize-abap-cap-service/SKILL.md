@@ -34,7 +34,8 @@ Sub-skill of [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-
 | `FUNCTION ZFM_X IMPORTING iv_id` | `action callX(id : String) returns Result;` | `srv.on('callX', async (req) => …)` |
 | `FUNCTION ZFM_X CHANGING ct_items` | `action callX(items : array of Item) returns array of Item;` | mutating param → returned shape |
 | `FUNCTION ZFM_X RAISING zcx_my_error` | `action callX() returns Result;` + `req.reject(…)` | exception class → HTTP code (table below) |
-| Report `ZRPT_X SUBMIT` | `function callX() returns Report;` | trigger via Kyma CronJob or BTP Job Scheduler |
+| Report `ZRPT_X SUBMIT` (batch / side-effecting) | `action runX() returns Report;` — OData V4 functions must be side-effect-free; a schedulable report is an `action` | trigger via Kyma CronJob or BTP Job Scheduler |
+| Report `ZRPT_X` (pure list display) | `function listX() returns array of Row;` | read-only rendering |
 | `METHOD <class>.<method>` | bound action `action <method>(…)` | route via class wrapper |
 
 Exception class → HTTP code defaults:
@@ -139,7 +140,7 @@ Write `<target>/docs/service-notes.md` with:
 - **Modifying SAP standard tables in the FM**: CAP runtime cannot. Flag the FM as `extract_to_side_by_side_with_event_subscription` — the new CAP action subscribes to S/4 events and writes to CAP storage.
 - **`SUBMIT … RETURN` reports**: refactor to action with explicit parameters. List-display reports → `function` returning `array of`.
 - **AMDP / native HANA SQL inside FM**: do NOT port as embedded SQL — model as CDS view + CAP query.
-- **Locks / SAP LUW**: explicit ENQUEUE → `cds.tx` + `forUpdate()`.
+- **Locks / SAP LUW**: `forUpdate()` only covers locking *inside one transaction/request*. ABAP ENQUEUE locks routinely span the whole SAP LUW including user think time across dialog steps — CAP has NO cross-request enqueue equivalent: redesign with optimistic concurrency (`@odata.etag`) or draft handling, and say so in the migration notes. A silent 1:1 `forUpdate()` port loses the protection the FM relied on.
 
 ## When NOT to use
 

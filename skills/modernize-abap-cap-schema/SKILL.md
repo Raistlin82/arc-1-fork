@@ -28,14 +28,14 @@ Sub-skill of [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-
 | Currency / Quantity | `@Semantics.amount.currencyCode` / `@Semantics.quantity.unitOfMeasure` |
 | Comments | DDIC short text + field labels → `@Common.Label` |
 
-## DDIC → CDS type mapping (24 mappings)
+## DDIC → CDS type mapping
 
 | DDIC | CDS | Notes |
 |---|---|---|
 | CHAR(n) | `String(n)` | preserve length |
 | NUMC(n) | `String(n)` | leading-zero numeric; CAP-side validation up to user |
 | DEC(p,s) / CURR(p,s) / QUAN(p,s) | `Decimal(p,s)` | currency/quantity get semantic annotation |
-| INT1 / INT2 / INT4 | `Integer` / `Int16` / `Int32` | |
+| INT1 / INT2 / INT4 | `UInt8` / `Int16` / `Int32` | INT1 is unsigned 0-255 |
 | INT8 | `Int64` | |
 | FLTP | `Double` | |
 | RAW(n) / SSTRING / STRING | `Binary(n)` / `String` / `LargeString` | |
@@ -43,13 +43,13 @@ Sub-skill of [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-
 | RAWSTRING | `LargeBinary` | |
 | DATS | `Date` | |
 | TIMS | `Time` | |
-| TZNTSTMPS | `Timestamp` | with timezone |
+| UTCLONG / DATN / TIMN | `Timestamp` / `Date` / `Time` | modern DDIC built-ins (7.5x+) |
 | LCHR / LRAW | `LargeString` / `LargeBinary` | |
-| UNIT (CUKY) | `Association to Currencies` | when associated with amount field |
-| MEINS | `Association to Units` | when associated with quantity field |
+| CUKY (currency key) | `Currency` (reuse type → `Association to sap.common.Currencies`) | pairs with the CURR amount field |
+| UNIT (unit of measure, e.g. data element MEINS) | own `UnitsOfMeasure` CodeList entity | `@sap/cds/common` ships NO Units code list (only Countries/Currencies/Languages/Timezones) — generate one |
 | LANG (SPRAS) | `Association to Languages` | |
 | CLNT | `String(3)` | client field — usually omitted in BTP CAP |
-| DEC(15) as `TIMESTAMP` / DEC(21,7) as `TIMESTAMPL` | `Timestamp` | detect via data element, not raw DEC — classic ABAP timestamps are DECs |
+| DEC(15) as `TIMESTAMP` / DEC(21,7) as `TIMESTAMPL` / TZNTSTMPS/TZNTSTMPL | `Timestamp` | detect via data element, not raw DEC — classic ABAP timestamps are DECs storing UTC with NO timezone attached |
 | DF16_DEC / DF34_DEC / DF16_RAW / DF34_RAW | `Decimal` | decfloat; note precision in schema-notes |
 | ACCP | `String(6)` | posting period YYYYMM; keep as string |
 | PREC / CUKY standalone (no amount sibling) | `String(2)` / `String(5)` | orphan reference fields — flag for review |
@@ -90,8 +90,10 @@ Bidirectional inference: write both sides (`<parent>.items : Composition of many
 Write `<target>/db/schema.cds` in CAP pretty-print format. Validate via:
 
 ```bash
-npx cds compile <target>/db/schema.cds --to edmx > /dev/null && echo "OK"
+npx cds compile <target>/db/schema.cds --to sql > /dev/null && echo "OK"
 ```
+
+(`--to edmx` would fail here — it requires at least one `service` definition, which only exists after `modernize-abap-cap-service` runs. Use it then, not on the schema alone.)
 
 With `@sap/cds-mcp` connected, cross-check doubtful mappings against the authoritative docs (`search_docs`, e.g. "temporal aspect", "localized entity") and introspect the staged model with `search_model` — cheaper than compile-error roundtrips.
 

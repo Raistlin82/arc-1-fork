@@ -5,7 +5,7 @@ to "classified, remediated, and refactored toward Clean Core Level B/A" — show
 which skill runs at each step, where it comes from, what it delegates to, and how automated
 each step really is**.
 
-You type **five things**. Everything else is delegation.
+You type **four commands** (the fifth step is a human review gate, not a command). Everything else is delegation.
 
 ## Legend 1 — where does each piece come from?
 
@@ -28,11 +28,11 @@ deterministic gates. Every step below is tagged with one of three tiers:
 |---|---|---|---|
 | **Deterministic** 🟦 | SAP-proposed quickfixes (`SAPDiagnose quickfix → apply_quickfix`), `SAPLint lint_and_fix`/`format`, ATC/unit-test runs, reads, transport ops | SAP / abaplint / the tool — zero LLM creativity | High: exact transformations and hard pass/fail gates |
 | **Generative** 🟪 | The actual rewrites (D→B, C→A), test generation, CAP scaffolds, reviews, reports — the agent reads the source, consults [`PATTERNS.md`](./PATTERNS.md) recipes + plugin knowledge, and writes the result | The LLM agent | Only as good as the gates around it — never trusted bare (see the cage below) |
-| **Human** 🟨 | Plan review/edit, per-object confirmation on the diff, `remove_unused` sign-off, side-by-side QA parity | You | — |
+| **Human** 🟨 | Plan review/edit, per-unit confirmation on the diff, `remove_unused` sign-off, side-by-side QA parity | You | — |
 
 The mechanical (Deterministic) pass runs **twice by design**: once package-wide as **Phase 0**
 right after plan approval (lights-out — the only part that needs no per-object review), and
-again per object as step ⓪ of every rewrite, catching mechanical findings that surface during
+again per unit as step ⓪ of every rewrite, catching mechanical findings that surface during
 the rewrite itself.
 
 ## The process at a glance
@@ -41,13 +41,14 @@ the rewrite itself.
 flowchart TD
     S1[/"1 · /bootstrap-system-context"/]:::det --> S2[/"2 · /sap-erp-clean-core-refactor ZPKG plan"/]:::gen
     S2 --> S3{"3 · HUMAN GATE<br/>review &amp; edit the plan<br/>(no writes so far)"}:::hum
-    S3 -->|approved| P0["PHASE 0 · package-wide mechanical burn-down<br/>quickfix → apply_quickfix · lint_and_fix · format<br/>lights-out — own transport"]:::det
+    S3 -->|approved| BL["AS-FOUND BASELINE · before any write<br/>setup-abap-mirror (source snapshot)<br/>+ sap-object-documenter (as-is docs, every unit)"]:::gen
+    BL --> P0["PHASE 0 · package-wide mechanical burn-down<br/>quickfix → apply_quickfix · lint_and_fix · format<br/>lights-out — own transport"]:::det
     P0 --> P0R["ATC re-run — refresh plan numbers"]:::det
-    P0R --> EX["4 · /sap-erp-clean-core-refactor ZPKG execute<br/>per-object loop, HUMAN confirmation each"]:::gen
-    EX --> DEC{"plan decision<br/>per object"}:::hum
+    P0R --> EX["4 · /sap-erp-clean-core-refactor ZPKG execute<br/>per-unit loop, HUMAN confirmation each"]:::gen
+    EX --> DEC{"plan decision<br/>per logical unit"}:::hum
     DEC --> RW["rewrite_in_place<br/>D→B · C→A<br/>(cage pipeline below)"]:::gen
     DEC --> SBS["extract_to_side_by_side<br/>→ modernize-abap-to-btp-cap<br/>= Level A on the ERP side"]:::gen
-    DEC --> REL["release_api<br/>/api-style-review →<br/>SAPManage set_api_state"]:::det
+    DEC --> REL["release_api<br/>/api-style-review →<br/>SAPManage set_api_state"]:::gen
     DEC --> KB["keep_at_level_b<br/>SKTD + ATC exemption<br/>(on-prem only)"]:::gen
     DEC --> RM["remove_unused<br/>sign-off → references check<br/>→ delete"]:::hum
     RW --> V
@@ -55,7 +56,7 @@ flowchart TD
     REL --> V
     KB --> V
     RM --> V
-    V["7 · VERIFY · cumulative ATC + unittest<br/>+ perf check on hot data-access rewrites<br/>net ATC regression aborts the loop"]:::det
+    V["VERIFY (SKILL Step 7) · cumulative ATC + unittest<br/>+ perf check on hot data-access rewrites<br/>net ATC regression aborts the loop"]:::det
     V --> TR[/"5 · /sap-transport-review<br/>per-object diffs + risk flags"/]:::gen
     TR --> DONE["SAPTransport release<br/>(inactive-objects pre-check built in)"]:::det
 
@@ -64,9 +65,9 @@ flowchart TD
     classDef hum fill:#fef3c7,stroke:#d97706,color:#92400e
 ```
 
-🟦 Deterministic · 🟪 Generative · 🟨 Human — numbers refer to table A.
+🟦 Deterministic · 🟪 Generative · 🟨 Human (mixed-tier nodes carry their dominant tier) — numbers 1–5 refer to table A; VERIFY is SKILL.md Step 7. The baseline, Phase 0 and the per-unit loop are all phases OF command 4 (`execute`).
 
-**The cage around every Generative rewrite** (one object inside `rewrite_in_place`):
+**The cage around every Generative rewrite** (one logical unit inside `rewrite_in_place`):
 
 ```mermaid
 flowchart TD
@@ -94,7 +95,7 @@ flowchart TD
 | Config | Why |
 |---|---|
 | `SAP_ALLOW_WRITES=true` + `SAP_ALLOWED_PACKAGES=ZPKG/**` | every mutation (incl. activation) is checked fail-closed against the object's real package |
-| `SAP_ALLOW_TRANSPORT_WRITES=true` | create/reassign transport requests in Phase 5 |
+| `SAP_ALLOW_TRANSPORT_WRITES=true` | create/reassign transport requests in Step 6.5 (during `execute`) |
 | `SAP_ALLOW_FREE_SQL=true` *(optional)* | only for runtime dead-code detection (SCMON/SUSG) |
 | **Transportable package — not `$TMP`** | ATC silently skips local objects: 0 findings on a `$TMP` package means "not checked", not "clean" |
 
@@ -108,9 +109,9 @@ flowchart TD
 | # | You type | Skill | Origin | Tier | What happens |
 |---|---|---|---|---|---|
 | 1 | `/bootstrap-system-context` | `bootstrap-system-context` | **arc-1** | Deterministic | `SAPManage(action="probe")` → SID, release, components, features; formatter + ATC preset; `abap_feature_matrix` snapshot → `system-info.md`. No sub-skills |
-| 2 | `/sap-erp-clean-core-refactor ZPKG plan` | `sap-erp-clean-core-refactor` | **CHAIN** | Generative (analysis — **no writes**) over Deterministic evidence | Inventory → classification → per-object decision → editable plan at `docs/refactor/<date>-clean-core-plan.md`. Delegation: table B |
-| 3 | *(review & edit the plan — no command)* | — | — | **Human** | The gate. Override any per-object decision before anything touches the system |
-| 4 | `/sap-erp-clean-core-refactor ZPKG execute` | `sap-erp-clean-core-refactor` | **CHAIN** | **Phase 0**: Deterministic, lights-out · then per-object loop: mixed tiers (table C) with **Human** confirmation throughout | Package-wide mechanical burn-down + ATC refresh first, then applies the plan object by object. Delegation: table C |
+| 2 | `/sap-erp-clean-core-refactor ZPKG plan` | `sap-erp-clean-core-refactor` | **CHAIN** | Generative (analysis — **no writes**) over Deterministic evidence | Inventory → classification → per-unit decision → editable plan at `docs/refactor/<date>-clean-core-plan.md`. Delegation: table B |
+| 3 | *(review & edit the plan — no command)* | — | — | **Human** | The gate. Override any per-unit decision before anything touches the system |
+| 4 | `/sap-erp-clean-core-refactor ZPKG execute` | `sap-erp-clean-core-refactor` | **CHAIN** | **Phase 0**: Deterministic, lights-out · then per-unit loop: mixed tiers (table C) with **Human** confirmation throughout | Package-wide mechanical burn-down + ATC refresh first, then applies the plan unit by unit. Delegation: table C |
 | 5 | `/sap-transport-review` | `sap-transport-review` | **arc-1** | Generative review over Deterministic diffs | Pre-release gate: per-object unified diffs + risk flags on the transport. Standalone |
 
 ## B — Delegation chain of `plan` (step 2)
@@ -118,14 +119,14 @@ flowchart TD
 | Internal step | Calls | Origin | Tier |
 |---|---|---|---|
 | 1e Bootstrap (if step 1 wasn't run) | `bootstrap-system-context` | **arc-1** | Deterministic |
-| 1f Transport-conflict scan | `sap-transport-overview` — objects locked in someone else's open TR would stall Phase 5 | **arc-1** | Deterministic |
+| 1f Transport-conflict scan | `sap-transport-overview` — objects locked in someone else's open TR would stall Step 6.5 (transport handling inside `execute`) | **arc-1** | Deterministic |
 | 2 Inventory | `SAPRead(type="DEVC")` recursive, `SAPSearch(searchType="tadir_lookup")`, red-flag `grep` pre-scan | **MCP** ARC-1 | Deterministic |
-| 2e Impact | `SAPContext(action="impact")` per candidate — fan-in drives the risk × effort multipliers | **MCP** ARC-1 | Deterministic (data); multiplier table is mechanical |
-| 2f Cluster into logical units | `SAPContext(action="structure")` + `SAPRead(type="FUGR", expand_includes=true)` — main + includes / FUGR + FMs + `LZ…` / RAP stack / SEGW set = **one unit**; shared includes get one coordinated decision. Classification, decisions and plan rows are per unit, never per bare include | **MCP** ARC-1 | Deterministic (structure data); unit boundaries are mechanical rules |
 | 2d Dead code (optional) | `sap-unused-code` — needs `SAP_ALLOW_FREE_SQL` | **arc-1** | Deterministic (SCMON/SUSG evidence) |
+| 2e Cluster into logical units | `SAPContext(action="structure")` + `SAPRead(type="FUGR", expand_includes=true)` — main + includes / FUGR + FMs + `LZ…` / RAP stack / SEGW set = **one unit**; shared includes get one coordinated decision. Classification, decisions and plan rows are per unit, never per bare include | **MCP** ARC-1 | Deterministic (structure data); unit boundaries are mechanical rules |
+| 2f Impact (per unit) | `SAPContext(action="impact")` per candidate — fan-in drives the risk × effort multipliers | **MCP** ARC-1 | Deterministic (data); multiplier table is mechanical |
 | 3 Classification A–D | `sap-clean-core-atc` → `SAPDiagnose(action="atc")` + `sap_get_object_details` per SAP reference; worst-level roll-up | **arc-1** + **MCP** sap-docs | Deterministic (ATC findings + dataset lookup + mechanical roll-up) |
+| 4-0 Understanding pass — **every non-A unit, systematic** | `explain-abap-code` → `docs/refactor/analysis/<unit>.md` (purpose, flow, deps); feeds the decision and the execute-phase rewrite context | **arc-1** | Generative (analysis) over Deterministic reads |
 | 4 JIT evidence lookup | `mcp-sap-docs` (`sap_community_search`, `sap_discovery_center_search`, `abap_feature_matrix`), `@sap/cds-mcp`, `context7` | **MCP** | Deterministic retrieval, Generative synthesis |
-| 4 Budget-exhausted fallback | `explain-abap-code` — stubborn objects only | **arc-1** | Generative |
 | 4 Per-object decision | decision tree + [`PATTERNS.md`](./PATTERNS.md) Category 9 recipes | **CHAIN** (reference doc) | Generative (proposal — finalized by the **Human** gate, step 3 of table A) |
 | 5 Stakeholder report (`--report=dossier`) | `sap-migration-dossier` | **arc-1** | Generative (report writing) |
 
@@ -135,8 +136,8 @@ flowchart TD
 
 | Plan decision | Calls | Origin | Tier |
 |---|---|---|---|
-| **Phase 0 — mechanical burn-down** (all rewrite/mechanical objects, one sweep) | `SAPDiagnose(action="quickfix")` → `apply_quickfix` + `SAPLint(action="lint_and_fix")` + `SAPLint(action="format")`; own transport; `SAPDiagnose(action="atc")` re-run refreshes the plan numbers | **MCP** ARC-1 | **Deterministic — lights-out** (no per-object review; ATC + unit tests are the net) |
-| *(before the loop)* optional local baseline | `setup-abap-mirror` — abapGit-style package snapshot for local `git diff` evidence | **arc-1** | Deterministic |
+| **As-found baseline** (before ANY write, quickfixes included) | `setup-abap-mirror` (source snapshot) + `sap-object-documenter` batch over every plan unit → `docs/refactor/baseline/<date>/` (the "before" picture; regenerate after verification for the "after") | **arc-1** | Deterministic reads + Generative (docs writing) — read-only, lights-out |
+| **Phase 0 — mechanical burn-down** (all rewrite/mechanical objects, one sweep) | `SAPDiagnose(action="quickfix")` → `apply_quickfix` + `SAPLint(action="lint_and_fix")` + `SAPLint(action="format")`; own transport; `SAPDiagnose(action="atc")` re-run refreshes the plan numbers | **MCP** ARC-1 | **Deterministic — lights-out** (no per-unit review; ATC + unit tests are the net) |
 | **`rewrite_in_place`** (D→B, C→A) | ⓪ residual quickfixes surfaced during rewrite: `quickfix` → `apply_quickfix` | **MCP** ARC-1 | Deterministic |
 | | ① regression tests: `generate-abap-unit-test` / `generate-cds-unit-test` (CDS seeds from `SAPDiagnose(action="cds_testcases")` on 8.16+) | **arc-1** | Generative (test code) over Deterministic seeds |
 | | ② rewrite per [`PATTERNS.md`](./PATTERNS.md) 9.1/9.2 recipes → `SAPWrite` + `SAPActivate` + `SAPLint(action="format")` | **CHAIN** + **MCP** ARC-1 | **Generative** — the LLM writes the ABAP; syntax check + format are Deterministic |
@@ -171,8 +172,8 @@ flowchart TD
 
 ## The full census
 
-- **You invoke 5 things**; 3 are stock arc-1, 2 are this chain's orchestrator.
-- **This chain owns exactly 4 skills**: the orchestrator + the 3 CAP-extraction skills. Everything else it drives is stock arc-1 (**21 upstream skills** engaged across the run: bootstrap-system-context, sap-transport-overview, sap-unused-code, sap-clean-core-atc, explain-abap-code, sap-migration-dossier, setup-abap-mirror, generate-abap-unit-test, generate-cds-unit-test, generate-rap-logic, generate-rap-service-researched, migrate-segw-to-rap, generate-analytics-star-schema, generate-cds-analytical-query, migrate-custom-code, convert-ui5-to-fiori-elements, modernize-ui5-app, sap-object-documenter, debug-slow-sql, sap-transport-review, analyze-chat-session) or external plugins (**7 review/gate commands**, never writes).
+- **You type 4 commands** (2 stock arc-1 + 2 this chain's orchestrator) plus 1 human review gate.
+- **This chain owns exactly 4 skills**: the orchestrator + the 3 CAP-extraction skills. Everything else it drives is stock arc-1 (**21 upstream skills** engaged across the run: bootstrap-system-context, sap-transport-overview, sap-unused-code, sap-clean-core-atc, explain-abap-code, sap-migration-dossier, setup-abap-mirror, generate-abap-unit-test, generate-cds-unit-test, generate-rap-logic, generate-rap-service-researched, migrate-segw-to-rap, generate-analytics-star-schema, generate-cds-analytical-query, migrate-custom-code, convert-ui5-to-fiori-elements, modernize-ui5-app, sap-object-documenter, debug-slow-sql, sap-transport-review, analyze-chat-session) or external plugins (**8 review/gate commands across 7 plugins**, never writes).
 - **Every write to the SAP system goes through the ARC-1 MCP server** — behind its safety ceiling (`allowWrites`, package allowlist, transport gates), regardless of which skill asked for it.
 - **Automation in one sentence**: Deterministic evidence and gates at the edges, Generative code in the middle, Human confirmation on every diff that reaches the system — only Phase 0 (and the per-object mechanical residue) runs lights-out.
 

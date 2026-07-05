@@ -1,6 +1,6 @@
 ---
 name: sap-erp-clean-core-refactor
-description: Plans and executes a Clean Core refactor of SAP ABAP custom code (Z*/Y*). Inventories objects via ARC-1, classifies them as Level A/B/C/D (via `sap-clean-core-atc`), and decides per object whether to rewrite-in-place, extract to a side-by-side BTP extension, keep at Level B, or remove. Documentation lookups are just-in-time (no pre-built KB). Use when asked to "refactor custom code to Clean Core", "plan side-by-side extensions", "Clean Core return on ERP", or to produce a documented migration plan.
+description: Plans and executes a Clean Core refactor of SAP ABAP custom code (Z*/Y*). Inventories objects via ARC-1, classifies them as Level A/B/C/D (via `sap-clean-core-atc`), and decides per logical unit (a program + its includes = one unit) whether to rewrite-in-place, extract to a side-by-side BTP extension, keep at Level B, or remove. Documentation lookups are just-in-time (no pre-built KB). Use when asked to "refactor custom code to Clean Core", "plan side-by-side extensions", "Clean Core return on ERP", or to produce a documented migration plan.
 ---
 
 # SAP ERP — Clean Core Refactor
@@ -10,8 +10,8 @@ Plans and executes the refactor of ABAP custom code to Clean Core. Three modes:
 | Mode | What it does | Writes? |
 |---|---|---|
 | `discover` | Inventory the Z*/Y* package | No |
-| `plan` (default) | Inventory + classify + decide per object → emit `docs/refactor/<date>-clean-core-plan.md` | No |
-| `execute` | Apply the plan: rewrite ABAP, scaffold BTP extensions, document Level B keepers, remove unused | Yes (with per-object confirmation) |
+| `plan` (default) | Inventory + classify + decide per logical unit → emit `docs/refactor/<date>-clean-core-plan.md` | No |
+| `execute` | Apply the plan: rewrite ABAP, scaffold BTP extensions, document Level B keepers, remove unused | Yes (with per-unit confirmation) |
 
 ## Input
 
@@ -22,7 +22,7 @@ Plans and executes the refactor of ABAP custom code to Clean Core. Three modes:
 Examples:
 - `ZFI plan` — typical first call (default target = `btp-cf`)
 - `ZCL_INVOICE_HANDLER plan` — single-object focus
-- `ZFI execute` — apply plan with per-object confirmation
+- `ZFI execute` — apply plan with per-unit confirmation
 - `ZFI plan --target=btp-kyma --aggressive` — Kyma side-by-side target + push Level B → A
 
 **Flags**:
@@ -103,9 +103,11 @@ After plan emission, edit `docs/refactor/<date>-clean-core-plan.md` to override 
 
 ### Step 3 — Classification
 
-Delegate to [`../sap-clean-core-atc/SKILL.md`](../sap-clean-core-atc/SKILL.md). Receive back per-object Level A/B/C/D + ATC finding categories.
+Delegate to [`../sap-clean-core-atc/SKILL.md`](../sap-clean-core-atc/SKILL.md). Receive back per-unit Level A/B/C/D (ATC runs on each unit's main object) + ATC finding categories.
 
-### Step 4 — JIT lookup + decide
+### Step 4 — Understand, JIT lookup, decide
+
+**4-0 — Understanding pass (systematic, every non-A unit).** Before any decision, run [`../explain-abap-code/SKILL.md`](../explain-abap-code/SKILL.md) on each unit in scope: purpose, control flow, dependency context. Persist the output to `docs/refactor/analysis/<unit>.md` — it feeds the decision below, the plan's evidence column, and Step 6's rewrite/test-generation context. No SAP-side cost (reads only); Level-A units skip (nothing to decide). Deciding the fate of code nobody has read is how refactors go wrong.
 
 For each non-A finding, consult sources in this order until evidence is sufficient (bounded by `--budget`):
 
@@ -115,13 +117,13 @@ For each non-A finding, consult sources in this order until evidence is sufficie
 4. **Tier-2 Apify** (paid, ~€0.005-0.02/page): `api.sap.com`, `help.sap.com`, `developers.sap.com`, community, blogs.
 5. **Pattern mining** (free, optional): `SAPRead(VERSIONS, VERSION_SOURCE)` for the customer's own history — find how similar Z objects have already been migrated. Cuts rewrite effort 30-50%.
 
-If budget exhausts without an answer, flag `research_required` and optionally invoke [`../explain-abap-code/SKILL.md`](../explain-abap-code/SKILL.md) for a deep dive.
+If budget exhausts without an answer, flag `research_required` and go back to the unit's 4-0 analysis for a deeper pass (method-level, `SAPRead` with `method` surgery) before giving up.
 
 Full source catalog: [`./SOURCES.md`](./SOURCES.md). Battle-tested patterns referenced for decision-making: [`./PATTERNS.md`](./PATTERNS.md).
 
 ### Step 5 — Emit plan
 
-Write `docs/refactor/<date>-clean-core-plan.md` with one row per object:
+Write `docs/refactor/<date>-clean-core-plan.md` with one row per logical unit (members listed):
 
 | Object | Start Level | Target Level | Decision | Replacement / Pattern | Effort | Risk | KB evidence |
 
@@ -129,11 +131,13 @@ Plus: inventory summary, side-by-side extension catalog (per `extract` outcome),
 
 **User reviews the plan and edits any decision** before `execute`.
 
-With `--report=dossier` (or whenever the plan must be shared with stakeholders who won't read raw markdown), delegate emission to [`../sap-migration-dossier/SKILL.md`](../sap-migration-dossier/SKILL.md): it already produces inventory + usage + ATC + clean-core review cards with Markdown/HTML/JSON/CSV/graph outputs. Feed it the per-object decision table from this step as extra input; keep `docs/refactor/<date>-clean-core-plan.md` as the editable source of truth for `execute`.
+With `--report=dossier` (or whenever the plan must be shared with stakeholders who won't read raw markdown), delegate emission to [`../sap-migration-dossier/SKILL.md`](../sap-migration-dossier/SKILL.md): it already produces inventory + usage + ATC + clean-core review cards with Markdown/HTML/JSON/CSV/graph outputs. Feed it the per-unit decision table from this step as extra input; keep `docs/refactor/<date>-clean-core-plan.md` as the editable source of truth for `execute`.
 
 ### Step 6 — Execute (opt-in)
 
-Optional baseline first: [`../setup-abap-mirror/SKILL.md`](../setup-abap-mirror/SKILL.md) snapshots the package locally (abapGit-style) before any write — cheap local `git diff` evidence for the whole run.
+**As-found baseline (systematic, before ANY write — quickfixes included).** Two snapshots of the state you found:
+1. Source: [`../setup-abap-mirror/SKILL.md`](../setup-abap-mirror/SKILL.md) — abapGit-style local mirror, cheap `git diff` evidence for the whole run.
+2. Documentation: [`../sap-object-documenter/SKILL.md`](../sap-object-documenter/SKILL.md) batch pass over every unit in the plan → `docs/refactor/baseline/<date>/` (purpose, style Classic/Modern/Mixed, dependencies, as-is). This is the "before" picture reviewers and auditors will ask for; regenerate after Step 7 for the "after".
 
 **Phase 0 — package-wide mechanical burn-down (lights-out).** Immediately after plan approval, sweep every `rewrite_in_place` / mechanical-only object in one pass: `SAPDiagnose(action="quickfix")` → `apply_quickfix`, `SAPLint(action="lint_and_fix")`, `SAPLint(action="format")`. No per-object confirmation needed — SAP/abaplint propose the exact change; ATC + unit tests are the net. Collect it in its own transport (trivial to review with `sap-transport-review`), then re-run `SAPDiagnose(action="atc")` to refresh the plan numbers before the generative loop: the quickfixes are the plan's "quick wins" phase made explicit.
 
@@ -141,7 +145,7 @@ Then, per object, ask confirmation and dispatch:
 
 | Decision | Action |
 |---|---|
-| `rewrite_in_place` | (0) Residual mechanical findings first: `SAPDiagnose(action="quickfix")` → `apply_quickfix` — Phase 0 already swept the package; this catches what surfaces during the rewrite itself. (1) Generate regression test via [`../generate-abap-unit-test/SKILL.md`](../generate-abap-unit-test/SKILL.md) or [`../generate-cds-unit-test/SKILL.md`](../generate-cds-unit-test/SKILL.md) (CDS on 8.16+: seed from `SAPDiagnose(action="cds_testcases")`). (2) `SAPWrite(action="update")` + `SAPActivate` + `SAPLint(action="format")`, then a cheap `/abap-cloud-review` pass (sap-abap plugin) BEFORE the ATC round-trip, then `SAPDiagnose(action="atc")` + `SAPDiagnose(action="unittest")`. (3) Review the edit as a diff: `SAPRead(action="diff")` active-vs-previous. (4) Rollback if regression: restore the pre-rewrite source from version history — `SAPRead(type="VERSION_SOURCE")` + `SAPWrite(action="update")`. For RAP behavior pool delegate to [`../generate-rap-logic/SKILL.md`](../generate-rap-logic/SKILL.md) |
+| `rewrite_in_place` | ⓪ Residual mechanical findings first: `SAPDiagnose(action="quickfix")` → `apply_quickfix` — Phase 0 already swept the package; this catches what surfaces during the rewrite itself. ① Generate regression test via [`../generate-abap-unit-test/SKILL.md`](../generate-abap-unit-test/SKILL.md) or [`../generate-cds-unit-test/SKILL.md`](../generate-cds-unit-test/SKILL.md) (CDS on 8.16+: seed from `SAPDiagnose(action="cds_testcases")`). ② `SAPWrite(action="update")` + `SAPActivate` + `SAPLint(action="format")`. ③ Cheap `/abap-cloud-review` pass (sap-abap plugin) BEFORE the ATC round-trip. ④ `SAPDiagnose(action="atc")` + ⑤ `SAPDiagnose(action="unittest")`. ⑥ Review the edit as a diff: `SAPRead(action="diff")` active-vs-previous. ⑦ Rollback if regression: restore the pre-rewrite source from version history — `SAPRead(type="VERSION_SOURCE")` + `SAPWrite(action="update")`. (Same ⓪–⑦ as WORKFLOW.md's cage.) For RAP behavior pool delegate to [`../generate-rap-logic/SKILL.md`](../generate-rap-logic/SKILL.md) |
 | `extract_to_side_by_side` | Delegate to [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-cap/SKILL.md). ABAP source stays deprecated-tagged until QA confirms parity. UI side: [`../convert-ui5-to-fiori-elements/SKILL.md`](../convert-ui5-to-fiori-elements/SKILL.md) (annotation-driven LROP) or [`../modernize-ui5-app/SKILL.md`](../modernize-ui5-app/SKILL.md) (freestyle TypeScript, for non-standard UX) |
 | `keep_at_level_b` | Delegate to [`../sap-object-documenter/SKILL.md`](../sap-object-documenter/SKILL.md) (SKTD rationale + ATC exemption) |
 | `remove_unused` | Stakeholder sign-off → `SAPNavigate(action="references")` last-check → `SAPWrite(action="delete")` |
@@ -181,8 +185,8 @@ No centralized infra. No pre-built KB. Manual mode (no Apify) works at zero cost
 | File | What |
 |---|---|
 | [`./WORKFLOW.md`](./WORKFLOW.md) | **Operator's guide** — the 5 things you type, plus the full delegation map (which skill runs where, whether it is chain / stock arc-1 / external plugin / MCP) |
-| [`./SOURCES.md`](./SOURCES.md) | 23 authoritative SAP sources in 4 tiers (Tier-1 git / Tier-2 Apify / Tier-3 manual / Tier-4 MCP) |
-| [`./PATTERNS.md`](./PATTERNS.md) | ~90 battle-tested patterns in 9 categories (UI5/FE V4, CAP/TS, BTP/Kyma deployment with 4-target matrix, security, customizing, lifecycle, events, ecosystem plugins, **ABAP level-escalation recipes D→B / C→A / B→A**). Consulted during Step 1 target resolution, Step 4 decision, Step 6a in-place rewrite + Step 6b side-by-side scaffold |
+| [`./SOURCES.md`](./SOURCES.md) | 26 authoritative SAP sources + 3 MCP servers across 4 tiers (Tier-1 git / Tier-2 Apify / Tier-3 manual / Tier-4 MCP) |
+| [`./PATTERNS.md`](./PATTERNS.md) | ~90 battle-tested patterns in 9 categories (UI5/FE V4, CAP/TS, BTP/Kyma deployment target matrix, security, customizing, lifecycle, events, ecosystem plugins, **ABAP level-escalation recipes D→B / C→A / B→A**). Consulted during Step 1 target resolution, Step 4 decision, Step 6a in-place rewrite + Step 6b side-by-side scaffold |
 | [`./INTEGRATIONS.md`](./INTEGRATIONS.md) | Step-by-step mapping: refactor phase × ARC-1 MCP tool × arc-1 native skill × secondsky/sap-skills plugin |
 
 ## Recommended companion plugins
