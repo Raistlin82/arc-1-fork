@@ -12,7 +12,7 @@ It leans on two token-cheap ARC-1 primitives so a review of a 30-object transpor
 of small diffs instead of 60 full-source reads:
 
 - `SAPTransport(action="list", summary=true)` — scan many open transports cheaply (objects omitted, `objectCount` kept), then drill into one.
-- `SAPRead(action="diff", from=…, to=…)` — server-side unified diff per object; the response is just the hunks.
+- `SAPRead(type=…, name=…, action="diff", from=…, to=…)` — server-side unified diff per object; the response is just the hunks.
 
 Complements [explain-abap-code](../explain-abap-code/SKILL.md) (deep single-object understanding) and
 [sap-object-documenter](../sap-object-documenter/SKILL.md) (written docs for a package). This skill is
@@ -105,7 +105,7 @@ an inactive draft) — there is no "before" revision to diff against. Handle it 
 ## Step 4 (optional): impact + quality — only when asked or the change is risky
 
 - **Impact** (a changed `DDLS`/`BDEF`/`SRVD` can break consumers): `SAPContext(action="impact", type="DDLS", name="<view>")` → projection views, BDEFs, service defs/bindings, ABAP consumers that depend on it.
-- **Quality**: `SAPDiagnose(action="atc", ...)` per changed object → new ATC findings the change introduces; or `SAPLint(action="lint", name=…)` for a fast local pass.
+- **Quality**: `SAPDiagnose(action="atc", ...)` per changed object → new ATC findings the change introduces; or `SAPLint(action="lint", source=…, name=…)` for a fast local pass after reading the changed source.
 - **Pre-release validity**: for unactivated work, `SAPActivate` (or `SAPDiagnose action="syntax"`) confirms the draft even compiles before you stake a release on it.
 
 ## Step 5: Write the report
@@ -175,6 +175,6 @@ Write to disk (default `docs/reviews/transport-<id>-<date>.md`) only if asked; o
 ## Follow-up Options
 
 - "Activate / release this once it looks right?" → `SAPActivate`, then `SAPTransport(action="release")`.
-- "Who breaks if I change this CDS?" → `SAPContext(action="impact")` (or re-run with `+impact`).
+- "Who breaks if I change this CDS?" → `SAPContext(action="impact", type="DDLS", name="<view>")` (or re-run with `+impact`).
 - "Document these objects properly?" → [sap-object-documenter](../sap-object-documenter/SKILL.md).
 - "Clean-core readiness of the changed objects?" → [sap-clean-core-atc](../sap-clean-core-atc/SKILL.md).

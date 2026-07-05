@@ -142,7 +142,7 @@ If SAPContext fails (e.g., unsupported type), fall back to manual reads of key d
 **Supported types:** `SAPContext` accepts `CLAS`, `INTF`, `PROG`, `FUNC`, `DDLS` (on-prem) / `CLAS`, `INTF`, `DDLS` (BTP). It does **not** accept `BDEF`. So when explaining a BDEF, run dependency/impact analysis on the **bound CDS root entity** instead:
 
 ```
-SAPContext(action="impact", name="<root_cds>")
+SAPContext(action="impact", type="DDLS", name="<root_cds>")
 ```
 
 `action="impact"` (DDLS only) returns the downstream blast radius — projection views, consumption views, and services that build on the behavior. This is the "dependencies / who consumes this" answer for a behavior definition. For the handler class internals, run `SAPContext(type="CLAS", name="<ZBP_NAME>")`.
@@ -270,7 +270,7 @@ Offer the user next steps:
 | ATC variant not found | Specified variant doesn't exist on system | Run default ATC, list available variants |
 | Method listing empty | Object is not a class or has no methods | Skip method listing, explain from source only |
 | Source is empty | Object exists but has no source (e.g., generated proxy) | Inform user, try reading related objects instead |
-| `SAPContext` rejects BDEF type | BDEF isn't a supported SAPContext type | Run `SAPContext(action="impact", name="<root_cds>")` on the bound CDS root instead |
+| `SAPContext` rejects BDEF type | BDEF isn't a supported SAPContext type | Run `SAPContext(action="impact", type="DDLS", name="<root_cds>")` on the bound CDS root instead |
 | BDEF pool class not found | `projection;` BDEF (no own pool) or class name parsed wrong | Skip the class read; explain from the projection's `use` clauses + base BDEF |
 
 ## Notes

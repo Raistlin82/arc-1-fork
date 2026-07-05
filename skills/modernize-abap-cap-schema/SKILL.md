@@ -58,13 +58,13 @@ Sub-skill of [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-
 
 ### Step 1 — Enumerate tables
 
-`SAPSearch(searchType="tadir_lookup", packageName="<pkg>", objectType="TABL")` → list of Z tables.
+`SAPRead(type="DEVC", name="<pkg>")` recursively, then filter `TABL` rows whose names are in the customer namespace. Use `SAPSearch(searchType="tadir_lookup", names=[...], objectType="TABL")` only to validate exact table names across packages; `tadir_lookup` does not enumerate by `packageName`.
 
 ### Step 2 — Read DDIC details (per table)
 
-`SAPRead(type="TABL", name="<table>", format="structured")` — fields + types + keys + foreign keys + domain references.
+`SAPRead(type="TABL", name="<table>")` — ARC-1 returns the DDIC table/structure as CDS-like source. Parse fields, keys and type references from that source; drill into `SAPRead(type="DTEL")` / `SAPRead(type="DOMA")` only when labels, fixed values, conversion exits or domain semantics are needed.
 
-For complex domains / data elements: drill in only when the DDIC type alone is insufficient (e.g. fixed value lists → `@assert.range`).
+For complex domains / data elements: drill in only when the DDIC source type alone is insufficient (e.g. fixed value lists → `@assert.range`).
 
 ### Step 3 — Apply type mapping + aspects
 

@@ -45,7 +45,7 @@ If the user provides just a description, proceed directly to research. Questions
 Ask the user for their target package if not provided. Then resolve the transport request (skip only if package is `$TMP`):
 
 ```
-SAPTransport(action="check", objectType="DDLS", objectName="<placeholder_name>", package="<package>")
+SAPTransport(action="check", type="DDLS", name="<placeholder_name>", package="<package>")
 ```
 
 This checks if a transport is required and returns existing transports for the package. If a transport is required:
@@ -182,7 +182,7 @@ If `SAPManage(action="probe")` shows `abapGit` or gCTS support and the target pa
 ```
 SAPGit(action="list_repos")
 SAPGit(action="objects", repoId="<repo_id>")
-SAPGit(action="history", repoId="<repo_id>", limit=20)
+SAPGit(action="history", repoId="<repo_id>")
 ```
 
 Use this to learn:
@@ -654,10 +654,10 @@ After approval, create the artifacts. Use batch creation when possible.
 SAPWrite(action="batch_create", objects=[...], package="<package>", transport="<transport>")
 ```
 
-**For composition-linked DDLS or other interdependent siblings** (parent's `composition [0..*] of ZR_CHILD` where the child is also in the same batch), pass `activateAtEnd: true` so ARC-1 writes inactive drafts for every object first and then issues ONE terminal `activateBatch`. SAP's activator sees the whole graph at once and resolves cross-references between siblings. Per-object inline activation would fail on the parent with `"data source ZR_CHILD does not exist or is not active"` because the child is still inactive when the parent gets activated.
+**For composition-linked DDLS or other interdependent siblings** (parent's `composition [0..*] of ZR_CHILD` where the child is also in the same batch), pass `activateAtEnd=true` so ARC-1 writes inactive drafts for every object first and then issues ONE terminal `activateBatch`. SAP's activator sees the whole graph at once and resolves cross-references between siblings. Per-object inline activation would fail on the parent with `"data source ZR_CHILD does not exist or is not active"` because the child is still inactive when the parent gets activated.
 
 ```
-SAPWrite(action="batch_create", activateAtEnd: true, objects=[...], package="<package>", transport="<transport>")
+SAPWrite(action="batch_create", activateAtEnd=true, objects=[...], package="<package>", transport="<transport>")
 ```
 
 If some generated objects need explicit per-item routing, put `package` and `transport` on the individual objects. Item-level values override the top-level batch values and are required when a recovered plan mixes packages:
@@ -693,12 +693,12 @@ SAPSearch(searchType="tadir_lookup",
 
 The lookup groups exact matches by requested name and returns `missing`; do not build large `WHERE OBJ_NAME IN (...)` SQL lists for this check.
 
-**After cleanup, verify the names are truly gone** — the default ADT info-system endpoint filters out TADIR rows that don't resolve to a workbench resource, so an orphan "ghost" (TADIR row left behind by an aborted create/delete) is invisible. Re-run the lookup with `source: "both"` to detect ghosts. This requires `sql` scope (admin must have `SAP_ALLOW_FREE_SQL=true`):
+**After cleanup, verify the names are truly gone** — the default ADT info-system endpoint filters out TADIR rows that don't resolve to a workbench resource, so an orphan "ghost" (TADIR row left behind by an aborted create/delete) is invisible. Re-run the lookup with `source="both"` to detect ghosts. This requires `sql` scope (admin must have `SAP_ALLOW_FREE_SQL=true`):
 
 ```
 SAPSearch(searchType="tadir_lookup",
   names=["<table>","ZI_<entity>","ZC_<entity>","ZSB_<entity>_V4"],
-  source: "both")
+  source="both")
 ```
 
 If the response contains a `splitBrain` array, the listed names exist in TADIR but ADT can't resolve them — clean up via SE03 / RS_DD_TADIR_CLEANUP before retrying create.
@@ -714,7 +714,7 @@ SAPWrite(action="create", type="DOMA", name="Z<DOMAIN>", package="<package>", tr
 
 ```
 SAPWrite(action="create", type="DTEL", name="Z<DATAELEMENT>", package="<package>", transport="<transport>",
-  typeKind="domain", dataType="Z<DOMAIN>", labels={short:"Status", medium:"Object Status", long:"Object Status", heading:"Status"})
+  typeKind="domain", typeName="Z<DOMAIN>", shortLabel="Status", mediumLabel="Object Status", longLabel="Object Status", headingLabel="Status")
 ```
 
 ```
@@ -937,11 +937,13 @@ Offer follow-up actions based on the plan:
   - `SAPManage(action="flp_create_catalog", catalogId="Z_<ENTITY>_C", title="<Entity> Catalog")`
   - `SAPManage(action="flp_create_tile", catalogId="Z_<ENTITY>_C", tile={id:"Z_<ENTITY>_T", title:"<Entity>", semanticObject:"<Entity>", semanticAction:"manage"})`
   - `SAPManage(action="flp_create_group", groupId="Z_<ENTITY>_G", title="<Entity>")`
-  - `SAPManage(action="flp_add_tile_to_group", groupId="Z_<ENTITY>_G", catalogId="Z_<ENTITY>_C", tileId="Z_<ENTITY>_T")`
+  - `SAPManage(action="flp_add_tile_to_group", groupId="Z_<ENTITY>_G", catalogId="Z_<ENTITY>_C", tileInstanceId="Z_<ENTITY>_T")`
 8. **Create DOMA/DTEL** (if not done in Phase 4) for proper reusable typing
-9. **Release transport** (if transportable package) → use `SAPTransport(action="release_recursive", transport="<TR>")` to release tasks and parent in one step
+9. **Release transport** (if transportable package) → use `SAPTransport(action="release_recursive", id="<TR>")` to release tasks and parent in one step
 10. **Attach generated documentation** (optional) → use `SAPWrite(action="create", type="SKTD", refObjectType="SRVD", name="<service_doc_name>", source="<architecture_summary_markdown>")`
-11. **Review transport + revision context on later iterations** → use `SAPTransport(action="history", objectType="SRVD", objectName="ZSD_<ENTITY>")` and `SAPRead(type="VERSIONS", name="ZSD_<ENTITY>", objectType="SRVD")`
+11. **Review transport + revision context on later iterations**:
+    - `SAPTransport(action="history", type="SRVD", name="ZSD_<ENTITY>")`
+    - `SAPRead(type="VERSIONS", name="ZSD_<ENTITY>", objectType="SRVD")`
 12. **If the package is repo-managed** → use `SAPGit` (`list_repos`, `objects`, `history`) before changing naming or branch conventions
 ```
 

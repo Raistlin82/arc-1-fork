@@ -64,7 +64,7 @@ Determine BTP vs on-prem — this affects naming conventions, language version, 
 Ask the user for their target package if not provided. Then resolve the transport request (skip only if package is `$TMP`):
 
 ```
-SAPTransport(action="check", objectType="DDLS", objectName="<first_object_name>", package="<package>")
+SAPTransport(action="check", type="DDLS", name="<first_object_name>", package="<package>")
 ```
 
 This checks if a transport is required and returns existing transports for the package. If a transport is required:
@@ -272,7 +272,7 @@ Objects are created and activated in array order — put dependencies first (tab
 
 Set `package` and `transport` at the top level when every artifact shares them. If a batch item needs to override either value, put `package` and/or `transport` on that object; item-level values win.
 
-**Pass `activateAtEnd: true` for stacks with cross-sibling references** (e.g. composition-linked DDLS where the parent's `composition [0..*] of ZR_CHILD` references a child that's also in this batch). ARC-1 writes inactive drafts for every object and then issues one terminal `activateBatch` — SAP's activator sees the whole graph and resolves the cross-references in a single pass. Without this flag, the parent's inline activation fails with `"data source ZR_CHILD does not exist or is not active"`.
+**Pass `activateAtEnd=true` for stacks with cross-sibling references** (e.g. composition-linked DDLS where the parent's `composition [0..*] of ZR_CHILD` references a child that's also in this batch). ARC-1 writes inactive drafts for every object and then issues one terminal `activateBatch` — SAP's activator sees the whole graph and resolves the cross-references in a single pass. Without this flag, the parent's inline activation fails with `"data source ZR_CHILD does not exist or is not active"`.
 
 If batch creation fails, fall back to the sequential approach below (Steps 4-13).
 

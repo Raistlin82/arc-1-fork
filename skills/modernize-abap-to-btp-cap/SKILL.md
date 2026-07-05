@@ -116,13 +116,13 @@ For audit / hardening / CI gates of the generated CAP project, see [`Raistlin82/
 
 From [secondsky/sap-skills](https://github.com/secondsky/sap-skills):
 
-- `sap-abap` (MUST) — ABAP source patterns the sub-skills consume
-- `sap-abap-cds` (MUST) — CDS view patterns for Step 3
-- `sap-cap-capire` (MUST, 4 agents) — CAP scaffolding patterns for Steps 3-4
-- `sap-btp-developer-guide` (MUST) — BTP deployment for Step 6
-- `sap-fiori-tools` (SHOULD) — Fiori Elements scaffolding for Step 5
+- `sap-abap` (recommended) — ABAP source patterns the sub-skills consume
+- `sap-abap-cds` (recommended) — CDS view patterns for Step 3
+- `sap-cap-capire` (recommended, 4 agents) — CAP scaffolding patterns for Steps 3-4
+- `sap-btp-developer-guide` (recommended) — BTP deployment for Step 6
+- `sap-fiori-tools` (SHOULD, when installed) — Fiori Elements scaffolding for Step 5
 
 - `sap-api-style` (SHOULD) — `/api-style-review` on the generated `service.cds` (Step 4)
 - `sapui5-linter` (SHOULD) — `/ui5-linter-check` + `/ui5-linter-fix-plan` on the Step 5 UI
 
-Plus ARC-1 MCP (mandatory — system probe + source read in Steps 1-2) and `@sap/cds-mcp` (recommended — authoritative CAP docs via `search_docs` + staged-model introspection via `search_model` in Steps 3-4).
+Plus ARC-1 MCP (mandatory — system probe + source read in Steps 1-2) and `@sap/cds-mcp` when configured (recommended — authoritative CAP docs via `search_docs` + staged-model introspection via `search_model` in Steps 3-4). If a companion plugin/MCP is missing, record the degraded path in the hand-off notes instead of assuming the command exists.

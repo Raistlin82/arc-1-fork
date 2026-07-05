@@ -43,20 +43,20 @@ This skill depends on:
 > **Canonical annotation reference.** This skill points at the **ABAP RAP Fiori Feature
 > Showcase** (`SAP-samples/abap-platform-fiori-feature-showcase`) as the authoritative source
 > for `@UI.*` / `@ObjectModel.*` / `@Common.*` annotation patterns. When uncertain about how
-> to express a legacy UI feature as an annotation, search the showcase via
-> `mcp__sap-docs__search` with the feature's *Search Term* (e.g. `#OPHeaderAction`,
+> to express a legacy UI feature as an annotation, search the showcase via the active
+> SAP docs MCP `search` tool with the feature's *Search Term* (e.g. `#OPHeaderAction`,
 > `#LineItemHighlight`, `#HeaderInfo`, `#ActionInLineItem`). The showcase is the
 > ground-truth catalog every annotation in this skill maps back to.
 
 ---
 
-## Using `mcp__sap-docs__search` for annotation discovery (read this first)
+## Using the SAP docs MCP for annotation discovery (read this first)
 
 This skill names a handful of canonical annotation patterns inline. **Treat them as
 starting points, not the whole catalog.** Anything not explicitly covered — alternate
 visual representations, dynamic feature control, charts, value helps, semantic keys,
 multi-level OP routing, draft-specific UI behavior, or 7.58-specific syntax issues —
-**look up in `mcp__sap-docs__search` before guessing**. The MCP indexes the
+**look up with the active SAP docs MCP `search` tool before guessing**. The MCP indexes the
 authoritative SAP-maintained references, has up-to-date showcase tags, and includes
 release-specific documentation (758 news, cloud differences, etc.) that this skill text
 can't keep current with on its own.
@@ -77,12 +77,12 @@ can't keep current with on its own.
 1. **Identify what the user sees**: "status as a colored chip", "click row → child detail page", "filter with fixed values".
 2. **Search the showcase by hashtag** — most patterns are tagged literally in markdown:
    ```
-   mcp__sap-docs__search(query="#TagName")           // exact tag lookup
-   mcp__sap-docs__search(query="<visual description>")  // semantic fallback
+   search(query="#TagName")                  # via the active SAP docs MCP namespace
+   search(query="<visual description>")      # semantic fallback
    ```
 3. **Fetch the full pattern** of the most relevant hit:
    ```
-   mcp__sap-docs__fetch(id="/abap-fiori-showcase/<section>#<tag>")
+   fetch(id="/abap-fiori-showcase/<section>#<tag>")
    ```
 4. **Adapt to the user's entities** — the showcase uses `/DMO/FSA_R_RootTP` etc.; substitute the user's projection names.
 5. **If the on-prem pattern is rejected on the target release**, search again on a different axis:
@@ -127,7 +127,7 @@ Search-Term references that resolve to a concrete annotation pattern in the show
   `sap-help` than to reverse-engineer from a runtime failure.
 - **Don't accept the first failed-activation symptom as the final answer.** Run 7 hit four
   different blockers in four different layers for one polish item; in every case a follow-up
-  search via `mcp__sap-docs__search` would have surfaced an alternative *before* the
+  search via the active SAP docs MCP would have surfaced an alternative *before* the
   rollback. The cost of one extra search is 5 seconds; the cost of an unnecessary rollback
   is 10+ minutes.
 
@@ -401,7 +401,7 @@ Classify each inventory item as one of:
 ### 2a. Annotation map — starting points (verify each pattern via sap-docs)
 
 The table below is a **quick reference**, not a definitive catalog. Apply the search
-recipe from the "Using `mcp__sap-docs__search`" section above to confirm the current
+recipe from the "Using the SAP docs MCP" section above to confirm the current
 canonical syntax for your release, especially for anything tagged ⚠ below.
 
 | Legacy feature | Starting annotation + showcase tag |
@@ -1014,7 +1014,7 @@ UI5 MCP calls used:
 - Controller extensions are the escape hatch — when in doubt about whether something needs one,
   ask the user. The FE template can express more than people expect; only escalate when truly
   necessary.
-- Reach for `mcp__fiori-mcp__search_docs` (or `mcp__sap-docs__search` with `topic="fiori-elements"`)
+- Reach for `mcp__fiori-mcp__search_docs` (or the active SAP docs MCP `search` tool with `topic="fiori-elements"`)
   before guessing annotation syntax. SAP's annotation reference is the authoritative source.
 - If `mcp__fiori-mcp__list_functionalities` returns capabilities you didn't expect (e.g.
   "add page to existing app", "modify manifest"), surface them in the plan — they may simplify

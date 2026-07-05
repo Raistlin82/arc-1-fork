@@ -180,15 +180,15 @@ Both skills produce the same RAP artifact stack. The difference is how they get 
 
 ### Recent ARC-1 Features These Skills Use
 
-- `SAPContext(action="impact")` for RAP/CDS reuse and "what breaks if I change this?" analysis
+- `SAPContext(action="impact", type="DDLS")` for RAP/CDS reuse and "what breaks if I change this?" analysis
 - `SAPDiagnose(action="cds_testcases")` for SAP-native CDS test-case discovery (CDS Test Double Framework) — powers `generate-cds-unit-test` Step 2 on SAP_BASIS 8.16+ (ABAP Platform 2025), returning per-semantic `testMethod`/`semanticType`/`calculatedField` suggestions; falls back to manual DDL semantic analysis on older releases (ARC-1 PR #351)
 - `SAPRead(type="VERSIONS")` and `SAPRead(type="VERSION_SOURCE")` for pattern mining and safer edits of existing RAP stacks
 - `SAPSearch(searchType="tadir_lookup", source="both")` for one-shot existence checks against both released and inactive variants, with a `splitBrain` warning when an object exists only in one source — used by `migrate-segw-to-rap` Phase 6a (ARC-1 v0.9.5+ / PR #270)
-- `SAPWrite(action="batch_create", activateAtEnd: true)` for atomic CDS-composition activation — replaces per-file + manual terminal activation in `migrate-segw-to-rap` Step 2 (ARC-1 v0.9.5+ / PR #270)
+- `SAPWrite(action="batch_create", activateAtEnd=true)` for atomic CDS-composition activation — replaces per-file + manual terminal activation in `migrate-segw-to-rap` Step 2 (ARC-1 v0.9.5+ / PR #270)
 - `SAPTransport(action="history")` for object-to-transport traceability during later iterations
-- `SAPRead(action="diff", from=…, to=…)` for server-side single-system version diffs (active↔inactive, or revision↔active) returning only hunks — powers `sap-transport-review` (ARC-1 PR #445)
+- `SAPRead(type=…, name=…, action="diff", from=…, to=…)` for server-side single-system version diffs (active↔inactive, or revision↔active) returning only hunks — powers `sap-transport-review` (ARC-1 PR #445)
 - `SAPTransport(action="list", summary=true)` for a headers-only transport overview (omits `objects[]`, keeps `objectCount`) — cheap scan before drilling in, also used by `sap-transport-review` (ARC-1 PR #448)
-- `SAPLint(action="format" | "get_formatter_settings")` for SAP-native keyword case and indentation
+- `SAPLint(action="format", source=...)` / `SAPLint(action="get_formatter_settings")` for SAP-native keyword case and indentation
 - `SAPRead` / `SAPWrite` for `SKTD` so generated RAP services can carry attached Markdown documentation
 - `SAPGit` when a package is already part of an abapGit or gCTS-backed delivery flow
 
@@ -202,7 +202,7 @@ Both skills produce the same RAP artifact stack. The difference is how they get 
 | [sap-migration-dossier](sap-migration-dossier/SKILL.md) | Creates human-reviewed ECC → S/4HANA migration dossiers with inventory, usage, ATC, clean-core, review cards, and optional Markdown/HTML/JSON/CSV/graph outputs | Package- or namespace-level migration planning where the output needs to be saved, reviewed, visualized, or shared |
 | [sap-object-documenter](sap-object-documenter/SKILL.md) | Batch-documents many custom objects at once — purpose, style (Classic/Modern/Mixed), dependencies — as Markdown | Onboarding packages, handoffs, seeding a repo wiki (vs. explain-abap-code which is single-object interactive) |
 | [sap-transport-review](sap-transport-review/SKILL.md) | Reviews what *changed* — in a transport or in your unactivated drafts — as per-object unified diffs (`SAPTransport summary` to scan, `SAPRead action="diff"` to diff) plus risk flags and optional impact/ATC. The headless/whole-transport twin of Eclipse ADT 3.6's "Object Changes" | Pre-release/pre-activation gate, reviewing a transport (senior dev), "what have I changed since my last release?", change hand-off or audit |
-| [sap-transport-overview](sap-transport-overview/SKILL.md) | System-wide inventory of every open transport (all users) — owner, size, and risk flags (object in two requests, $TMP, stale, empty) via `SAPTransport(list, summary=true, user="*")`. Breadth, no diffs — the companion to sap-transport-review | Basis/release manager: "what's open across the system and what's risky to import", backlog & cleanup, pre-go-live conflict check |
+| [sap-transport-overview](sap-transport-overview/SKILL.md) | System-wide inventory of every open transport (all users) — owner, size, and risk flags (object in two requests, $TMP, stale, empty) via `SAPTransport(action="list", summary=true, user="*")`. Breadth, no diffs — the companion to sap-transport-review | Basis/release manager: "what's open across the system and what's risky to import", backlog & cleanup, pre-go-live conflict check |
 
 ### Clean Core & Custom Code Retirement
 
@@ -237,7 +237,7 @@ Both run against the same V4 RAP service produced by `migrate-segw-to-rap`. The 
 | **Custom code** | Minimal — annotations only; controller extensions only when unavoidable | Full — every view, controller, formatter is hand-written TS |
 | **Best for** | Standard CRUD, search/filter, sort, drilldown, value help, Approve/Submit action buttons | Non-standard UX, custom controls, dashboards, freeform layouts, anything `sap.fe.*` doesn't template |
 | **Skill depends on** | ARC-1 + sap-docs + ui5-mcp-server + fiori-mcp | ARC-1 (optional) + sap-docs + ui5-mcp-server + browser MCP |
-| **Maturity** | Driven by `@sap-ux/fiori-mcp-server` 3-step API + annotation-discovery via `mcp__sap-docs__search` | 5 documented Critical Traps from accumulated run learnings; teaches LLM to investigate via Self-help patterns |
+| **Maturity** | Driven by `@sap-ux/fiori-mcp-server` 3-step API + annotation-discovery via the active SAP docs MCP `search` tool | 5 documented Critical Traps from accumulated run learnings; teaches LLM to investigate via Self-help patterns |
 
 ### System Context & Local Workflow
 

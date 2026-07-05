@@ -12,7 +12,7 @@ This skill replicates SAP Joule's "CDS Analytical Model Generation" capability (
 ## Prerequisites — read this first
 
 - **Requires SAP_BASIS 7.5x with the analytics annotations.** Verify with `SAPManage(action="probe")` (`rap.available`). If RAP/CDS isn't available, stop.
-- The output is a set of **interdependent** CDS views (cube → dimensions → texts). They must be created as inactive drafts and activated together so SAP's activator resolves the cross-references in one pass. This skill uses `SAPWrite(action="batch_create", activateAtEnd: true)` for exactly that.
+- The output is a set of **interdependent** CDS views (cube → dimensions → texts). They must be created as inactive drafts and activated together so SAP's activator resolves the cross-references in one pass. This skill uses `SAPWrite(action="batch_create", activateAtEnd=true)` for exactly that.
 
 ## Smart Defaults (apply silently, do NOT ask)
 
@@ -20,7 +20,7 @@ This skill replicates SAP Joule's "CDS Analytical Model Generation" capability (
 |---|---|---|
 | Object type | `DDLS` | Cube/dimension/text are all CDS data definitions |
 | Package | `$TMP` | Fast prototyping; ask before a transportable package |
-| Activation | `batch_create` + `activateAtEnd: true` | Cross-references resolve in one terminal pass |
+| Activation | `batch_create` + `activateAtEnd=true` | Cross-references resolve in one terminal pass |
 | Authorization | `#NOT_REQUIRED` (cube/dimension) | Standard for analytical interface views |
 | Naming | `ZI_<X>_Cube`, `ZI_<X>_Dim`, `ZI_<X>_Txt` | Clear star-schema roles (match the casing the templates use) |
 
@@ -70,8 +70,9 @@ The element list classifies fields. Decide for each:
 For each dimension field, check whether a reusable dimension view already exists before generating a new one:
 
 ```
-SAPSearch(query="*<dimension_keyword>*", searchType="object", objectType="DDLS")
+SAPSearch(query="*<dimension_keyword>*", searchType="object")
 ```
+Then keep only `DDLS` rows; normal object-name search does not apply an `objectType` filter.
 
 If a released `#DIMENSION` view exists (e.g. `I_Country`, `I_CalendarDate`), reuse it via association. Otherwise generate a new `ZI_<X>_DIM` (extended scope).
 
@@ -201,7 +202,7 @@ SAPWrite(action="batch_create", activateAtEnd=true, objects=[
 ])
 ```
 
-Order the array dependencies-first (text → dimension → cube) so that even if `activateAtEnd` falls back to per-object activation on an older release, the chain still resolves. With `activateAtEnd: true`, ARC-1 writes all three as inactive drafts and fires one terminal activation over the whole graph.
+Order the array dependencies-first (text → dimension → cube) so that even if `activateAtEnd` falls back to per-object activation on an older release, the chain still resolves. With `activateAtEnd=true`, ARC-1 writes all three as inactive drafts and fires one terminal activation over the whole graph.
 
 If `batch_create` with `activateAtEnd` is not honored (older release), fall back to: create each object with `SAPWrite(action="create", ...)` then a single `SAPActivate(objects=[...])` over all created objects.
 
@@ -227,7 +228,7 @@ The cube is the foundation; the query is what end users consume. Offer:
 | Association cardinality error | Cube→dimension not `[1..1]` | Change cardinality to `[1..1]` |
 | `foreignKey.association` placement | Annotation on the association instead of the key field | Move it to the dimension key field in the cube |
 | Text view rejected | Used `@Analytics.dataCategory` instead of `@ObjectModel.dataCategory` for `#TEXT` | Text views use the `ObjectModel` namespace |
-| Cross-reference unresolved | Created objects activated individually before siblings existed | Use `batch_create` with `activateAtEnd: true` |
+| Cross-reference unresolved | Created objects activated individually before siblings existed | Use `batch_create` with `activateAtEnd=true` |
 | Representative key missing | Dimension has no `representativeKey` | Add `@ObjectModel.representativeKey` |
 
 ## Notes

@@ -141,13 +141,12 @@ Keep only objects of runtime types (PROG, CLAS, FUGR, FUNC) with Z/Y prefix. (Ta
 
 ### 2b. Namespace / prefix
 
-`SAPSearch` takes a single `objectType` filter — call it once per runtime type and union the results:
+Use one broad name search, then filter the returned rows by runtime type:
 
 ```
-SAPSearch(query="<prefix>*", objectType="PROG")
-SAPSearch(query="<prefix>*", objectType="CLAS")
-SAPSearch(query="<prefix>*", objectType="FUGR")
+SAPSearch(query="<prefix>*", searchType="object")
 ```
+Then keep only `PROG`, `CLAS`, and `FUGR` rows from the result. Normal object-name search does not apply an `objectType` filter; `objectType` is for `source_code` and `tadir_lookup`.
 
 ### 2c. Object list
 

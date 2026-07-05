@@ -19,7 +19,7 @@ These are SAP-maintained git repositories that can be `git clone`d locally and r
 | `sap-samples-btp-typescript` | SAP-samples — BTP TypeScript app | https://github.com/SAP-samples/btp-build-business-application-with-typescript | TypeScript CAP scaffolding | `git clone --depth 1`, weekly `git pull --ff-only` |
 | `sap-cloud-sdk` | SAP Cloud SDK (docs only) | https://github.com/SAP/cloud-sdk | JS/TS/Java SDK for consuming S/4 + BTP services | `git clone --depth 1 --filter=blob:none`, weekly `git pull --ff-only` |
 
-**Operational note**: a project that installs this skill runs a one-time setup that clones the Tier 1 list under `.cache/git/`. Total size after clone ≈ 100-200 MB. Weekly refresh is bandwidth-only (no compute cost).
+**Operational note**: if the Tier 1 repos are not already present, the pre-flight should clone them under `.cache/git/` or mark the tier as unavailable in the plan header. Total size after clone ≈ 100-200 MB. Weekly refresh is bandwidth-only (no compute cost).
 
 ## Tier 2 — JIT Apify lookups (per-page cost, user pays at lookup time)
 
@@ -57,19 +57,22 @@ These sources require S-user credentials and **cannot be automated** without the
 
 ## Tier 4 — MCP-server-backed lookup (preferred when installed)
 
-When the consuming environment has these MCP servers configured, the skill prefers them over Apify (faster, often free, better structured):
+When the consuming environment has these MCP servers configured, the skill prefers them over Apify (faster, often free, better structured). **Do tool discovery first** and record the exact namespace in the plan header: current clients may expose the same capability as `mcp__mcp_sap_docs__*`, `mcp__abap_mcp_server__*`, or an equivalent SAP docs server. Never hardcode a namespace in generated instructions.
 
 | MCP server | Replaces Apify for | When preferred |
 |---|---|---|
-| `mcp-sap-docs` — `sap_get_object_details` | abap-atc-cr-cv-s4hc queries (release states + successors) | When `mcp__sap-docs__*` tools are available |
-| `mcp-sap-docs` — `sap_community_search` | `community-sap-com` + `blogs-sap-com` rows | Always when available — free vs ~€0.01/page |
-| `mcp-sap-docs` — `sap_discovery_center_search` / `sap_discovery_center_service` | `discovery-center` row (SPA scrape) | Always when available |
-| `mcp-sap-docs` — `abap_feature_matrix` | help.sap.com language-availability lookups | Step 1 bootstrap + Step 6a "can I use this syntax on this release?" |
-| `mcp-sap-docs` — `search` / `fetch` | `help-sap-*` rows | When the query is doc-shaped rather than page-shaped |
+| `mcp-sap-docs` / `abap_mcp_server` — `sap_get_object_details` | abap-atc-cr-cv-s4hc exact-object queries (release states + successors) | Always for known object names; this is the highest-confidence Clean Core lookup |
+| `mcp-sap-docs` / `abap_mcp_server` — `sap_search_objects` | abap-atc-cr-cv-s4hc discovery by keyword, application component, object type, or clean-core level | When looking for released alternatives before guessing successor names |
+| `mcp-sap-docs` / `abap_mcp_server` — unified `search` (+ `fetch` when exposed) | `help-sap-*`, ABAP/RAP docs, SAP Community/blog evidence when included by the server | Use for doc-shaped questions. If `fetch` is not exposed, rely on the returned URL/snippet and cite/cache the result |
+| `mcp-sap-docs` / `abap_mcp_server` — dedicated `sap_community_search` when exposed | `community-sap-com` + `blogs-sap-com` rows | Only for exact errors, obscure symptoms, or workaround hunting after official docs are insufficient |
+| `mcp-sap-docs` / `abap_mcp_server` — `sap_discovery_center_search` / `sap_discovery_center_service` | `discovery-center` row (SPA scrape) | Always when available |
+| `mcp-sap-docs` / `abap_mcp_server` — `abap_feature_matrix` | language-feature availability lookups | Step 1 bootstrap + Step 6a "can I use this syntax on this release?" |
+| `mcp-sap-docs` — `ui5_version_diff` when exposed | `sapui5-sdk` upgrade/release-delta lookup | UI5/Fiori branches when comparing framework versions or deciding if a local workaround can be removed |
+| `abap_mcp_server` — `abap_lint` | none; secondary lint sanity check | Optional snippet-level check only. Do not replace ARC-1 `SAPLint`, which is system-aware and uses the current ARC-1 config/release profile |
 | `@sap/cds-mcp` — `search_docs` / `search_model` | `cap-cloud-sap` row; plus staged-CAP-model introspection Apify can't do | When the finding concerns the CAP side (Step 6b, `modernize-abap-cap-*`) |
 | `context7` | Generic library docs (non-SAP) | When the lookup is about an npm package or non-SAP library |
 
-With `mcp-sap-docs` + `@sap/cds-mcp` both connected, Tier 2 shrinks to the genuinely page-shaped lookups (`api-sap-com` service lifecycle pages, `learning-sap-com`) — the typical refactor cost drops accordingly.
+With SAP docs MCP + `@sap/cds-mcp` both connected, Tier 2 shrinks to the genuinely page-shaped lookups (`api-sap-com` service lifecycle pages, `learning-sap-com`, or auth-gated pages) — the typical refactor cost drops accordingly. If neither Apify nor the relevant MCP server is configured, the plan remains valid but marks those lookups as manual/degraded.
 
 ## When-to-use heuristic — what source for what finding
 

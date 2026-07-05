@@ -259,7 +259,7 @@ CAP + Fiori Elements V4 projects deploy across **four canonical target environme
 
 | Target | When to choose | CDS profile | Auth | DB | UI delivery | Remote services |
 |---|---|---|---|---|---|---|
-| **BTP Cloud Foundry** | Customer is fully BTP-managed, has CF entitlements, accepts BTP-managed services (Free or pay) | `production` (HANA HDI) or `production-pg` (PostgreSQL, deprecated 2026-Q4) | XSUAA | HANA HDI or BTP PostgreSQL service | `@sap/html5-app-repo` (Free plan OK) + approuter | BTP Destination service + Cloud Connector |
+| **BTP Cloud Foundry** | Customer is fully BTP-managed, has CF entitlements, accepts BTP-managed services (Free or pay) | `production` (HANA HDI) or `production-pg` when the customer explicitly chooses PostgreSQL | XSUAA | HANA HDI or BTP PostgreSQL service after live lifecycle/entitlement check | `@sap/html5-app-repo` (Free plan OK) + approuter | BTP Destination service + Cloud Connector |
 | **BTP Kyma** | Customer wants Kubernetes operational model, BTP-hosted but more flexible than CF, uses pay-tier or in-cluster services | `k8s` | OIDC (XSUAA or IAS via OAuth2) | PostgreSQL in-cluster (Bitnami Helm) or HANA Cloud | UI ZIPs embedded in approuter Docker image | `S4_BASE_URL` + Destination via Kyma BTP Operator |
 | **On-Premise Kyma** | Customer-managed cluster (k3d local, Rancher, Gardener, OpenShift), uses customer IdP (Keycloak), needs full data sovereignty | `k8s-onprem` (Keycloak + HANA/PG) or `k8s-hana` (Kyma + HANA on-prem) | OIDC via customer IdP (Keycloak, Active Directory) | HANA on-prem or PostgreSQL on-prem | UI ZIPs embedded; ingress via NGINX or cluster-native | `*.svc.cluster.local` for in-cluster S/4 proxies + Cloud Connector for SaaS bridges |
 
@@ -945,13 +945,13 @@ This category is not gotchas — it's the map of **companion plugins / skills** 
 
 CAP runtime knowledge base. Covers CDS modeling, service handlers, draft semantics, authentication / authorization, deployment profiles, multitenancy. Reference for any CAP-side question that goes deeper than this skill's snapshot.
 
-### 8.2 — SAP UI5 (`sapui5`, `sap-fiori-tools`)
+### 8.2 — SAP UI5 / Fiori (`sap-fiori-tools`, `sapui5-linter`, UI5/Fiori MCP when configured)
 
-UI5 API explorer, control library reference, Fiori Tools scaffolding. Look up control APIs, manifest schema, annotation reference. Mandatory companion when working on Fiori Elements V4 apps.
+UI5 API explorer, control library reference, Fiori Tools scaffolding and linting. Look up control APIs, manifest schema and annotation reference through the live MCP/plugin that is actually configured; use `ui5_version_diff` from the SAP docs MCP when comparing UI5 releases. Otherwise make the UI branch manual/degraded.
 
-### 8.3 — SAP BTP Cloud Platform (`sap-btp-cloud-platform`)
+### 8.3 — SAP BTP service map (`sap-btp-developer-guide` or BTP service-map plugin when installed)
 
-BTP service map (auth, persistence, connectivity, eventing). Use when designing a new BTP-side deployment or troubleshooting service bindings.
+BTP service map (auth, persistence, connectivity, eventing). Use the installed BTP reference skill/plugin when designing a new BTP-side deployment or troubleshooting service bindings.
 
 ### 8.4 — SAP BTP Connectivity (`sap-btp-connectivity`)
 
@@ -991,11 +991,11 @@ Fiori Tools MCP: manifest validation, Fiori app discovery, page-template scaffol
 
 ### 8.13 — SAP CAP MCP (`sap-cap-capire` MCP server / `@sap/cds-mcp`)
 
-CDS model search, doc lookup. Use during exploration of an unfamiliar CAP project.
+CDS model search, doc lookup and staged-model introspection. Use during exploration of an unfamiliar CAP project when the server is actually exposed by the current MCP client. If it is absent, the CAP branch still runs, but documentation lookup falls back to Tier 1/2 sources and staged-model introspection becomes manual.
 
-### 8.14 — SAP Docs / SAP Notes (`sap-docs`, `sap-note-search`)
+### 8.14 — SAP Docs / Released-object lookup (`mcp-sap-docs` / `abap_mcp_server`)
 
-Help portal, Notes search, `sap_search_objects` for Clean Core checks. Mandatory companion for any S/4HANA Tier-2 proxy work.
+Help portal, SAP Community/blog evidence through unified `search` (plus `fetch` when exposed), SAP Discovery Center, ABAP feature matrix, `ui5_version_diff` when exposed, and `sap_search_objects` / `sap_get_object_details` for Clean Core checks. Dedicated `sap_community_search` is useful when exposed, but is not required; use unified online search otherwise. Strongly recommended companion for any S/4HANA Tier-2 proxy work; if absent, cache the manual source URL and mark confidence lower.
 
 ### 8.15 — Context7 (`context7`)
 
@@ -1018,9 +1018,9 @@ fan-in risk factor from SKILL.md Step 2.
 ### 9.0 — How to use these recipes
 
 1. Match the object's worst findings (from `sap-clean-core-atc` + `SAPDiagnose(action="atc")`) against the tables below — worst level first.
-2. **Never invent a released successor.** The tables name the well-known ones; for anything else resolve live via `sap_get_object_details(...)` → `successorObjects` (mcp-sap-docs, backed by `SAP/abap-atc-cr-cv-s4hc`) and verify the successor exists on the customer release with `SAPSearch`.
+2. **Never invent a released successor.** The tables name the well-known ones; for anything else resolve live via `sap_get_object_details(...)` → `successorObjects` or search alternatives with `sap_search_objects(...)` (SAP docs MCP, backed by `SAP/abap-atc-cr-cv-s4hc`). Then verify the target name exists in the customer's system with `SAPSearch(searchType="tadir_lookup", names=[...])` or a normal `SAPSearch` exact match.
 3. A recipe is *done* only when the verification loop (9.4) confirms the object's re-classified level.
-4. Mechanical variants of these rewrites often ship as ATC quickfixes — try `SAPDiagnose(action="quickfix")` → `apply_quickfix` before hand-editing.
+4. Mechanical variants of these rewrites often ship as ATC quickfixes — try `SAPDiagnose(action="quickfix")` → `SAPDiagnose(action="apply_quickfix")` before hand-editing. `apply_quickfix` returns text deltas only; merge them into the candidate source and persist with `SAPWrite`.
 
 ### 9.1 — D → B: get out of the no-API zone
 
@@ -1066,7 +1066,7 @@ Target: only released APIs (`state=released` in the API release contract). Curat
 
 | Situation | Recipe | Effort |
 |---|---|---|
-| Stable Z-API (class/interface/CDS) consumed by other Z code | **Wrap-and-release**: verify stability (`SAPContext(action="impact")` fan-in + owner sign-off) → `/api-style-review` (sap-api-style plugin) on the surface — a released contract freezes naming/design debt → `SAPManage(action="set_api_state", contract="C1")` → every consumer drops to A | S |
+| Stable Z-API (class/interface/CDS) consumed by other Z code | **Wrap-and-release**: read `SAPRead(type="API_STATE", name="<api>", objectType="<type>")`, verify stability with type-aware fan-in (`SAPContext(action="impact", type="DDLS")` for CDS; `SAPNavigate(action="references")` / cached `SAPContext(action="usages")` for non-CDS) + owner sign-off → `/api-style-review` (sap-api-style plugin) on the surface when available — a released contract freezes naming/design debt → `SAPManage(action="set_api_state", name="<api>", objectType="<type>", contract="C1", transport="<tr>")` → every consumer drops to A | S |
 | Unavoidable unreleased SAP dependency | **Tier-2 wrapper** (SAP 3-tier extensibility model): isolate the dependency in a dedicated wrapper package, release the *wrapper's* API (C1), track the SAP successor for later swap | M |
 | Classic BAPI usage | **Check the live release state first** (rule 9.0.2): since S/4HANA 2023 / Cloud 2308 SAP has RELEASED a curated subset of stable BAPIs for ABAP Cloud (C1) — those need no wrapper. For the (still-majority) unreleased ones: wrap behind a Z-interface now (cheap), swap to the released OData API when extracting side-by-side | S + later M |
 | CDS views built on classic DDIC views / unreleased base views | Rebase onto released `I_*` interface views; keep field aliases to avoid consumer churn | M |
@@ -1078,7 +1078,7 @@ Target: only released APIs (`state=released` in the API release contract). Curat
 1. `SAPDiagnose(action="atc")` on the object — the original finding must be gone, no new P1/P2.
 2. Re-classify: the object's level per `sap-clean-core-atc` roll-up must equal the recipe's target level (D→B recipes: no more D findings; C→A: only released references; B→A: contract visible on the API).
 3. `SAPDiagnose(action="unittest")` — regression tests from Step 6-pre still green.
-4. `SAPRead(action="diff")` — review the rewrite as a diff before transport release.
+4. `SAPRead(type="<type>", name="<name>", action="diff")` — review the rewrite as a diff before transport release.
 5. Data-access recipes only, on hot objects: no performance regression — `debug-slow-sql` ladder (`SAPDiagnose(action="odata_perf")` / `SAPDiagnose(action="cds_sql")`); a released `I_*` view with the wrong access path can be slower than the SELECT it replaced.
 
 ### 9.5 — Effort model (person-days, AI-assisted chain)
@@ -1104,7 +1104,7 @@ higher. S/M/L mapping: **S ≈ 0.25–0.5 · M ≈ 1–2 · L ≈ 3+ person-days
 
 **Fixed subtotal for a ~100-unit package: ≈ 4.5–9.5 person-days** — before any per-unit work. Units whose findings were ONLY mechanical are DONE after Phase 0 at no extra per-unit cost.
 
-#### 9.5.2 — Per-unit scenarios (fan-in bands precomputed; fan-in = distinct consumers per `SAPContext(action="impact")`)
+#### 9.5.2 — Per-unit scenarios (fan-in bands precomputed; fan-in = distinct consumers per the Step 2 type-aware resolver)
 
 | Scenario (logical unit) | From → To | Base (fan-in ≤3) | Fan-in 4–10 (×2) | Fan-in 11–50 (×4) | Fan-in 50+ |
 |---|---|---|---|---|---|
@@ -1204,9 +1204,9 @@ Install whichever of these are available in your environment. Each is referenced
 | Plugin / Skill | npm / vercel-labs install | Domain |
 |---|---|---|
 | `sap-cap-capire` | `npx skills add SAP/sap-cap-capire` | CAP runtime knowledge base |
-| `sapui5` | `npx skills add SAP/sap-ui5` | UI5 API explorer |
+| `sapui5-linter` / UI5 MCP | environment-specific plugin or MCP install | UI5 API/lint support when available |
 | `sap-fiori-tools` | `npx skills add SAP/sap-fiori-tools` | Fiori Elements scaffolding & validation |
-| `sap-btp-cloud-platform` | `npx skills add SAP/sap-btp-cloud-platform` | BTP services map |
+| BTP service-map plugin / `sap-btp-developer-guide` | environment-specific plugin or installed skill | BTP services map |
 | `sap-btp-connectivity` | `npx skills add SAP/sap-btp-connectivity` | Destinations, Cloud Connector |
 | `sap-btp-integration-suite` | `npx skills add SAP/sap-btp-integration-suite` | iFlow, API Management |
 | `sap-btp-cloud-logging` | `npx skills add SAP/sap-btp-cloud-logging` | Observability |
@@ -1215,7 +1215,7 @@ Install whichever of these are available in your environment. Each is referenced
 | `sap-btp-master-data-integration` | `npx skills add SAP/sap-btp-mdi` | MDI |
 | `sap-cap-best-practices` | `npx skills add SAP/sap-cap-best-practices` | CAP curated patterns |
 | `sap-pce-expert` | `npx skills add SAP/sap-pce-expert` | S/4 PCE / RISE specifics |
-| `sap-docs` | `npx skills add SAP/sap-docs` | Help portal, Notes search |
+| SAP docs MCP (`mcp-sap-docs` / `abap_mcp_server`) | configure the MCP connector exposed by your client | Help portal/search, released-object lookup, ABAP feature matrix, Discovery Center, UI5 release diff when exposed |
 
 The exact plugin namespace (`SAP/...` vs `vercel-labs/...` vs `<community>/...`) depends on the package registry your tooling uses. Adapt the install commands to your environment.
 

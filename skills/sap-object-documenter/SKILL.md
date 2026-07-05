@@ -25,7 +25,7 @@ The user provides **one of**:
 
 - **Package** (e.g., `Z_SALES_EXTENSIONS`) — document every custom object in it
 - **Object list** — comma-separated (e.g., `ZCL_SALES_HANDLER, ZR_POSTING_JOB`)
-- **Type + prefix** — e.g., "document all Z* classes" → runs `SAPSearch(query="Z*", objectType="CLAS")`
+- **Type + prefix** — e.g., "document all Z* classes" → runs `SAPSearch(query="Z*")`, then filters returned rows to `CLAS`
 
 And optionally:
 - **Output path** — default: `docs/custom-code/<package_or_group>.md`
@@ -77,10 +77,10 @@ SAPRead(type="DDLS", name="<name>", include="elements")  # Field list
 ## Step 3: Classify ABAP Style (Classes + Programs only)
 
 ```
-SAPLint(action="lint", name="<name>")
+SAPLint(action="lint", source="<source_read_in_step_2>", name="<name>")
 ```
 
-(Pass `source=<source>` instead of `name` if you already have the source in memory — avoids a second fetch.)
+`source` is required for `lint`; reuse the source read in Step 2 rather than issuing another SAP read.
 
 Interpret the lint findings:
 

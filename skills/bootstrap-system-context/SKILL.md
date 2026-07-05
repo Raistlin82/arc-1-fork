@@ -158,7 +158,7 @@ Do not dump the full file contents into chat — the user can open the file.
 |---|---|---|
 | `SAPRead(type="SYSTEM")` fails with auth error | User lacks `S_ADT_RES` for discovery | Continue without identity block; note in output that SID is unknown |
 | `SAPRead(type="COMPONENTS")` empty or 404 | Endpoint unavailable on this system | Note "components endpoint unavailable"; continue with probe + lint |
-| `SAPManage(action="probe")` blocked (read-only mode with no `write` scope) | Safety config | Fall back to `SAPManage(action="features")` for cached results |
+| `SAPManage(action="probe")` blocked or times out | Missing read scope, ADT discovery issue, or transient connectivity | Fall back to `SAPManage(action="features")` for cached results |
 | `SAPLint(action="list_rules")` returns no preset | ARC-1 lint config not yet loaded | Report "lint preset: not configured"; still write the file |
 
 ## Notes

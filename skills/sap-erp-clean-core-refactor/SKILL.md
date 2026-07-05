@@ -10,7 +10,7 @@ Plans and executes the refactor of ABAP custom code to Clean Core. Three modes:
 | Mode | What it does | Writes? |
 |---|---|---|
 | `discover` | Inventory the Z*/Y* package | No |
-| `estimate` | Inventory + cluster + classify + fan-in, then instantiate the [PATTERNS §9.5 effort model](./PATTERNS.md) with the REAL numbers → emit `docs/refactor/<date>-effort-estimate.md` (person-day sizing, no per-unit decisions yet) | No |
+| `estimate` | Inventory + cluster + classify + type-aware fan-in, then instantiate the [PATTERNS §9.5 effort model](./PATTERNS.md) with the REAL numbers → emit `docs/refactor/<date>-effort-estimate.md` (person-day sizing, no per-unit decisions yet) | No |
 | `plan` (default) | Everything `estimate` does + understanding pass + per-unit decisions → emit `docs/refactor/<date>-clean-core-plan.md` (supersedes the estimate with decision-refined effort) | No |
 | `execute` | Apply the plan: rewrite ABAP, scaffold BTP extensions, document Level B keepers, remove unused. Logs ACTUAL effort per unit for §9.5 calibration | Yes (with per-unit confirmation) |
 
@@ -36,7 +36,7 @@ Examples:
 | `--target-level=B` | Settle for B; cheaper paths preferred |
 | `--push-to-a=A,B,C` | Selective B→A for listed objects only |
 | `--force-refresh` | Bypass the 30-day cache; re-query sources |
-| `--budget=N` | Per-finding Apify lookup budget (default 5) |
+| `--budget=N` | Per-finding JIT lookup budget (default 5; Apify only when configured) |
 | `--report=dossier` | Emit the plan through [`../sap-migration-dossier/SKILL.md`](../sap-migration-dossier/SKILL.md) (HTML/JSON/CSV/graph + review cards) instead of the plain markdown plan |
 
 After plan emission, edit `docs/refactor/<date>-clean-core-plan.md` to override any decision before `execute`.
@@ -64,14 +64,14 @@ After plan emission, edit `docs/refactor/<date>-clean-core-plan.md` to override 
 
 **Side-by-side outcome** = Level A on the ERP side (the Z object disappears; logic lives on BTP under separate Clean Core gate).
 
-**`release_api` shortcut (C/D → A without a rewrite).** When an object is C or D *only because it consumes another Z/Y object* that has no released API contract, the cheapest path is releasing the dependency itself: `SAPManage(action="set_api_state", contract="C1")` (ARC-1 ≥ 0.9.24). Contracts C0–C4 are type- and release-dependent — don't pre-judge; send the default and let SAP's error list the supported ones. The same move completes a B→A escalation: after a rewrite stabilizes a Z-API (CDS view, class), release it so every consumer drops to Level A. Check the dependency is genuinely stable first (`SAPContext(action="impact")` fan-in + owner sign-off) — a released contract is a compatibility promise.
+**`release_api` shortcut (C/D → A without a rewrite).** When an object is C or D *only because it consumes another Z/Y object* that has no released API contract, the cheapest path is releasing the dependency itself. First read the current contract with `SAPRead(type="API_STATE", name="<dep>", objectType="<type>")`, verify stability with the type-aware fan-in resolver from Step 2 (`SAPContext(action="impact", type="DDLS")` for CDS; `SAPNavigate(action="references")` or cached `SAPContext(action="usages")` for non-CDS) plus owner sign-off, then call `SAPManage(action="set_api_state", name="<dep>", objectType="<type>", contract="C1", transport="<tr>")`. Contracts C0-C4 are type- and release-dependent — don't pre-judge; send the default and let SAP's error list the supported ones. The same move completes a B→A escalation: after a rewrite stabilizes a Z-API (CDS view, class), release it so every consumer drops to Level A. A released contract is a compatibility promise.
 
 ## Workflow
 
 ### Step 1 — Pre-flight
 
-- Verify ARC-1 MCP is connected (`SAPSearch` probe).
-- Verify Apify MCP is available — if not, the skill degrades to **manual mode** (emits "consult URL X" pointers; user pastes back snippets).
+- Verify ARC-1 MCP is connected (`SAPSearch` probe). ARC-1 is required because it is the only writer.
+- Build a capability matrix for optional lookups/reviewers: `mcp-sap-docs` / `abap_mcp_server` if available, Apify MCP if available, `@sap/cds-mcp`, context7, Fiori MCP, UI5 MCP, and companion plugin skills. Missing optional tools degrade to documented fallback/manual mode; do not block the read-only plan unless the missing tool is required for the selected execution branch.
 - Resolve `$TARGET` (`--target=…` or ask once).
 - One-time per system: run [`../bootstrap-system-context/SKILL.md`](../bootstrap-system-context/SKILL.md) to capture release / ATC preset / formatter into `system-info.md`. With mcp-sap-docs connected, also snapshot `abap_feature_matrix` for the captured release — Step 6a rewrites must only use language features that exist there.
 - Transport-conflict scan: [`../sap-transport-overview/SKILL.md`](../sap-transport-overview/SKILL.md) — if any object of the package sits in someone else's open transport, flag it now (an object locked in two requests stalls Step 6.5).
@@ -79,21 +79,21 @@ After plan emission, edit `docs/refactor/<date>-clean-core-plan.md` to override 
 
 ### Step 2 — Inventory + impact analysis
 
-- Enumerate Z*/Y* objects: `SAPRead(type="DEVC", name="<pkg>")` (walk subpackages recursively) + `SAPSearch(searchType="tadir_lookup")`.
-- Cheap red-flag pre-scan: `SAPRead(…, grep="EXEC SQL|CALL 'SYSTEM'|CALL TRANSACTION|SUBMIT ")` per object — spots forbidden statements without downloading full sources; feeds the classification step's triage order (worst first).
+- Enumerate Z*/Y* objects: `SAPRead(type="DEVC", name="<pkg>")` (walk subpackages recursively). Use `SAPSearch(searchType="tadir_lookup", names=[...])` only for exact cross-package validation of names you already collected; `source="both"` is optional and requires SQL scope. `DEVC` omits legacy SEGW rows, so detect SEGW through MPC/DPC class names, service searches, and, when SQL is allowed, `tadir_lookup source="both"` / targeted TADIR checks.
+- Cheap red-flag pre-scan: `SAPRead(type="<source_type>", name="<object_name>", grep="EXEC SQL|CALL 'SYSTEM'|CALL TRANSACTION|SUBMIT ")` per source-bearing object — spots forbidden statements without downloading full sources; feeds the classification step's triage order (worst first).
 - Dead-code: delegate to [`../sap-unused-code/SKILL.md`](../sap-unused-code/SKILL.md) (requires `SAP_ALLOW_FREE_SQL=true`).
 - **Cluster into logical units.** TADIR granularity lies: a legacy "object" is usually N rows (main program + its includes, function group + FMs + `LZ…` includes, a CDS/RAP stack). Classification and decisions operate on the **compilation unit**, never on a bare include:
 
 | TADIR rows | Logical unit | How to resolve membership |
 |---|---|---|
-| PROG main + INCL includes | one unit | `SAPContext(action="structure")` / `deps` on the main — never naming conventions |
+| PROG main + INCL includes | one unit | `SAPRead(type="PROG")` on the main, parse real `INCLUDE` statements, then `SAPRead(type="INCL")` for members; use `SAPContext(action="deps", type="PROG")` for dependency context and `SAPNavigate(action="references")` to detect shared includes — never `SAPContext(action="structure")`, which is TABL-only |
 | FUGR + FUNCs + `LZ…` includes | one unit | `SAPRead(type="FUGR", expand_includes=true)`; dynpros are NOT reachable via ADT — flag for manual review |
 | CLAS (+ CCDEF/CCIMP/testclasses) | one unit | ADT already treats the class as the unit |
-| DDLS + DCLS + DDLX + BDEF + SRVD + SRVB | one unit (RAP/CDS stack) | `SAPContext(action="impact")` sibling detection |
+| DDLS + DCLS + DDLX + BDEF + SRVD + SRVB | one unit (RAP/CDS stack) | `SAPContext(action="impact", type="DDLS")` sibling detection from the CDS root |
 | SEGW MPC/DPC/`*_EXT` + model | one unit | routed to `migrate-segw-to-rap` as a whole |
 
-  An include referenced by 2+ mains is a **shared component**: it gets ONE decision, coordinated across the units that use it (the `SAPContext(action="impact")` fan-in surfaces these). ATC runs on the unit's main object; includes inherit its findings; the A–D roll-up is the worst level across the unit; the plan emits **one row per unit**, listing its members.
-- **Impact analysis** for every non-A candidate: `SAPContext(action="impact")` → fan-in count drives effort × risk:
+  An include referenced by 2+ mains is a **shared component**: it gets ONE decision, coordinated across the units that use it (`SAPNavigate(action="references")` surfaces the fan-in). ATC runs on the unit's main object; includes inherit its findings; the A-D roll-up is the worst level across the unit; the plan emits **one row per unit**, listing its members.
+- **Impact analysis** for every non-A candidate is type-aware: DDLS/RAP roots use `SAPContext(action="impact", type="DDLS", includeIndirect=<needed>)`; non-CDS objects use `SAPNavigate(action="references", type="<type>", name="<name>")`; cached `SAPContext(action="usages")` is allowed only when ARC-1 cache warmup is enabled. Fan-in count drives effort × risk:
 
 | Fan-in | Risk × | Strategy |
 |---|---|---|
@@ -115,9 +115,9 @@ For each non-A finding, consult sources in this order until evidence is sufficie
 
 1. **Cache hit**: `.cache/sap-clean-core/<sha256-of-topic>/<source>-<date>.md` (30-day TTL stable / 7-day community).
 2. **Tier-1 git** (free): grep `abap-atc-cr-cv-s4hc`, curated `SAP-samples`, `cloud-sdk` (all installed as local clones).
-3. **Tier-4 MCP** (free when installed): `mcp-sap-docs` — `sap_get_object_details` for release states, `sap_community_search` (replaces the paid community/blog lookups), `sap_discovery_center_search` for reference architectures, `abap_feature_matrix` for release-gated language features; `@sap/cds-mcp` (`search_docs`/`search_model`) for the CAP side; `context7` for non-SAP libraries.
+3. **Tier-4 MCP** (free when installed): `mcp-sap-docs` / `abap_mcp_server` — `sap_get_object_details` for release states, `sap_community_search` (replaces the paid community/blog lookups), `sap_discovery_center_search` for reference architectures, `abap_feature_matrix` for release-gated language features, and `ui5_version_diff` for UI5 upgrade deltas when exposed; `@sap/cds-mcp` (`search_docs`/`search_model`) for the CAP side; `context7` for non-SAP libraries.
 4. **Tier-2 Apify** (paid, ~€0.005-0.02/page): `api.sap.com`, `help.sap.com`, `developers.sap.com`, community, blogs.
-5. **Pattern mining** (free, optional): `SAPRead(VERSIONS, VERSION_SOURCE)` for the customer's own history — find how similar Z objects have already been migrated. Cuts rewrite effort 30-50%.
+5. **Pattern mining** (free, optional): `SAPRead(type="VERSIONS", name="<obj>", objectType="<type>")` + `SAPRead(type="VERSION_SOURCE", versionUri="<uri>")` for the customer's own history — find how similar Z objects have already been migrated. Cuts rewrite effort 30-50%.
 
 If budget exhausts without an answer, flag `research_required` and go back to the unit's 4-0 analysis for a deeper pass (method-level, `SAPRead` with `method` surgery) before giving up.
 
@@ -137,7 +137,7 @@ Effort is estimated per [`PATTERNS.md §9.5`](./PATTERNS.md) (person-day model: 
 |---|---|---|
 | Unit type + member count | Step 2 clustering | scenario row (PROG/FUGR/CLAS/SEGW/RAP stack) |
 | Start level + finding categories | Step 3 classification | From→To column; mechanical-only units → covered by Phase 0 (≈0 per-unit) |
-| Fan-in count | `SAPContext(action="impact")` | multiplier band (×1/×2/×4/50+→dedicated) |
+| Fan-in count | Step 2 type-aware resolver (`SAPContext impact` for DDLS, `SAPNavigate references` / cached `SAPContext usages` for non-CDS) | multiplier band (×1/×2/×4/50+→dedicated) |
 | `REUSE_ALV_*`/`WRITE` hits, MPC/DPC members, dynpro presence | Step 2 grep pre-scan + FUGR read | report/SEGW rows; +dynpro condition |
 | Existing test classes per unit | inventory (testclasses includes) | +20–30% no-tests condition |
 
@@ -155,13 +155,13 @@ With `--report=dossier` (or whenever the plan must be shared with stakeholders w
 1. Source: [`../setup-abap-mirror/SKILL.md`](../setup-abap-mirror/SKILL.md) — abapGit-style local mirror, cheap `git diff` evidence for the whole run.
 2. Documentation: [`../sap-object-documenter/SKILL.md`](../sap-object-documenter/SKILL.md) batch pass over every unit in the plan → `docs/refactor/baseline/<date>/` (purpose, style Classic/Modern/Mixed, dependencies, as-is). This is the "before" picture reviewers and auditors will ask for; regenerate after Step 7 for the "after".
 
-**Phase 0 — package-wide mechanical burn-down (lights-out).** Immediately after plan approval, sweep every `rewrite_in_place` / mechanical-only object in one pass: `SAPDiagnose(action="quickfix")` → `apply_quickfix`, `SAPLint(action="lint_and_fix")`, `SAPLint(action="format")`. No per-object confirmation needed — SAP/abaplint propose the exact change; ATC + unit tests are the net. Collect it in its own transport (trivial to review with `sap-transport-review`), then re-run `SAPDiagnose(action="atc")` to refresh the plan numbers before the generative loop: the quickfixes are the plan's "quick wins" phase made explicit.
+**Phase 0 — package-wide mechanical burn-down (lights-out).** Immediately after plan approval, sweep every `rewrite_in_place` / mechanical-only object in one pass, but remember these tools transform source; they do not persist by themselves. For each source-bearing object: read active source, run `SAPDiagnose(action="quickfix")` at matching ATC finding positions, select only proposals whose description matches the finding, call `SAPDiagnose(action="apply_quickfix")` to get text deltas, merge the deltas, run `SAPLint(action="lint_and_fix")`, then `SAPLint(action="format")`, validate with `SAPDiagnose(action="syntax", source="<candidate>")`, persist with `SAPWrite(action="update", source="<candidate>", transport="<phase0-tr>")`, and `SAPActivate`. No per-object confirmation needed for this mechanical phase, but the own transport must be reviewed with `sap-transport-review`. Re-run `SAPDiagnose(action="atc")` afterwards to refresh plan numbers before the generative loop.
 
 Then, per object, ask confirmation and dispatch:
 
 | Decision | Action |
 |---|---|
-| `rewrite_in_place` | ⓪ Residual mechanical findings first: `SAPDiagnose(action="quickfix")` → `apply_quickfix` — Phase 0 already swept the package; this catches what surfaces during the rewrite itself. ① Generate regression test via [`../generate-abap-unit-test/SKILL.md`](../generate-abap-unit-test/SKILL.md) or [`../generate-cds-unit-test/SKILL.md`](../generate-cds-unit-test/SKILL.md) (CDS on 8.16+: seed from `SAPDiagnose(action="cds_testcases")`). ② `SAPWrite(action="update")` + `SAPActivate` + `SAPLint(action="format")`. ③ Cheap `/abap-cloud-review` pass (sap-abap plugin) BEFORE the ATC round-trip. ④ `SAPDiagnose(action="atc")` + ⑤ `SAPDiagnose(action="unittest")`. ⑥ Review the edit as a diff: `SAPRead(action="diff")` active-vs-previous. ⑦ Rollback if regression: restore the pre-rewrite source from version history — `SAPRead(type="VERSION_SOURCE")` + `SAPWrite(action="update")`. (Same ⓪–⑦ as WORKFLOW.md's cage.) For RAP behavior pool delegate to [`../generate-rap-logic/SKILL.md`](../generate-rap-logic/SKILL.md) |
+| `rewrite_in_place` | ⓪ Residual mechanical findings first: `quickfix` → `apply_quickfix` → merge deltas into the candidate source — Phase 0 already swept the package; this catches what surfaces during the rewrite itself. ① Generate regression test via [`../generate-abap-unit-test/SKILL.md`](../generate-abap-unit-test/SKILL.md) or [`../generate-cds-unit-test/SKILL.md`](../generate-cds-unit-test/SKILL.md) (CDS on 8.16+: seed from `SAPDiagnose(action="cds_testcases")`). ② Rewrite candidate source, run `SAPLint(action="lint_and_fix")`, `SAPLint(action="format")`, and `SAPDiagnose(action="syntax", source="<candidate>")`; only then `SAPWrite(action="update")` + `SAPActivate`. ③ Cheap `/abap-cloud-review` pass (sap-abap plugin) BEFORE the ATC round-trip when the plugin is available. ④ `SAPDiagnose(action="atc")` + ⑤ `SAPDiagnose(action="unittest")`. ⑥ Review the edit as a diff: `SAPRead(type="<type>", name="<name>", action="diff")` active-vs-previous. ⑦ Rollback if regression: read history with `SAPRead(type="VERSIONS", objectType="<type>", name="<name>")`, fetch the chosen revision through `SAPRead(type="VERSION_SOURCE", versionUri="<revision_uri>")`, then restore it with `SAPWrite(action="update")`. (Same ⓪–⑦ as WORKFLOW.md's cage.) For RAP behavior pool delegate to [`../generate-rap-logic/SKILL.md`](../generate-rap-logic/SKILL.md) |
 | `extract_to_side_by_side` | Delegate to [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-cap/SKILL.md). ABAP source stays deprecated-tagged until QA confirms parity. UI side: [`../convert-ui5-to-fiori-elements/SKILL.md`](../convert-ui5-to-fiori-elements/SKILL.md) (annotation-driven LROP) or [`../modernize-ui5-app/SKILL.md`](../modernize-ui5-app/SKILL.md) (freestyle TypeScript, for non-standard UX) |
 | `keep_at_level_b` | Delegate to [`../sap-object-documenter/SKILL.md`](../sap-object-documenter/SKILL.md) (SKTD rationale + ATC exemption) |
 | `remove_unused` | Stakeholder sign-off → `SAPNavigate(action="references")` last-check → `SAPWrite(action="delete")` |
@@ -174,9 +174,9 @@ Then, per object, ask confirmation and dispatch:
 | Analytical Z report (ALV over aggregates, no transaction) | [`../generate-analytics-star-schema/SKILL.md`](../generate-analytics-star-schema/SKILL.md) → [`../generate-cds-analytical-query/SKILL.md`](../generate-cds-analytical-query/SKILL.md) — the clean-core successor is an embedded-analytics cube + query, not a transactional LROP |
 | Object whose plan row lists ONLY mechanical/priority ATC findings | [`../migrate-custom-code/SKILL.md`](../migrate-custom-code/SKILL.md) — the standalone finding-driven fixer covers it without the full 6a pipeline |
 
-New decision arm — `release_api`: run `/api-style-review` (sap-api-style plugin) on the API surface first — a released contract is a compatibility promise, so naming/design debt gets frozen with it — then `SAPManage(action="set_api_state", contract="C1")` on the unreleased Z dependency (see Decision tree note). Idempotent; SAP's "No changes were made" is a no-op success.
+New decision arm — `release_api`: read `SAPRead(type="API_STATE", name="<dep>", objectType="<type>")`, run `/api-style-review` (sap-api-style plugin) on the API surface when available, get owner sign-off, then `SAPManage(action="set_api_state", name="<dep>", objectType="<type>", contract="C1", transport="<tr>")` on the unreleased Z dependency (see Decision tree note). Idempotent; SAP's "No changes were made" is a no-op success.
 
-Transport: `SAPTransport(check → create → reassign)`. Optional `SAPGit` commit if `SAP_ALLOW_GIT_WRITES=true`.
+Transport: `SAPTransport(action="check")` → `SAPTransport(action="create")` → `SAPTransport(action="reassign")`. Optional `SAPGit(action="commit")` if `SAP_ALLOW_GIT_WRITES=true`.
 
 ### Step 7 — Verify
 
@@ -201,13 +201,13 @@ No centralized infra. No pre-built KB. Manual mode (no Apify) works at zero cost
 | File | What |
 |---|---|
 | [`./WORKFLOW.md`](./WORKFLOW.md) | **Operator's guide** — the 5 things you type, plus the full delegation map (which skill runs where, whether it is chain / stock arc-1 / external plugin / MCP) |
-| [`./SOURCES.md`](./SOURCES.md) | 26 authoritative SAP sources + 3 MCP servers across 4 tiers (Tier-1 git / Tier-2 Apify / Tier-3 manual / Tier-4 MCP) |
+| [`./SOURCES.md`](./SOURCES.md) | 26 authoritative SAP sources + optional MCP connectors across 4 tiers (Tier-1 git / Tier-2 Apify / Tier-3 manual / Tier-4 MCP) |
 | [`./PATTERNS.md`](./PATTERNS.md) | ~90 battle-tested patterns in 9 categories (UI5/FE V4, CAP/TS, BTP/Kyma deployment target matrix, security, customizing, lifecycle, events, ecosystem plugins, **ABAP level-escalation recipes D→B / C→A / B→A**). Consulted during Step 1 target resolution, Step 4 decision, Step 6a in-place rewrite + Step 6b side-by-side scaffold |
 | [`./INTEGRATIONS.md`](./INTEGRATIONS.md) | Step-by-step mapping: refactor phase × ARC-1 MCP tool × arc-1 native skill × secondsky/sap-skills plugin |
 
 ## Recommended companion plugins
 
-**MUST** (from [secondsky/sap-skills](https://github.com/secondsky/sap-skills)):
+**Strongly recommended** (from [secondsky/sap-skills](https://github.com/secondsky/sap-skills)); if a plugin command is unavailable, continue only with the documented degraded path or make the branch manual:
 - `sap-abap` — ABAP language patterns (Step 6 rewrite ABAP) + `/abap-cloud-review` post-rewrite gate (Step 6a)
 - `sap-abap-cds` — CDS view design (Step 6 when introducing CDS)
 - `sap-cap-capire` — CAP framework + 4 dispatchable agents (Step 6 side-by-side) + `/cap-deployment-checklist` hand-off gate
@@ -219,7 +219,7 @@ No centralized infra. No pre-built KB. Manual mode (no Apify) works at zero cost
 - `sap-btp-connectivity` — `/btp-destination-diagnose` when the extension consumes S/4 APIs via destinations (Step 6b)
 - `sap-btp-best-practices` — `/btp-architecture-review` at hand-off for larger side-by-side landscapes
 
-**Optional**: Apify MCP (JIT lookup), `mcp-sap-docs` (preferred over Apify when installed — incl. `sap_community_search` + `abap_feature_matrix`), `@sap/cds-mcp` (CAP docs + staged-model introspection), `context7` (non-SAP libs), plus situational SHOULD plugins listed in [`./INTEGRATIONS.md`](./INTEGRATIONS.md).
+**Optional MCPs**: Apify MCP (JIT lookup), `mcp-sap-docs` / `abap_mcp_server` (preferred over Apify when installed — incl. `sap_get_object_details`, `sap_community_search`, `sap_discovery_center_search`, `abap_feature_matrix`, `ui5_version_diff` when present), `@sap/cds-mcp` (CAP docs + staged-model introspection), context7 (non-SAP libs), Fiori MCP and UI5 MCP for UI branches, plus situational SHOULD plugins listed in [`./INTEGRATIONS.md`](./INTEGRATIONS.md). Record which are active in the plan header.
 
 ## When NOT to use
 

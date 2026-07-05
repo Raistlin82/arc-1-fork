@@ -38,7 +38,7 @@ legacy JS app + the same V4 RAP service produced by `migrate-segw-to-rap`.
 | MCP | Used for | When |
 |---|---|---|
 | **UI5 MCP** (`mcp__SAPUI5_MCP_Server__*`) | Authoritative TS conversion guidelines, general UI5 guidelines, app scaffolding, API reference lookups, linter, manifest validator, version info | Throughout — this is the primary MCP for this skill |
-| **sap-docs MCP** (`mcp__sap-docs__*`) | OData V4 binding patterns, draft handling, control documentation | When V2→V4 binding behaviour is non-obvious (e.g. composite key on draft, `$expand=_Tasks`, action invocation) |
+| **SAP docs MCP** (active namespace from tool discovery, e.g. `mcp__mcp_sap_docs__*` or `mcp__abap_mcp_server__*`) | OData V4 binding patterns, draft handling, control documentation, UI5 release deltas via `ui5_version_diff` when exposed | When V2→V4 binding behaviour is non-obvious (e.g. composite key on draft, `$expand=_Tasks`, action invocation), or when deciding upgrade/deprecation impacts |
 | **arc-1 MCP** | OPTIONAL — service binding URL lookup, status-code semantics | Only if the V4 URL isn't readily available (e.g. you can't read the FE app's manifest); skip otherwise |
 | **fiori-mcp** | NOT USED | This is a freestyle TS app, not Fiori Elements — no annotations to generate |
 
@@ -46,7 +46,7 @@ legacy JS app + the same V4 RAP service produced by `migrate-segw-to-rap`.
 `mcp__SAPUI5_MCP_Server__get_typescript_conversion_guidelines`, which returns the authoritative
 playbook. You call it once at the start and follow it verbatim.
 
-**Also use `mcp__sap-docs__search` during the run** whenever a UI5 best-practice is non-obvious
+**Also use the active SAP docs MCP `search` tool during the run** whenever a UI5 best-practice is non-obvious
 or contested (FCL routing, V4 binding semantics, draft handling, accessibility, theming). The
 SAP help portal indexed there is authoritative and version-specific — quote it rather than
 guessing.
@@ -339,12 +339,12 @@ version-specific. Guessing usually costs a `tsc` cycle or a runtime "no metadata
 **Recipe:**
 
 ```text
-mcp__sap-docs__search(
+search(  # via the active SAP docs MCP namespace
   query="<feature> OData V4 model UI5",
   sources=["sapui5","sap-help"],
   includeOnline=true
 )
-mcp__sap-docs__fetch(id="<best result id>")
+fetch(id="<best result id>")
 ```
 
 Useful starting topics (search these terms verbatim):
@@ -369,7 +369,7 @@ property. The home/main route needs one too (Trap 1). If you're not sure which `
 enum value to use, search:
 
 ```text
-mcp__sap-docs__search(query="sap.f.LayoutType FCL three-column")
+search(query="sap.f.LayoutType FCL three-column")  # via the active SAP docs MCP namespace
 ```
 
 ### Pattern E — Page renders blank but DOM is populated
@@ -429,7 +429,7 @@ mcp__SAPUI5_MCP_Server__get_typescript_conversion_guidelines   # TS-specific rul
 If the answer isn't in those, escalate to sap-docs:
 
 ```text
-mcp__sap-docs__search(query="<your question>")
+search(query="<your question>")  # via the active SAP docs MCP namespace
 ```
 
 ### Pattern H — You've debugged the same problem twice this run
@@ -870,7 +870,7 @@ Read `<target>/webapp/manifest.json`, then **merge in** the legacy specifics:
 2. Set `sap.app.title` / `sap.app.description` from `i18n` (already templated as `{{appTitle}}`).
 3. Copy `sap.app.icons` from legacy if non-empty.
 4. Add `sap.app.dataSources` with the V4 service URL the user names (or, if uncertain, run
-   `mcp__sap-docs__search` for the V4 binding pattern your backend uses; SRVD-direct on ABAP
+   the active SAP docs MCP `search` tool for the V4 binding pattern your backend uses; SRVD-direct on ABAP
    on-prem is typically `/sap/opu/odata4/sap/<service_binding>/srvd/sap/<service_binding>/0001/`):
 
    ```json
@@ -1357,7 +1357,7 @@ const key = ctx.getProperty("<KeyField>") as string;
 If you don't know whether the service is draft-enabled, search:
 
 ```text
-mcp__sap-docs__search(query="Draft Handling with the OData V4 Model")
+search(query="Draft Handling with the OData V4 Model")  # via the active SAP docs MCP namespace
 ```
 
 ##### (ii) Expand
@@ -1404,7 +1404,8 @@ try {
 The **fully-qualified action name** (`<Action.FQN>`) is service-specific. For RAP V4 it looks
 like `com.sap.gateway.srvd.<service_name>.v0001.<action_name>`. To find it for your service,
 inspect `$metadata` and look for `<Action Name="X" IsBound="true">` — the parent `<Schema Namespace>`
-attribute plus `.X` is the FQN. Use `mcp__sap-docs__search(query="OData V4 Operations action invocation UI5")`
+attribute plus `.X` is the FQN. Use the active SAP docs MCP `search` tool with
+`query="OData V4 Operations action invocation UI5"`
 if uncertain about the API shape.
 
 #### Step 6: Move private fields to class properties
@@ -1784,7 +1785,7 @@ What's next:
   content is large and version-specific; do not paraphrase from memory.
 - **Use sap-docs MCP for ad-hoc best-practice lookups during the run.** When uncertain about
   routing config, V4 binding behaviour, draft semantics, FCL layout values, etc., search
-  `mcp__sap-docs__search` and fetch the specific topic. Don't guess.
+  with the active SAP docs MCP namespace and fetch the specific topic. Don't guess.
 - **Per-view granularity matters:** do one view fully (XML + controller + formatter + lint)
   before moving to the next. Don't accumulate technical debt across views.
 - **Reach for `get_api_reference`** whenever a legacy API name disappears in the modern target
