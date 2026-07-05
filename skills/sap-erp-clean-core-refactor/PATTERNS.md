@@ -1144,7 +1144,25 @@ bigger rewrite but `release_api` on the stabilized interface, or a dedicated pro
 | Dynpro/GUI to replace | +50–100% |
 | Fan-in 50+ on a rewrite row | mandatory architectural review (`research_required`) before any estimate |
 
-#### 9.5.4 — Worked example (package of 100 units)
+#### 9.5.4 — Actualization protocol (`estimate` mode → plan → actuals)
+
+This model is a **starting calibration**; the chain actualizes it with the real system in
+three passes:
+
+1. **`estimate` mode** (read-only, cheap): real inventory + clustering + classification +
+   fan-in, then mechanical scenario matching — every unit gets a §9.5.2 row and band, each
+   assignment citing its signals (unit type, level, finding categories, ALV/SEGW/dynpro
+   markers, test-class presence). Output: `docs/refactor/<date>-effort-estimate.md` with the
+   instantiated fixed-cost table, per-unit ranges, aggregates and top effort drivers.
+2. **`plan`** refines: the understanding pass and human decisions can move units between
+   scenarios (e.g. a "rewrite" revealed to be a clone → the clone row; a keeper instead of a
+   rewrite) — effort re-totals automatically.
+3. **`execute` logs actuals** per unit (scenario, band, estimated range, actual person-days).
+   After the run, compare estimate vs actuals and adjust THIS section's baselines for that
+   system/team — the deltas are per-customer calibration, not global truth. Two or three runs
+   in, the estimates become quotable.
+
+#### 9.5.5 — Worked example (package of 100 units)
 
 15 already A (no action) · 10 unused (10 × 0.1 = 1) · 35 mechanical-only (covered by Phase 0, ≈0)
 · 25 simple rewrites at ~0.75 avg (= 19) · 10 complex rewrites, half at ×2 fan-in, ~3 avg (= 30)

@@ -74,6 +74,7 @@ Use this document to:
 | 5a — Generate plan markdown | (filesystem write) | — | — | — | `docs/refactor/<date>-clean-core-plan.md` |
 | 5b — Per-unit decision rows | (templating) | — | — | — | Object / Start Level / Target Level / Decision / Replacement / Effort / Risk / KB evidence |
 | 5c — Stakeholder dossier (`--report=dossier`) | — | **`sap-migration-dossier`** | — | — | HTML/JSON/CSV/graph + review cards; plan markdown stays the editable source of truth |
+| 5d — Effort quantification (`estimate` mode / plan header) | (mechanical matching over Steps 2-3 outputs) | — | — | — | Instantiates PATTERNS §9.5 with real unit counts, levels, fan-in bands + detected conditions → `docs/refactor/<date>-effort-estimate.md`; execute logs actuals for recalibration |
 
 ### Step 6 — Execute (opt-in)
 

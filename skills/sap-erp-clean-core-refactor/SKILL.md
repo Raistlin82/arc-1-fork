@@ -10,8 +10,9 @@ Plans and executes the refactor of ABAP custom code to Clean Core. Three modes:
 | Mode | What it does | Writes? |
 |---|---|---|
 | `discover` | Inventory the Z*/Y* package | No |
-| `plan` (default) | Inventory + classify + decide per logical unit → emit `docs/refactor/<date>-clean-core-plan.md` | No |
-| `execute` | Apply the plan: rewrite ABAP, scaffold BTP extensions, document Level B keepers, remove unused | Yes (with per-unit confirmation) |
+| `estimate` | Inventory + cluster + classify + fan-in, then instantiate the [PATTERNS §9.5 effort model](./PATTERNS.md) with the REAL numbers → emit `docs/refactor/<date>-effort-estimate.md` (person-day sizing, no per-unit decisions yet) | No |
+| `plan` (default) | Everything `estimate` does + understanding pass + per-unit decisions → emit `docs/refactor/<date>-clean-core-plan.md` (supersedes the estimate with decision-refined effort) | No |
+| `execute` | Apply the plan: rewrite ABAP, scaffold BTP extensions, document Level B keepers, remove unused. Logs ACTUAL effort per unit for §9.5 calibration | Yes (with per-unit confirmation) |
 
 ## Input
 
@@ -20,6 +21,7 @@ Plans and executes the refactor of ABAP custom code to Clean Core. Three modes:
 ```
 
 Examples:
+- `ZFI estimate` — person-day sizing from the real system state, before committing to a plan
 - `ZFI plan` — typical first call (default target = `btp-cf`)
 - `ZCL_INVOICE_HANDLER plan` — single-object focus
 - `ZFI execute` — apply plan with per-unit confirmation
@@ -128,6 +130,18 @@ Write `docs/refactor/<date>-clean-core-plan.md` with one row per logical unit (m
 | Object | Start Level | Target Level | Decision | Replacement / Pattern | Effort | Risk | KB evidence |
 
 Effort is estimated per [`PATTERNS.md §9.5`](./PATTERNS.md) (person-day model: fixed run costs + per-unit scenario × fan-in band + extra conditions); the plan header carries the fixed-cost subtotal and the grand total so stakeholders see both.
+
+**`estimate` mode — actualizing §9.5 with the real situation.** Runs the read-only pipeline up to fan-in, then matches every unit to a §9.5.2 scenario row **mechanically and auditably** — each assignment cites its signals:
+
+| Signal | Source | Drives |
+|---|---|---|
+| Unit type + member count | Step 2 clustering | scenario row (PROG/FUGR/CLAS/SEGW/RAP stack) |
+| Start level + finding categories | Step 3 classification | From→To column; mechanical-only units → covered by Phase 0 (≈0 per-unit) |
+| Fan-in count | `SAPContext(action="impact")` | multiplier band (×1/×2/×4/50+→dedicated) |
+| `REUSE_ALV_*`/`WRITE` hits, MPC/DPC members, dynpro presence | Step 2 grep pre-scan + FUGR read | report/SEGW rows; +dynpro condition |
+| Existing test classes per unit | inventory (testclasses includes) | +20–30% no-tests condition |
+
+Output `docs/refactor/<date>-effort-estimate.md`: instantiated fixed-cost table (real unit counts), per-unit table (unit, scenario, band, pd range, signals), aggregates per scenario/level, top-10 effort drivers, assumptions + confidence notes. `plan` later refines it (human decisions can move units between scenarios); `execute` logs actuals per unit so the §9.5 baselines get recalibrated per system — estimate → plan → actuals is the calibration loop that makes the numbers quotable.
 
 Plus: inventory summary, side-by-side extension catalog (per `extract` outcome), suggested sequencing (quick wins → in-place phase 1 → in-place phase 2 → side-by-side parallel), research backlog, source citations.
 
