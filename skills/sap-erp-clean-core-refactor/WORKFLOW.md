@@ -39,7 +39,7 @@ the rewrite itself.
 
 ```mermaid
 flowchart TD
-    S1[/"1 · /bootstrap-system-context"/]:::det --> S2[/"2 · /sap-erp-clean-core-refactor ZPKG plan"/]:::gen
+    S1[/"1 · /bootstrap-system-context"/]:::det --> S2[/"2 · /sap-erp-clean-core-refactor ZPKG plan<br/>inventory → cluster into logical units → classify A–D<br/>+ understanding pass: explain-abap-code on every non-A unit"/]:::gen
     S2 --> S3{"3 · HUMAN GATE<br/>review &amp; edit the plan<br/>(no writes so far)"}:::hum
     S3 -->|approved| BL["AS-FOUND BASELINE · before any write<br/>setup-abap-mirror (source snapshot)<br/>+ sap-object-documenter (as-is docs, every unit)"]:::gen
     BL --> P0["PHASE 0 · package-wide mechanical burn-down<br/>quickfix → apply_quickfix · lint_and_fix · format<br/>lights-out — own transport"]:::det
@@ -48,7 +48,7 @@ flowchart TD
     EX --> DEC{"plan decision<br/>per logical unit"}:::hum
     DEC --> RW["rewrite_in_place<br/>D→B · C→A<br/>(cage pipeline below)"]:::gen
     DEC --> SBS["extract_to_side_by_side<br/>→ modernize-abap-to-btp-cap<br/>= Level A on the ERP side"]:::gen
-    DEC --> REL["release_api<br/>/api-style-review →<br/>SAPManage set_api_state"]:::gen
+    DEC --> REL["release_api<br/>owner sign-off → /api-style-review →<br/>SAPManage set_api_state"]:::gen
     DEC --> KB["keep_at_level_b<br/>SKTD + ATC exemption<br/>(on-prem only)"]:::gen
     DEC --> RM["remove_unused<br/>sign-off → references check<br/>→ delete"]:::hum
     RW --> V
