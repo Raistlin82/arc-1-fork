@@ -945,9 +945,9 @@ This category is not gotchas — it's the map of **companion plugins / skills** 
 
 CAP runtime knowledge base. Covers CDS modeling, service handlers, draft semantics, authentication / authorization, deployment profiles, multitenancy. Reference for any CAP-side question that goes deeper than this skill's snapshot.
 
-### 8.2 — SAP UI5 / Fiori (`sap-fiori-app-development`, `sap-fiori-tools`, `sap-fiori-guidelines`, `sapui5-linter`, UI5/Fiori MCP when configured)
+### 8.2 — SAP UI5 / Fiori (`sap-fiori-app-development`, `sap-fiori-tools`, `sap-fiori-create-cli`, `sap-fiori-guidelines`, `sapui5-linter`, `sapui5-cli`, `sap-fiori-eslint-plugin`, UI5/Fiori MCP when configured)
 
-UI5 API explorer, control library reference, Fiori Tools scaffolding, Fiori app-development rules, Fiori design review and linting. Look up control APIs, manifest schema and annotation reference through the live MCP/plugin that is actually configured; use `ui5_version_diff` from the SAP docs MCP when comparing UI5 releases. Otherwise make the UI branch manual/degraded. For Level A side-by-side UI, treat app-development guidance and lint/build/browser verification as branch-MUST; design-guideline review is SHOULD and becomes branch-MUST for stakeholder-facing apps.
+UI5 API explorer, control library reference, Fiori Tools scaffolding, Fiori app-development rules, Fiori design review and linting. Look up control APIs, manifest schema and annotation reference through the live MCP/plugin that is actually configured; use `ui5_version_diff` from the SAP docs MCP when comparing UI5 releases. Otherwise make the UI branch manual/degraded. For Level A side-by-side UI, treat app-development guidance and lint/build/browser verification as branch-MUST; design-guideline review is SHOULD and becomes branch-MUST for stakeholder-facing apps. `sap-fiori-add-visual-filter` and `sap-fiori-analytical-chart` are branch-MUST only when the accepted FE UX explicitly contains those analytical features.
 
 ### 8.3 — SAP BTP service map (`sap-btp-developer-guide` or BTP service-map plugin when installed)
 
@@ -969,39 +969,55 @@ OpenTelemetry integration, Kibana / Cloud Logging dashboards. Use when wiring up
 
 BTP Job Scheduler service for cron-style jobs. Alternative / complement to Kyma CronJob CRDs.
 
-### 8.8 — SAP BTP Audit Log (`sap-btp-audit-log`)
+### 8.8 — SAP BTP Audit Log service (`sap-btp-cloud-logging`; optional `sap-btp-audit-log` if installed)
 
-BTP Audit Log Service. Adopt as a destination for the local AuditLogEntry events; never replace the local audit log (defense-in-depth Category 4.1).
+BTP Audit Log Service. Adopt as a destination for local AuditLogEntry events; never replace the local audit log (defense-in-depth Category 4.1). In this environment the available companion is `sap-btp-cloud-logging`; use a dedicated `sap-btp-audit-log` skill only when it is actually installed/exposed.
 
 ### 8.9 — SAP BTP Master Data Integration (`sap-btp-master-data-integration`)
 
 MDI for BP / Product / Cost-Object distribution across systems. Use when the project needs master-data sync to S/4 / SuccessFactors / etc.
 
-### 8.10 — SAP CAP Best Practices (`sap-cap-best-practices`)
+### 8.10 — SAP CAP Best Practices (`sap-cap-capire`; optional `sap-cap-best-practices` if installed)
 
-Curated CAP patterns from SAP engineering. Use as a cross-check for Category 2 patterns when in doubt.
+Curated CAP patterns from SAP engineering. Use `sap-cap-capire` as the installed baseline for Category 2 CAP patterns; use a dedicated `sap-cap-best-practices` companion only when it is actually installed/exposed.
 
-### 8.11 — SAP PCE Expert (`sap-pce-expert`)
+### 8.11 — SAP PCE / RISE specifics (`sap-btp-developer-guide`, SAP docs MCP; optional `sap-pce-expert` if installed)
 
-S/4HANA Private Cloud Edition / RISE specifics. Use when the project consumes S/4HANA PCE / RISE (Tier-2 proxies have different host patterns and Communication Scenarios).
+S/4HANA Private Cloud Edition / RISE specifics. Use `sap-btp-developer-guide` plus SAP docs MCP lookups as the installed baseline when the project consumes S/4HANA PCE / RISE. Use a dedicated `sap-pce-expert` companion only when it is actually installed/exposed.
 
-### 8.12 — SAP Fiori Tools (`sap-fiori-tools`)
+### 8.12 — SAP BTP Service Manager (`sap-btp-service-manager`)
+
+BTP service instance and binding lifecycle. SHOULD for side-by-side extensions that depend on BTP services; branch-MUST when the refactor deliverable includes creating, binding, automating, or troubleshooting service instances rather than merely documenting manual setup.
+
+### 8.13 — SAP HANA / SQLScript (`sap-sqlscript`, `sap-hana-cli`, `sap-hana-cloud-data-intelligence`, `sap-hana-ml`)
+
+HANA-native development, HDI/container administration, SQLScript, table functions, procedures, AMDP-adjacent modeling, data intelligence, and HANA ML. These are not part of the generic ABAP clean-core path. They become branch-MUST when inventory or target architecture contains AMDP/table functions/HANA procedures/SQLScript or HANA-native artifacts.
+
+### 8.14 — SAP Datasphere / SAC (`sap-datasphere`, `sap-sac-custom-widget`, `sap-sac-planning`, `sap-sac-scripting`)
+
+Analytics targets outside embedded analytics. Use only when the accepted replacement is Datasphere or SAP Analytics Cloud rather than embedded CDS analytical queries. They become branch-MUST for that target because the validation surface lives outside ARC-1.
+
+### 8.15 — SAP AI (`sap-ai-pathfinder`, `sap-ai-core`, `sap-cloud-sdk-ai`)
+
+AI extension branches. Use `sap-ai-pathfinder` to validate whether AI belongs in the architecture, `sap-ai-core` for runtime/service operation, and `sap-cloud-sdk-ai` for SDK implementation. They are branch-MUST only when the side-by-side extension includes AI runtime, AI service calls, or AI-specific architecture decisions.
+
+### 8.16 — SAP Fiori Tools (`sap-fiori-tools`)
 
 Fiori Tools MCP: manifest validation, Fiori app discovery, page-template scaffolding. Use during Fiori Elements V4 setup or migration.
 
-### 8.13 — SAP CAP MCP (`sap-cap-capire` MCP server / `@sap/cds-mcp`)
+### 8.17 — SAP CAP MCP (`sap-cap-capire` MCP server / `@sap/cds-mcp`)
 
 CDS model search, doc lookup and staged-model introspection. Use during exploration of an unfamiliar CAP project when the server is actually exposed by the current MCP client. If it is absent, the CAP branch still runs, but documentation lookup falls back to Tier 1/2 sources and staged-model introspection becomes manual.
 
-### 8.14 — SAP Docs / Released-object lookup (`mcp-sap-docs` / `abap_mcp_server`)
+### 8.18 — SAP Docs / Released-object lookup (`mcp-sap-docs` / `abap_mcp_server`)
 
 Help portal, SAP Community/blog evidence through unified `search` (plus `fetch` when exposed), SAP Discovery Center service details through `sap_discovery_center_service` when a service name/id is known, ABAP feature matrix, `ui5_version_diff` when exposed, and `sap_search_objects` / `sap_get_object_details` for Clean Core checks. Dedicated `sap_community_search` is useful when exposed, but is not required; use unified online search otherwise. Do not assume a dedicated Discovery Center search function exists. Strongly recommended companion for any S/4HANA Tier-2 proxy work; if absent, cache the manual source URL and mark confidence lower.
 
-### 8.15 — Context7 (`context7`)
+### 8.19 — Context7 (`context7`)
 
 Generic library documentation lookup. Use for non-SAP dependencies (Node libraries, npm packages).
 
-### 8.16 — Playwright MCP (`playwright`)
+### 8.20 — Playwright MCP (`playwright`)
 
 Browser automation for UI tests. Use during Fiori app smoke tests or visual regression checks.
 
@@ -1066,7 +1082,7 @@ Target: only released APIs (`state=released` in the API release contract). Curat
 
 | Situation | Recipe | Effort |
 |---|---|---|
-| Stable Z-API (class/interface/CDS) consumed by other Z code | **Wrap-and-release**: read `SAPRead(type="API_STATE", name="<api>", objectType="<type>")`, verify stability with type-aware fan-in (`SAPContext(action="impact", type="DDLS")` for CDS; `SAPNavigate(action="references")` / cached `SAPContext(action="usages")` for non-CDS) + owner sign-off → `/api-style-review` (sap-api-style plugin) on the surface when available — a released contract freezes naming/design debt → `SAPManage(action="set_api_state", name="<api>", objectType="<type>", contract="C1", transport="<tr>")` → every consumer drops to A | S |
+| Stable Z-API (class/interface/CDS) consumed by other Z code | **Wrap-and-release**: read `SAPRead(type="API_STATE", name="<api>", objectType="<type>")`, verify stability with type-aware fan-in (`SAPContext(action="impact", type="DDLS")` for CDS; `SAPNavigate(action="references")` / cached `SAPContext(action="usages")` for non-CDS) + owner sign-off → `sap-api-style` review on the surface when exposed — a released contract freezes naming/design debt → `SAPManage(action="set_api_state", name="<api>", objectType="<type>", contract="C1", transport="<tr>")` → every consumer drops to A | S |
 | Unavoidable unreleased SAP dependency | **Tier-2 wrapper** (SAP 3-tier extensibility model): isolate the dependency in a dedicated wrapper package, release the *wrapper's* API (C1), track the SAP successor for later swap | M |
 | Classic BAPI usage | **Check the live release state first** (rule 9.0.2): since S/4HANA 2023 / Cloud 2308 SAP has RELEASED a curated subset of stable BAPIs for ABAP Cloud (C1) — those need no wrapper. For the (still-majority) unreleased ones: wrap behind a Z-interface now (cheap), swap to the released OData API when extracting side-by-side | S + later M |
 | CDS views built on classic DDIC views / unreleased base views | Rebase onto released `I_*` interface views; keep field aliases to avoid consumer churn | M |
@@ -1205,19 +1221,24 @@ Install whichever of these are available in your environment. Each is referenced
 |---|---|---|
 | `sap-cap-capire` | `npx skills add SAP/sap-cap-capire` | CAP runtime knowledge base |
 | `sap-fiori-app-development` | environment-specific plugin/skill install | Fiori app creation/modification rules: CAP vs standalone, metadata ownership, tool-first flow |
-| `sap-fiori-tools` | environment-specific plugin/skill install | Fiori Elements scaffolding & validation |
+| `sap-fiori-tools` / `sap-fiori-create-cli` | environment-specific plugin/skill install | Fiori Elements scaffolding & validation |
 | `sap-fiori-guidelines` | environment-specific plugin/skill install | UX, accessibility and Fiori design review |
-| `sapui5-linter` / UI5 MCP | environment-specific plugin or MCP install | UI5 API/lint support when available; local `@ui5/linter` is the fallback gate |
+| `sapui5-linter` / `sapui5-cli` / `sap-fiori-eslint-plugin` / UI5 MCP | environment-specific plugin or MCP install | UI5 API/lint support when available; local `@ui5/linter` is the fallback gate |
+| `sap-fiori-add-visual-filter` / `sap-fiori-analytical-chart` | environment-specific plugin/skill install | Branch-MUST only for FE visual-filter or analytical-chart UX |
 | `sap-btp-best-practices` | environment-specific plugin/skill install | BTP architecture/governance review; branch-MUST for production/high-risk landscapes |
 | BTP service-map plugin / `sap-btp-developer-guide` | environment-specific plugin or installed skill | BTP services map |
 | `sap-btp-connectivity` | `npx skills add SAP/sap-btp-connectivity` | Destinations, Cloud Connector |
+| `sap-btp-service-manager` | environment-specific plugin/skill install | BTP service instance / binding lifecycle |
 | `sap-btp-integration-suite` | `npx skills add SAP/sap-btp-integration-suite` | iFlow, API Management |
 | `sap-btp-cloud-logging` | `npx skills add SAP/sap-btp-cloud-logging` | Observability |
 | `sap-btp-job-scheduling` | `npx skills add SAP/sap-btp-job-scheduling` | Job Scheduler |
-| `sap-btp-audit-log` | `npx skills add SAP/sap-btp-audit-log` | BTP Audit Log Service |
+| `sap-btp-audit-log` | optional if actually installed/exposed | BTP Audit Log Service; otherwise use service docs plus `sap-btp-cloud-logging` |
 | `sap-btp-master-data-integration` | `npx skills add SAP/sap-btp-mdi` | MDI |
-| `sap-cap-best-practices` | `npx skills add SAP/sap-cap-best-practices` | CAP curated patterns |
-| `sap-pce-expert` | `npx skills add SAP/sap-pce-expert` | S/4 PCE / RISE specifics |
+| `sap-cap-best-practices` | optional if actually installed/exposed | CAP curated patterns; baseline is `sap-cap-capire` |
+| `sap-pce-expert` | optional if actually installed/exposed | S/4 PCE / RISE specifics; baseline is `sap-btp-developer-guide` + SAP docs MCP |
+| `sap-sqlscript` / `sap-hana-cli` / `sap-hana-cloud-data-intelligence` / `sap-hana-ml` | environment-specific plugin/skill install | HANA-native / SQLScript / HDI / data-intelligence / ML branches |
+| `sap-datasphere` / `sap-sac-*` | environment-specific plugin/skill install | Datasphere or SAP Analytics Cloud target branches |
+| `sap-ai-pathfinder` / `sap-ai-core` / `sap-cloud-sdk-ai` | environment-specific plugin/skill install | AI architecture, AI Core runtime, and SDK implementation branches |
 | SAP docs MCP (`mcp-sap-docs` / `abap_mcp_server`) | configure the MCP connector exposed by your client | Help portal/search, released-object lookup, ABAP feature matrix, Discovery Center, UI5 release diff when exposed |
 
 The exact plugin namespace (`SAP/...` vs `vercel-labs/...` vs `<community>/...`) depends on the package registry your tooling uses. Adapt the install commands to your environment.

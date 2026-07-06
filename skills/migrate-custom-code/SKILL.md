@@ -137,11 +137,15 @@ sap_search_objects(query="<business capability or successor keyword>", system_ty
 
 ### 3c. Search SAP Notes / community only through exposed tools
 
-There is no guaranteed dedicated SAP Notes tool. Do not call a Notes-specific function unless tool discovery exposes it in the current runtime. Use the unified docs search instead, and escalate to community search only for exact errors or workaround hunting:
+There is no guaranteed dedicated SAP Notes tool. Do not call a Notes-specific function unless
+tool discovery exposes it in the current runtime. Use the unified docs search instead. Escalate
+to dedicated community search only when it is exposed; otherwise use unified online search with
+the exact error text:
 
 ```
 search(query="<checkTitle> SAP Note S/4HANA", includeOnline=true, includeSamples=false)
-sap_community_search(query="<exact error text or obscure migration symptom>")
+sap_community_search(query="<exact error text or obscure migration symptom>")        # only when exposed
+search(query="<exact error text or obscure migration symptom>", includeOnline=true)   # fallback
 ```
 
 ### 3d. Present explanation for each finding
@@ -244,7 +248,8 @@ SAPWrite(action="update", type="<type>", name="<object_name>", source="<fixed_so
 For `edit_method`, if you only have a method body rather than full class source, the pre-write `source="<fixed_source>"` syntax check above is not applicable. Write the method body, then validate the saved class immediately:
 
 ```
-SAPDiagnose(action="syntax", type="<type>", name="<object_name>")
+SAPRead(type="<type>", name="<object_name>")
+SAPDiagnose(action="syntax", type="<type>", name="<object_name>", source="<saved_source>")
 ```
 
 If syntax errors are introduced: revert by writing back the original source and report the issue.

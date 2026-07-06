@@ -96,7 +96,11 @@ service <ServiceName> @(requires: 'authenticated-user') {
 
 Carry `@Common.Label` from FM short text. `@Core.LongDescription` from FM detailed documentation if present.
 
-Review the generated service surface with `/api-style-review` (sap-api-style plugin) before handing off — action/function naming, verb style, and payload shapes are contract decisions that are expensive to change after consumers exist. With `@sap/cds-mcp` connected, resolve CDS syntax doubts via `search_docs` instead of guessing.
+Review the generated service surface with `sap-api-style` before handing off, using its command
+only when the plugin exposes one; otherwise perform an equivalent manual API-style checklist.
+Action/function naming, verb style, and payload shapes are contract decisions that are expensive
+to change after consumers exist. With `@sap/cds-mcp` connected, resolve CDS syntax doubts via
+`search_docs` instead of guessing.
 
 ### Step 5 — Generate `srv/service.ts` handler skeletons
 

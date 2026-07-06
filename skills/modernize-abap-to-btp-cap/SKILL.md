@@ -96,12 +96,14 @@ review and record the degraded gate in `docs/porting-plan.md`.
 3. `sap-btp-best-practices` — SHOULD for every deployable BTP side-by-side extension; branch-MUST
    for production, multi-subaccount/multi-region, sensitive-data, principal-propagation,
    HA/failover, or shared-landscape scenarios.
-4. `sap-fiori-app-development` + `sap-fiori-tools` — branch-MUST when Step 5 creates or modifies
-   a Fiori Elements app: decide CAP vs standalone, keep backend metadata authoritative, and prefer
-   the Fiori toolchain/MCP when exposed.
-5. `sap-fiori-guidelines` + `sapui5-linter` — branch-MUST for stakeholder-facing UI: Fiori UX /
-   accessibility review plus UI5 lint/build checks. If the plugin is absent, run local
-   `@ui5/linter` or the project's lint script.
+4. `sap-btp-service-manager` — SHOULD when the extension uses BTP services; branch-MUST when the
+   deliverable creates, binds, or automates service instances.
+5. `sap-fiori-app-development` + `sap-fiori-tools` / `sap-fiori-create-cli` — branch-MUST when
+   Step 5 creates or modifies a Fiori Elements app: decide CAP vs standalone, keep backend metadata
+   authoritative, and prefer the Fiori toolchain/MCP when exposed.
+6. `sap-fiori-guidelines` + `sapui5-linter` / `sapui5-cli` / `sap-fiori-eslint-plugin` —
+   branch-MUST for stakeholder-facing UI: Fiori UX / accessibility review plus UI5 lint/build
+   checks. If the plugin is absent, run local `@ui5/linter` or the project's lint script.
 
 ```bash
 cd <target>/.target-cap-staging
@@ -111,7 +113,10 @@ mbt build               # build MTA archive
 cf deploy mta_archives/<archive>.mtar
 ```
 
-If the deployed app cannot reach its S/4 destination, diagnose with `/btp-destination-diagnose` (sap-btp-connectivity plugin).
+If the deployed app cannot reach its S/4 destination, run the `sap-btp-connectivity` destination
+diagnostic command only when the plugin exposes it; otherwise perform the same destination,
+Cloud Connector, authentication, and principal-propagation checks manually and record the degraded
+gate in `docs/porting-plan.md`.
 
 For audit / hardening / CI gates of the generated CAP project, see [`Raistlin82/sap-cap-toolkit`](https://github.com/Raistlin82/sap-cap-toolkit).
 
@@ -133,11 +138,14 @@ capabilities; do not copy their GPL-licensed text into ARC-1 docs.
 - `sap-cap-capire` (recommended, 4 agents) — CAP scaffolding patterns for Steps 3-4
 - `sap-btp-developer-guide` (recommended) — BTP deployment for Step 6
 - `sap-btp-best-practices` (SHOULD; branch-MUST for production/high-risk landscapes) — BTP account, security, operations, HA/failover and governance review before deploy hand-off
+- `sap-btp-service-manager` (SHOULD; branch-MUST when service lifecycle is deliverable scope) — BTP service instances and bindings
 - `sap-fiori-app-development` (branch-MUST for FE branches) — Fiori app creation/modification rules for CAP vs standalone and backend metadata ownership
-- `sap-fiori-tools` (branch-MUST when FE generation uses Fiori tooling; otherwise SHOULD) — Fiori Elements scaffolding and project validation for Step 5
+- `sap-fiori-tools` / `sap-fiori-create-cli` (branch-MUST when FE generation uses Fiori tooling; otherwise SHOULD) — Fiori Elements scaffolding and project validation for Step 5
 - `sap-fiori-guidelines` (SHOULD; branch-MUST for stakeholder-facing UI) — Fiori UX/accessibility/design review
 
-- `sap-api-style` (SHOULD) — `/api-style-review` on the generated `service.cds` (Step 4)
-- `sapui5-linter` (branch-MUST when Step 5 produces UI5/FE frontend) — use the installed skill/plugin when exposed; otherwise run local `@ui5/linter` or project lint scripts
+- `sap-api-style` (SHOULD) — API style review on the generated `service.cds` (Step 4) when the
+  plugin exposes a command; otherwise use an equivalent manual checklist
+- `sapui5-linter`, `sapui5-cli`, `sap-fiori-eslint-plugin` (branch-MUST when Step 5 produces UI5/FE frontend) — use the installed skill/plugin when exposed; otherwise run local `@ui5/linter` or project lint scripts
+- `sap-fiori-add-visual-filter`, `sap-fiori-analytical-chart` (branch-MUST only when the accepted FE UX includes those controls)
 
 Plus ARC-1 MCP (mandatory — system probe + source read in Steps 1-2) and `@sap/cds-mcp` when configured (recommended — authoritative CAP docs via `search_docs` + staged-model introspection via `search_model` in Steps 3-4). If a companion plugin/MCP is missing, record the degraded path in the hand-off notes instead of assuming the command exists.

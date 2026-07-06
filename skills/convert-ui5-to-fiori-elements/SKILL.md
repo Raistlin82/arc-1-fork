@@ -37,9 +37,11 @@ This skill depends on:
   app-specific lint scripts) or stop and report the missing MCP capability.
 - External SAP Fiori/UI5 skills are capability-gated standards, not vendored sources. Use
   `sap-fiori-app-development` as the branch-MUST checklist for CAP vs standalone creation and
-  backend metadata ownership; use `sap-fiori-tools` / Fiori MCP when exposed for generation;
-  use `sap-fiori-guidelines` as the UX/accessibility/design review gate; use `sapui5-linter` or
-  local `@ui5/linter` / project lint scripts as the branch-MUST UI quality gate.
+  backend metadata ownership; use `sap-fiori-tools`, `sap-fiori-create-cli`, or Fiori MCP when
+  exposed for generation; use `sap-fiori-guidelines` as the UX/accessibility/design review gate;
+  use `sapui5-linter`, `sapui5-cli`, `sap-fiori-eslint-plugin`, or local `@ui5/linter` / project
+  lint scripts as the branch-MUST UI quality gate. Use `sap-fiori-add-visual-filter` and
+  `sap-fiori-analytical-chart` only when the accepted FE UX includes those controls.
 
 > **Independent of `modernize-ui5-app.md`.** This skill does not require the modern TS app to
 > exist. The legacy app is the single source of truth for user-visible features; the FE app

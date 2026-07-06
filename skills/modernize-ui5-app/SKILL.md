@@ -47,9 +47,10 @@ legacy JS app + the same V4 RAP service produced by `migrate-segw-to-rap`.
 **Capability invariant:** every `mcp__SAPUI5_MCP_Server__*`, browser, Chrome, or preview MCP reference in this skill is optional. First confirm the exact tool exists through tool discovery, then call it with the live schema exposed in the current session. If the tool is absent, do not call a historical or guessed MCP name.
 
 **External SAP Fiori/UI5 skills are standards, not vendored sources.** Use `sap-fiori-guidelines`
-as the UX/accessibility/design review gate for stakeholder-facing freestyle UI. Use `sapui5-linter`
-or local `@ui5/linter` / project lint scripts as the branch-MUST UI quality gate. `sap-fiori-tools`
-and `sap-fiori-app-development` are not the primary path for freestyle TypeScript conversion, but
+as the UX/accessibility/design review gate for stakeholder-facing freestyle UI. Use `sapui5-linter`,
+`sapui5-cli`, `sap-fiori-eslint-plugin`, or local `@ui5/linter` / project lint scripts as the
+branch-MUST UI quality gate. `sap-fiori-tools`, `sap-fiori-create-cli`, and
+`sap-fiori-app-development` are not the primary path for freestyle TypeScript conversion, but
 consult them when the work changes deployment, launchpad/app metadata, or crosses into Fiori
 Elements behavior. Do not copy text from external GPL skills into ARC-1 docs.
 

@@ -138,7 +138,7 @@ The SAP Docs MCP server is optional for running the dossier, but strongly recomm
 | `search` | Find official/reference docs for ATC themes, RAP/ABAP Cloud patterns, simplification guidance, and replacement APIs | Skip broad generic queries; query only top themes or uncertain decisions |
 | `fetch` | Retrieve full content for search results actually used in the rationale | Skip low-ranked or merely interesting results |
 | `abap_feature_matrix` | Check whether ABAP syntax/features are available in the target release | Skip when the target release is unknown; first record it as a methodology gap |
-| `sap_community_search` | Troubleshoot exact errors or obscure migration symptoms after official docs are insufficient | Skip for normal architecture decisions; community content is supporting evidence |
+| `sap_community_search` when exposed; otherwise `search(includeOnline=true)` | Troubleshoot exact errors or obscure migration symptoms after official docs are insufficient | Skip for normal architecture decisions; community content is supporting evidence |
 | `sap_discovery_center_service` | Assess BTP service feasibility, pricing, and roadmap when a replacement implies SAP BTP services | Skip for pure ABAP code audits with no BTP service decision |
 
 Older connector variants may expose equivalent tools as `_search`, `_fetch`, `_sap_docs_search`, `_sap_docs_get`, `_sap_help_search`, or `_sap_help_get`. Prefer the richer `search` / `fetch` / `sap_get_object_details` / `abap_feature_matrix` set when present.
@@ -150,7 +150,8 @@ Recommended usage:
 3. Use `search(includeSamples=false)` for official/reference guidance on top ATC themes and replacement strategy.
 4. Use `fetch` only for results cited in the report.
 5. Use `abap_feature_matrix` for release-sensitive remediation proposals.
-6. Use `sap_community_search` only for exact errors, niche symptoms, or workaround research.
+6. Use dedicated `sap_community_search` only when exposed, and only for exact errors, niche
+   symptoms, or workaround research; otherwise use unified `search(includeOnline=true)`.
 
 Suggested queries:
 
@@ -159,7 +160,8 @@ search(query="<ATC check title> S/4HANA migration", includeSamples=false, abapFl
 search(query="<deprecated API> successor released API", includeSamples=false, abapFlavor="<cloud|standard>")
 search(query="ABAP Cloud released API replacement <object>", includeSamples=false, abapFlavor="cloud")
 abap_feature_matrix(query="<ABAP feature>")
-sap_community_search(query="<exact error text or obscure symptom>")
+sap_community_search(query="<exact error text or obscure symptom>")        # only when exposed
+search(query="<exact error text or obscure symptom>", includeOnline=true)   # fallback
 ```
 
 Report evidence source labels:

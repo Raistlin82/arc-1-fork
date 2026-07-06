@@ -136,7 +136,7 @@ These skills assume you have:
 4. **Fiori MCP server** (`@sap-ux/fiori-mcp-server`) or equivalent local generator flow. Recommended for `convert-ui5-to-fiori-elements`; branch-MUST when the selected path depends on Fiori-MCP LROP generation or annotation-aware page-template configuration. Otherwise use the local Fiori generator/tooling and document the fallback.
 5. **Browser automation capability**. Used by UI skills for final render verification; use whatever browser/preview MCP is actually exposed in the current agent, or perform and document manual browser verification. HTTP 200 alone is not an acceptance gate.
 6. **(Optional) Official SAP ABAP MCP server** — the `abap-mcp` server that ships with ABAP Development Tools for VS Code and is enabled in Eclipse ADT 3.60+. When connected *alongside* ARC-1, the RAP-build skills can offload the single-root managed+draft build to SAP's own *Generate ABAP Repository Objects* generators. Entirely optional and auto-detected — every skill falls back to the ARC-1 build when it's absent.
-7. **External SAP skill capabilities** (`sap-btp-best-practices`, `sap-fiori-app-development`, `sap-fiori-tools`, `sap-fiori-guidelines`, `sapui5-linter`) are capability-gated standards. Use them when installed, but do not vendor or copy their text. They become branch-MUST only where a skill explicitly marks the BTP/Fiori/UI5 path as dependent on that review or validation gate.
+7. **External SAP skill capabilities** (`sap-btp-best-practices`, `sap-fiori-*`, `sapui5-*`, `sap-btp-service-manager`, `sap-sqlscript`, `sap-hana-*`, `sap-datasphere`, `sap-sac-*`, `sap-ai-*`, `sap-cloud-sdk-ai`) are capability-gated standards. Use them when installed, but do not vendor or copy their text. They become branch-MUST only where a skill explicitly marks the BTP/Fiori/UI5/HANA/analytics/AI path as dependent on that review or validation gate.
 
 ## Interop with the official SAP ABAP MCP server
 
@@ -183,8 +183,8 @@ Both skills produce the same RAP artifact stack. The difference is how they get 
 
 - `SAPContext(action="impact", type="DDLS")` for RAP/CDS reuse and "what breaks if I change this?" analysis
 - `SAPDiagnose(action="cds_testcases", name="<cds_name>")` for SAP-native CDS test-case discovery (CDS Test Double Framework) — powers `generate-cds-unit-test` Step 2 on SAP_BASIS 8.16+ (ABAP Platform 2025), returning per-semantic `testMethod`/`semanticType`/`calculatedField` suggestions; falls back to manual DDL semantic analysis on older releases (ARC-1 PR #351)
-- `SAPRead(type="VERSIONS")` and `SAPRead(type="VERSION_SOURCE")` for pattern mining and safer edits of existing RAP stacks
-- `SAPSearch(searchType="tadir_lookup", source="both")` for one-shot existence checks against both released and inactive variants, with a `splitBrain` warning when an object exists only in one source — used by `migrate-segw-to-rap` Phase 6a (ARC-1 v0.9.5+ / PR #270)
+- `SAPRead(type="VERSIONS", name="<name>", objectType="<type>")` and `SAPRead(type="VERSION_SOURCE", versionUri="<revision_uri>")` for pattern mining and safer edits of existing RAP stacks
+- `SAPSearch(searchType="tadir_lookup", names=["<object_name>"], source="both")` for one-shot existence checks against both released and inactive variants, with a `splitBrain` warning when an object exists only in one source — used by `migrate-segw-to-rap` Phase 6a (ARC-1 v0.9.5+ / PR #270)
 - `SAPWrite(action="batch_create", activateAtEnd=true)` for atomic CDS-composition activation — replaces per-file + manual terminal activation in `migrate-segw-to-rap` Step 2 (ARC-1 v0.9.5+ / PR #270)
 - `SAPTransport(action="history", type="<type>", name="<name>")` for object-to-transport traceability during later iterations
 - `SAPRead(type="<type>", name="<name>", action="diff", from="<from>", to="<to>")` for server-side single-system version diffs (active↔inactive, or revision↔active) returning only hunks — powers `sap-transport-review` (ARC-1 PR #445)

@@ -48,7 +48,7 @@ flowchart TD
     EX --> DEC{"plan decision<br/>per logical unit"}:::hum
     DEC --> RW["rewrite_in_place<br/>D→B · C→A<br/>(cage pipeline below)"]:::gen
     DEC --> SBS["extract_to_side_by_side<br/>→ modernize-abap-to-btp-cap<br/>= Level A on the ERP side"]:::gen
-    DEC --> REL["release_api<br/>owner sign-off → /api-style-review →<br/>SAPManage set_api_state"]:::gen
+    DEC --> REL["release_api<br/>owner sign-off → sap-api-style gate when exposed →<br/>SAPManage set_api_state"]:::gen
     DEC --> KB["keep_at_level_b<br/>SKTD + ATC exemption<br/>(on-prem only)"]:::gen
     DEC --> RM["remove_unused<br/>sign-off → references check<br/>→ delete"]:::hum
     RW --> V
@@ -76,7 +76,7 @@ flowchart TD
     C2 --> SC{"SAP syntax check<br/>source=&lt;candidate&gt;"}:::det
     SC -->|fail| C2
     SC -->|pass| W2["SAPWrite + SAPActivate"]:::det
-    W2 --> R3["③ /abap-cloud-review<br/>cheap second opinion"]:::gen
+    W2 --> R3["③ sap-abap cloud review<br/>when exposed"]:::gen
     R3 --> A4{"④ ATC re-run<br/>original finding gone?<br/>no new P1/P2?"}:::det
     A4 -->|regression| RB["⑦ rollback<br/>from SAP version history"]:::det
     A4 -->|pass| U5{"⑤ unit tests<br/>baseline still green?"}:::det
@@ -127,7 +127,7 @@ flowchart TD
 | 2f Impact / fan-in (per unit) | DDLS: `SAPContext(action="impact", type="DDLS")`; non-CDS: `SAPNavigate(action="references")`; cached `SAPContext(action="usages")` only when warmup is enabled. Fan-in drives the risk × effort multipliers | **MCP** ARC-1 | Deterministic (data); multiplier table is mechanical |
 | 3 Classification A–D | `sap-clean-core-atc` → `SAPDiagnose(action="atc", type="<type>", name="<name>")` per object + `sap_get_object_details` per SAP reference; worst-level roll-up | **arc-1** + **MCP** sap-docs | Deterministic (ATC findings + dataset lookup + mechanical roll-up) |
 | 4-0 Understanding pass — **every non-A unit, systematic** | `explain-abap-code` → `docs/refactor/analysis/<unit>.md` (purpose, flow, deps); feeds the decision and the execute-phase rewrite context | **arc-1** | Generative (analysis) over Deterministic reads |
-| 4 JIT evidence lookup | SAP docs MCP (`sap_get_object_details`, `sap_search_objects`, unified `search` + `fetch` when exposed, `sap_discovery_center_*`, `abap_feature_matrix`, `ui5_version_diff` when exposed), `@sap/cds-mcp`, `context7` | **MCP** | Deterministic retrieval, Generative synthesis. Dedicated `sap_community_search` is optional; if absent, use unified `search(includeOnline=true)` for community/blog evidence |
+| 4 JIT evidence lookup | SAP docs MCP (`sap_get_object_details`, `sap_search_objects`, unified `search` + `fetch` when exposed, `sap_discovery_center_service` for known services, Discovery Center search only when exposed, `abap_feature_matrix`, `ui5_version_diff` when exposed), `@sap/cds-mcp`, `context7` | **MCP** | Deterministic retrieval, Generative synthesis. Dedicated `sap_community_search` is optional; if absent, use unified `search(includeOnline=true)` for community/blog evidence |
 | 4 Per-object decision | decision tree + [`PATTERNS.md`](./PATTERNS.md) Category 9 recipes | **CHAIN** (reference doc) | Generative (proposal — finalized by the **Human** gate, step 3 of table A) |
 | 5 Stakeholder report (`--report=dossier`) | `sap-migration-dossier` | **arc-1** | Generative (report writing) |
 
@@ -142,7 +142,7 @@ flowchart TD
 | **`rewrite_in_place`** (D→B, C→A) | ⓪ residual quickfixes surfaced during rewrite: `quickfix` → `apply_quickfix` deltas → merge into candidate source | **MCP** ARC-1 | Deterministic |
 | | ① regression tests: `generate-abap-unit-test` / `generate-cds-unit-test` (CDS seeds from `SAPDiagnose(action="cds_testcases", name="<cds_name>")` on 8.16+) | **arc-1** | Generative (test code) over Deterministic seeds |
 | | ② rewrite per [`PATTERNS.md`](./PATTERNS.md) 9.1/9.2 recipes → `SAPLint(action="lint_and_fix", source="<candidate>", name="<name>")` → `SAPLint(action="format", source="<candidate>")` → `SAPDiagnose(action="syntax", type="<type>", name="<name>", source="<candidate>")` → `SAPWrite(action="update", type="<type>", name="<name>", source="<candidate>", transport="<tr>")` → `SAPActivate(type="<type>", name="<name>")` | **CHAIN** + **MCP** ARC-1 | **Generative** — the LLM writes the ABAP; lint, format and syntax are Deterministic pre-write gates |
-| | ③ `/abap-cloud-review` — cheap review BEFORE the ATC round-trip | **PLUGIN** `sap-abap` | Generative (review) |
+| | ③ `sap-abap` cloud review when the plugin exposes it — cheap review BEFORE the ATC round-trip | **PLUGIN** `sap-abap` | Generative (review) |
 | | ④⑤⑥ `SAPDiagnose(action="atc", type="<type>", name="<name>")` + `SAPDiagnose(action="unittest", type="<type>", name="<name>")` + `SAPRead(type="<type>", name="<name>", action="diff")`; ⑦ rollback from version history (`SAPRead(type="VERSIONS", name="<name>", objectType="<type>")` → `SAPRead(type="VERSION_SOURCE", versionUri="<revision_uri>")` → `SAPWrite(action="update", type="<type>", name="<name>", source="<revision_source>", transport="<tr>")`) on regression | **MCP** ARC-1 | Deterministic gates + **Human** confirmation on the diff |
 | | RAP behavior logic → [`generate-rap-logic`](../generate-rap-logic/SKILL.md); full RAP stack (rare) → [`generate-rap-service-researched`](../generate-rap-service-researched/SKILL.md) | **arc-1** | Generative |
 | **`rewrite_in_place`** — specialized shapes | SEGW V2 service (MPC/DPC) → `migrate-segw-to-rap` (never hand-rewrite generated classes) | **arc-1** | Generative (guided reverse-engineering) |
@@ -151,14 +151,16 @@ flowchart TD
 | **`extract_to_side_by_side`** (= Level A on the ERP side) | `modernize-abap-to-btp-cap` orchestrator, which chains: | **CHAIN** | Generative scaffold, Deterministic compile/validate gates |
 | | ├ `modernize-abap-cap-schema` (`db/schema.cds` from Z tables) | **CHAIN** | Generative (mapping table-driven) + Deterministic `cds compile` gate |
 | | ├ `modernize-abap-cap-service` (`srv/service.cds` + handler stubs) | **CHAIN** | Generative |
-| | ├ `/api-style-review` on the generated service surface | **PLUGIN** `sap-api-style` | Generative (review) |
+| | ├ `sap-api-style` review on the generated service surface when exposed; otherwise equivalent manual checklist | **PLUGIN** `sap-api-style` | Generative (review) |
 | | ├ UI: `convert-ui5-to-fiori-elements` (annotation-driven LROP) **or** `modernize-ui5-app` (freestyle TS) | **arc-1** | Generative |
-| | ├ Fiori app-development + Fiori tools gate (CAP vs standalone, metadata ownership, FE tooling when exposed) | **PLUGIN/skill** `sap-fiori-app-development`, `sap-fiori-tools` | Generative review + tool-driven scaffold when exposed |
-| | ├ UI quality/design gates: `sapui5-linter` when exposed or local `@ui5/linter` fallback; `sap-fiori-guidelines` for UX/accessibility/design | **PLUGIN/skill** `sapui5-linter`, `sap-fiori-guidelines` | Deterministic lint + Generative review |
+| | ├ Fiori app-development + Fiori tools gate (CAP vs standalone, metadata ownership, FE tooling when exposed) | **PLUGIN/skill** `sap-fiori-app-development`, `sap-fiori-tools`, `sap-fiori-create-cli` | Generative review + tool-driven scaffold when exposed |
+| | ├ UI quality/design gates: `sapui5-linter`, `sapui5-cli`, `sap-fiori-eslint-plugin` when exposed or local `@ui5/linter` fallback; `sap-fiori-guidelines` for UX/accessibility/design; visual-filter/chart skills only when that UX is in scope | **PLUGIN/skill** `sapui5-linter`, `sapui5-cli`, `sap-fiori-eslint-plugin`, `sap-fiori-guidelines`, `sap-fiori-add-visual-filter`, `sap-fiori-analytical-chart` | Deterministic lint + Generative review |
 | | ├ hand-off gates: CAP readiness + BTP readiness; `sap-btp-best-practices` is SHOULD for every BTP deployable extension and branch-MUST for production/high-risk landscapes | **PLUGIN** `sap-cap-capire`, `sap-btp-developer-guide`, `sap-btp-best-practices` | Generative (review) |
-| | └ destination triage: `/btp-destination-diagnose` | **PLUGIN** `sap-btp-connectivity` | Generative (diagnosis) |
+| | ├ service lifecycle gate when the deliverable creates/binds BTP services | **PLUGIN** `sap-btp-service-manager` | Generative review + deterministic CLI/script checks when available |
+| | ├ destination triage when exposed; otherwise manual destination / Cloud Connector / auth checks | **PLUGIN** `sap-btp-connectivity` | Generative (diagnosis) |
+| | ├ situational branches: HANA/SQLScript, Datasphere/SAC, AI | **PLUGIN** `sap-sqlscript`, `sap-hana-*`, `sap-datasphere`, `sap-sac-*`, `sap-ai-*`, `sap-cloud-sdk-ai` | Branch-MUST only when those targets/artifacts are in scope |
 | | QA parity before the ABAP original is retired | — | **Human** |
-| **`release_api`** (B→A closing move) | `SAPRead(type="API_STATE", name="<dep>", objectType="<type>")` → type-aware fan-in stability check (`SAPContext(action="impact", type="DDLS")` for DDLS, `SAPNavigate(action="references")` for non-CDS) + owner sign-off → `/api-style-review` when available → `SAPManage(action="set_api_state", name="<dep>", objectType="<type>", contract="C1", transport="<tr>")` | **PLUGIN** + **MCP** ARC-1 | **Human** sign-off → Generative review → Deterministic PUT |
+| **`release_api`** (B→A closing move) | `SAPRead(type="API_STATE", name="<dep>", objectType="<type>")` → type-aware fan-in stability check (`SAPContext(action="impact", type="DDLS")` for DDLS, `SAPNavigate(action="references")` for non-CDS) + owner sign-off → `sap-api-style` review when available → `SAPManage(action="set_api_state", name="<dep>", objectType="<type>", contract="C1", transport="<tr>")` | **PLUGIN** + **MCP** ARC-1 | **Human** sign-off → Generative review → Deterministic PUT |
 | **`keep_at_level_b`** (on-prem only) | `sap-object-documenter` — SKTD rationale + ATC exemption | **arc-1** | Generative (documentation) |
 | **`remove_unused`** | sign-off → `SAPNavigate(action="references", type="<type>", name="<name>")` last check → `SAPWrite(action="delete", type="<type>", name="<name>", transport="<tr>")` | **MCP** ARC-1 | **Human** sign-off → Deterministic check + delete |
 | Transport handling (per phase/cluster) | `SAPTransport(action="check", type="<type>", name="<name>", package="<package>")` → `SAPTransport(action="create", description="<description>", package="<package>")`; writes pass `transport="<tr>"`; `SAPTransport(action="reassign", id="<tr>", owner="<user>")` only for owner transfer; after transport review use `SAPTransport(action="release_recursive", id="<tr>")`. ARC-1 pre-checks inactive objects before release | **MCP** ARC-1 | Deterministic |
@@ -175,7 +177,7 @@ flowchart TD
 ## The full census
 
 - **You type 4 operational commands** (2 stock arc-1 + 2 this chain's orchestrator) plus 1 human review gate, shown as step 3 in table A.
-- **This chain owns exactly 4 skills**: the orchestrator + the 3 CAP-extraction skills. Everything else it drives is stock arc-1 (**21 upstream skills** engaged across the run: bootstrap-system-context, sap-transport-overview, sap-unused-code, sap-clean-core-atc, explain-abap-code, sap-migration-dossier, setup-abap-mirror, generate-abap-unit-test, generate-cds-unit-test, generate-rap-logic, generate-rap-service-researched, migrate-segw-to-rap, generate-analytics-star-schema, generate-cds-analytical-query, migrate-custom-code, convert-ui5-to-fiori-elements, modernize-ui5-app, sap-object-documenter, debug-slow-sql, sap-transport-review, analyze-chat-session) or external plugins (**8 review/gate commands across 7 plugins**, never writes).
+- **This chain owns exactly 4 skills**: the orchestrator + the 3 CAP-extraction skills. Everything else it drives is stock arc-1 (**21 upstream skills** engaged across the run: bootstrap-system-context, sap-transport-overview, sap-unused-code, sap-clean-core-atc, explain-abap-code, sap-migration-dossier, setup-abap-mirror, generate-abap-unit-test, generate-cds-unit-test, generate-rap-logic, generate-rap-service-researched, migrate-segw-to-rap, generate-analytics-star-schema, generate-cds-analytical-query, migrate-custom-code, convert-ui5-to-fiori-elements, modernize-ui5-app, sap-object-documenter, debug-slow-sql, sap-transport-review, analyze-chat-session) or external SAP capabilities. External plugins never write to SAP; baseline gates cover ABAP/CAP/BTP/Fiori/UI5, and service-manager, HANA/SQLScript, Datasphere/SAC, and AI skills become branch-MUST only when their target is selected.
 - **Every write to the SAP system goes through the ARC-1 MCP server** — behind its safety ceiling (`allowWrites`, package allowlist, transport gates), regardless of which skill asked for it.
 - **Automation in one sentence**: Deterministic evidence and gates at the edges, Generative code in the middle, Human confirmation on every diff that reaches the system — only Phase 0 (and the per-object mechanical residue) runs lights-out.
 

@@ -181,11 +181,14 @@ For ATC findings that need explanation:
 search(query="<checkTitle> simplification item S/4HANA", includeOnline=true, includeSamples=false, abapFlavor="<cloud|standard>")
 ```
 
-For SAP Notes, do not assume a dedicated Notes tool exists. Use the unified docs search; for obscure runtime symptoms or workarounds, use community search:
+For SAP Notes, do not assume a dedicated Notes tool exists. Use the unified docs search. For
+obscure runtime symptoms or workarounds, use dedicated community search only when exposed; otherwise
+use unified online search with the exact symptom:
 
 ```
 search(query="<finding_or_api_name> SAP Note", includeOnline=true, includeSamples=false)
-sap_community_search(query="<exact error text or obscure symptom>")
+sap_community_search(query="<exact error text or obscure symptom>")        # only when exposed
+search(query="<exact error text or obscure symptom>", includeOnline=true)   # fallback
 ```
 
 Use documentation results to enrich the explanation with official SAP context.

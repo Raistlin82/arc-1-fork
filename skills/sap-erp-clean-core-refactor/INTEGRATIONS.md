@@ -17,7 +17,7 @@ Use this document to:
 |---|---|---|
 | **ARC-1 MCP** | the *hands* — reads/writes ABAP objects on the SAP system via ADT REST API | `SAPRead`, `SAPWrite`, `SAPActivate`, `SAPLint`, `SAPContext`, `SAPDiagnose`, `SAPTransport`, `SAPGit`, `SAPManage`, `SAPNavigate`, `SAPSearch`, `SAPQuery` |
 | **arc-1 native skills** | the *playbook* — sequences of MCP operations encoded as reusable agents | `bootstrap-system-context`, `sap-clean-core-atc`, `generate-rap-logic`, `modernize-abap-to-btp-cap`, … |
-| **secondsky/sap-skills plugins** | the *library of patterns* — how to write what the hands will write, when installed. Treat them as external capability-gated dependencies; do not copy their GPL text into ARC-1 docs | `sap-abap`, `sap-abap-cds`, `sap-cap-capire` (with 4 agents), `sap-btp-developer-guide`, `sap-api-style`, `sap-fiori-tools`, `sap-fiori-app-development`, `sap-fiori-guidelines`, `sapui5-linter`, `sap-btp-best-practices`, … |
+| **secondsky/sap-skills plugins** | the *library of patterns* — how to write what the hands will write, when installed. Treat them as external capability-gated dependencies; do not copy their GPL text into ARC-1 docs | `sap-abap`, `sap-abap-cds`, `sap-cap-capire` (with 4 agents), `sap-btp-developer-guide`, `sap-api-style`, `sap-fiori-*`, `sapui5-*`, `sap-btp-*`, `sap-hana-*`, `sap-datasphere`, `sap-sac-*`, `sap-ai-*`, … |
 | **This skill** (`sap-erp-clean-core-refactor`) | the *orchestrator* — decides which patterns to apply using which hands following which playbook | (you are here) |
 | **External knowledge** | JIT documentation lookup when local cache misses | `mcp-sap-docs` / `abap_mcp_server` when connected, Apify when connected, WebFetch/manual pointers for simple HTML. Always use the tool names actually exposed by the current MCP client; do not hardcode a namespace |
 
@@ -28,7 +28,7 @@ Use this document to:
 | Sub-step | ARC-1 MCP | arc-1 skills | secondsky plugin | External | Notes |
 |---|---|---|---|---|---|
 | 1a — ARC-1 connectivity probe | `SAPSearch(searchType="object", query="<pkg>", maxResults=10)` | — | — | — | Cheap call to verify the server responds + auth works |
-| 1b — Optional capability matrix | — | — | plugin skill probes | `mcp-sap-docs`/`abap_mcp_server`, Apify, `@sap/cds-mcp`, context7, Fiori MCP, UI5 MCP | Record active/missing/degraded plus the exact exposed tool names. Only ARC-1 blocks the run globally; branch-specific MCPs block only that branch. For external skills, record availability of `sap-btp-best-practices`, `sapui5-linter`, `sap-fiori-guidelines`, `sap-fiori-app-development`, and `sap-fiori-tools` |
+| 1b — Optional capability matrix | — | — | plugin skill probes | `mcp-sap-docs`/`abap_mcp_server`, Apify, `@sap/cds-mcp`, context7, Fiori MCP, UI5 MCP | Record active/missing/degraded plus the exact exposed tool names. Only ARC-1 blocks the run globally; branch-specific MCPs block only that branch. For external skills, record baseline BTP/Fiori/UI5 skills plus branch-specific service-manager, HANA/SQLScript, Datasphere/SAC, and AI skills when their triggers apply |
 | 1c — Resolve `$TARGET` | — | — | `sap-btp-developer-guide` (target landscape reference) | — | Default `btp-cf` |
 | 1d — Init local cache | (bash) | — | — | — | `.cache/sap-clean-core/` gitignored |
 | 1e — Bootstrap system context | `SAPRead(type="SYSTEM")`, `SAPRead(type="COMPONENTS")`, `SAPManage(action="probe")`, `SAPLint(action="list_rules")` | **`bootstrap-system-context`** | — | `abap_feature_matrix` when SAP docs MCP is connected | One-time per system; produces `system-info.md` with release, components, feature flags, lint preset, and optional release-feature snapshot |
@@ -89,17 +89,21 @@ Use this document to:
 | 6a-alt — SEGW V2 service in inventory | — | **`migrate-segw-to-rap`** | — | — | MPC/DPC classes are generated — reverse-engineer to RAP V4, never hand-rewrite |
 | 6a-alt — Analytical Z report | — | **`generate-analytics-star-schema`** → **`generate-cds-analytical-query`** | — | — | Successor is an embedded-analytics cube + query, not a transactional LROP |
 | 6a — Rewrite in-place: read + pre-write gates + write | `SAPRead(type="VERSIONS", name="<name>", objectType="<type>")`, candidate source assembly, `SAPLint(action="lint_and_fix", source="<candidate>", name="<name>")`, `SAPLint(action="format", source="<candidate>")`, `SAPDiagnose(action="syntax", type="<type>", name="<name>", source="<candidate>")`, `SAPWrite(action="update", type="<type>", name="<name>", source="<source>", transport="<tr>")`, `SAPActivate(type="<type>", name="<name>")` | **`generate-rap-logic`** (when rewrite goes to RAP behavior pool), **`generate-rap-service-researched`** (full RAP stack, rare) | **`sap-abap`** (language patterns), **`sap-abap-cds`** (CDS views if introduced) | — | Pattern-mined via Step 4d-quater; formatter output must be written, not merely displayed |
-| 6a — Cloud-readiness review | — | — | **`sap-abap`** `/abap-cloud-review` | — | Cheap LLM review pass before the ATC round-trip |
+| 6a — Cloud-readiness review | — | — | **`sap-abap`** cloud-readiness review when exposed | — | Cheap LLM review pass before the ATC round-trip |
 | 6a — ATC regression | `SAPDiagnose(action="atc", type="<type>", name="<name>")` | — | — | — | Gate: blocks loop if regression |
 | 6a — Unit test regression | `SAPDiagnose(action="unittest", type="<type>", name="<name>")` | — | — | — | Gate: blocks loop on test failure |
 | 6a — Review edit as diff | `SAPRead(type="<type>", name="<name>", action="diff")` | — | — | — | Active-vs-previous version diff of the rewrite |
-| 6d — API design review | — | — | **`sap-api-style`** `/api-style-review` | — | Run BEFORE releasing: a C1 contract freezes naming/design debt |
+| 6d — API design review | — | — | **`sap-api-style`** review command when exposed | — | Run BEFORE releasing: a C1 contract freezes naming/design debt. If no command is exposed, use an equivalent manual checklist and record the degraded gate |
 | 6d — Release API contract | `SAPRead(type="API_STATE", name="<api>", objectType="<type>")` → `SAPManage(action="set_api_state", name="<api>", objectType="<type>", contract="C1", transport="<tr>")` | — | — | — | `release_api` arm: release a stable Z dependency so consumers drop to Level A (ARC-1 ≥ 0.9.24; contract support is release-dependent) |
 | 6a — Rollback if regression | `SAPRead(type="VERSIONS", name="<name>", objectType="<type>")` → `SAPRead(type="VERSION_SOURCE", versionUri="<revision_uri>")` → `SAPWrite(action="update", type="<type>", name="<name>", source="<revision_source>", transport="<tr>")` | — | — | — | Restore the pre-rewrite version from SAP's version history (no git needed) |
-| 6b — Side-by-side scaffold | — | **`modernize-abap-to-btp-cap`** chain, **`convert-ui5-to-fiori-elements`** or **`modernize-ui5-app`** (UI: annotation-driven vs freestyle) | **`sap-cap-capire`** (4 agents), **`sap-btp-developer-guide`**, **`sap-fiori-app-development`**, **`sap-fiori-tools`** when available | `@sap/cds-mcp` (staged-model introspection), Fiori MCP/UI5 MCP for UI branches when configured | Per-extension CAP project under `<target>/.target-cap-staging/`; branch becomes manual/degraded if its required MCP is absent. `sap-fiori-app-development` is branch-MUST for FE creation/modification to enforce CAP vs standalone and backend-metadata ownership |
-| 6b — UI quality gate | — | — | **`sapui5-linter`** when available; otherwise local `@ui5/linter` / project lint scripts. **`sap-fiori-guidelines`** for stakeholder-facing UI review | — | Branch-MUST when the extension has a UI5/FE frontend. Use plugin commands only when exposed; otherwise run the equivalent local/checklist path and record the degraded gate |
-| 6b — Destination diagnostics | — | — | **`sap-btp-connectivity`** `/btp-destination-diagnose` | — | When the extension consumes S/4 APIs via destinations |
-| 6b-post — Hand-off gates | — | — | **`sap-cap-capire`**, **`sap-btp-developer-guide`**, `sap-btp-best-practices` | — | Deploy-readiness gates for the generated CAP project, before `cf deploy`. `sap-btp-best-practices` is SHOULD for any deployable BTP extension and branch-MUST for production, multi-subaccount/multi-region, sensitive-data, principal-propagation, HA/failover, or shared-landscape scenarios. Use exact commands only when the installed skill/plugin exposes them |
+| 6b — Side-by-side scaffold | — | **`modernize-abap-to-btp-cap`** chain, **`convert-ui5-to-fiori-elements`** or **`modernize-ui5-app`** (UI: annotation-driven vs freestyle) | **`sap-cap-capire`** (4 agents), **`sap-btp-developer-guide`**, **`sap-fiori-app-development`**, **`sap-fiori-tools`**, `sap-fiori-create-cli` when exposed | `@sap/cds-mcp` (staged-model introspection), Fiori MCP/UI5 MCP for UI branches when configured | Per-extension CAP project under `<target>/.target-cap-staging/`; branch becomes manual/degraded if its required MCP is absent. `sap-fiori-app-development` is branch-MUST for FE creation/modification to enforce CAP vs standalone and backend-metadata ownership |
+| 6b — UI quality gate | — | — | **`sapui5-linter`**, **`sapui5-cli`**, **`sap-fiori-eslint-plugin`** when available; otherwise local `@ui5/linter` / project lint scripts. **`sap-fiori-guidelines`** for stakeholder-facing UI review | Browser/build tooling as locally available | Branch-MUST when the extension has a UI5/FE frontend. Use plugin commands only when exposed; otherwise run the equivalent local/checklist path and record the degraded gate. `sap-fiori-add-visual-filter` and `sap-fiori-analytical-chart` become branch-MUST only when those accepted UX controls are in scope |
+| 6b — Destination diagnostics | — | — | **`sap-btp-connectivity`** diagnostic command when exposed | — | When the extension consumes S/4 APIs via destinations; otherwise perform manual destination, Cloud Connector, auth, and principal-propagation checks |
+| 6b — BTP service lifecycle | — | — | **`sap-btp-service-manager`** | SAP Discovery Center service lookup when exposed | SHOULD when the extension uses BTP services; branch-MUST when the refactor deliverable includes service instance/binding creation or automation |
+| 6b — HANA / SQLScript branch | — | specialized plan row, not generic rewrite | **`sap-sqlscript`**, **`sap-hana-cli`**, **`sap-hana-cloud-data-intelligence`**, `sap-hana-ml` when ML artifacts are in scope | SAP docs MCP / HANA docs | branch-MUST when the inventory contains AMDP, table functions, HANA procedures, SQLScript, HDI administration, or HANA Cloud data-intelligence artifacts |
+| 6b — Analytics branch | — | **`generate-analytics-star-schema`**, **`generate-cds-analytical-query`** for embedded analytics | **`sap-datasphere`**, **`sap-sac-custom-widget`**, **`sap-sac-planning`**, **`sap-sac-scripting`** when those targets are selected | Datasphere/SAC tenant MCPs when configured | branch-MUST only when the accepted target is Datasphere or SAC rather than embedded analytics |
+| 6b — AI branch | — | side-by-side extension plan | **`sap-ai-pathfinder`**, **`sap-ai-core`**, **`sap-cloud-sdk-ai`** | SAP AI Core docs / SDK docs | branch-MUST only when the extension includes AI runtime, AI service calls, or AI architecture decisions |
+| 6b-post — Hand-off gates | — | — | **`sap-cap-capire`**, **`sap-btp-developer-guide`**, `sap-btp-best-practices`, plus branch-specific BTP skills (`sap-btp-cloud-logging`, `sap-btp-job-scheduling`, `sap-btp-integration-suite`, `sap-btp-master-data-integration`, `sap-btp-build-work-zone-advanced`, `sap-btp-cloud-transport-management`, `sap-btp-cias`) when their services appear | — | Deploy-readiness gates for the generated CAP project, before `cf deploy`. `sap-btp-best-practices` is SHOULD for any deployable BTP extension and branch-MUST for production, multi-subaccount/multi-region, sensitive-data, principal-propagation, HA/failover, or shared-landscape scenarios. Use exact commands only when the installed skill/plugin exposes them |
 | 6c — Document Level B keeper | `SAPWrite(type="SKTD", action="create"\|"update")` | **`sap-object-documenter`** | — | — | Markdown rationale + ATC exemption update |
 | 6.5 — Transport requirement check | `SAPTransport(action="check", type="<type>", name="<name>", package="<package>")` | — | — | — | Ensure deps reachable |
 | 6.5 — Transport create / ownership transfer | `SAPTransport(action="create", description="<description>", package="<package>")`; `SAPTransport(action="reassign", id="<tr>", owner="<user>")` only when the owner must change | — | — | — | One TR per phase or per cluster. Reusing a request means passing its ID as `transport="<tr>"` on write calls; `reassign` is owner transfer, not object assignment |
@@ -144,17 +148,19 @@ The table below shows which secondsky plugins this skill treats as recommended c
 
 | Plugin | Severity | Step where invoked |
 |---|---|---|
-| `sap-abap` | RECOMMENDED | Step 6a rewrite_in_place (ABAP rewrite patterns) + `/abap-cloud-review` post-rewrite gate when available |
+| `sap-abap` | RECOMMENDED | Step 6a rewrite_in_place (ABAP rewrite patterns) + cloud-readiness post-rewrite gate when available |
 | `sap-abap-cds` | RECOMMENDED | Step 6a when rewrite introduces CDS views |
-| `sap-cap-capire` (with 4 agents) | RECOMMENDED | Step 6b side-by-side scaffold + `/cap-deployment-checklist` hand-off gate |
-| `sap-btp-developer-guide` | RECOMMENDED | Step 1c target resolution, Step 6b scaffold + `/btp-app-readiness-review` hand-off gate |
-| `sap-api-style` | SHOULD | Step 6d `/api-style-review` before every `release_api`; Step 6b `service.cds` design review |
+| `sap-cap-capire` (with 4 agents) | RECOMMENDED | Step 6b side-by-side scaffold + CAP deployment checklist when exposed |
+| `sap-btp-developer-guide` | RECOMMENDED | Step 1c target resolution, Step 6b scaffold + BTP app-readiness review when exposed |
+| `sap-api-style` | SHOULD | Step 6d API-style review before every `release_api`; Step 6b `service.cds` design review. Use exact plugin commands only when exposed |
 | `sap-fiori-app-development` | branch-MUST for FE branches | Step 6b Fiori app creation/modification: CAP vs standalone decision, backend metadata ownership, Fiori MCP/tool-first workflow when exposed |
-| `sap-fiori-tools` | branch-MUST when FE UI is generated through Fiori tooling; otherwise SHOULD reference | Step 6b Fiori Elements UI generation and project validation |
+| `sap-fiori-tools` / `sap-fiori-create-cli` | branch-MUST when FE UI is generated through Fiori tooling; otherwise SHOULD reference | Step 6b Fiori Elements UI generation and project validation |
 | `sap-fiori-guidelines` | SHOULD; branch-MUST for stakeholder-facing UI | Step 6b UX/accessibility/design review of generated or modernized UI |
-| `sapui5-linter` | branch-MUST for UI5/FE frontends | Step 6b post-scaffold UI quality gate. Use installed skill/plugin when exposed; otherwise run local `@ui5/linter` / project lint scripts |
-| `sap-btp-connectivity` | SHOULD | Step 6b when extension uses destinations (`/btp-destination-diagnose`) |
+| `sapui5-linter`, `sapui5-cli`, `sap-fiori-eslint-plugin` | branch-MUST for UI5/FE frontends | Step 6b post-scaffold UI quality gate. Use installed skill/plugin when exposed; otherwise run local `@ui5/linter` / project lint scripts |
+| `sap-fiori-add-visual-filter`, `sap-fiori-analytical-chart` | branch-MUST only when accepted FE UX includes those controls | Step 6b analytical FE UI features |
+| `sap-btp-connectivity` | SHOULD | Step 6b when extension uses destinations; exact diagnostic command only when exposed |
 | `sap-btp-best-practices` | SHOULD; branch-MUST for production, multi-subaccount/multi-region, sensitive data, principal propagation, HA/failover, or shared landscapes | BTP architecture/governance/readiness review before deploy hand-off |
+| `sap-btp-service-manager` | SHOULD; branch-MUST when service lifecycle is deliverable scope | Step 6b BTP service instance/binding creation and automation |
 | `sap-cloud-sdk` | SHOULD | Step 6b when extension uses Cloud SDK |
 | `sap-cloud-sdk-ai` | OPTIONAL | Step 6b when extension is AI-heavy |
 | `sap-btp-cloud-logging` | OPTIONAL | Step 6b production observability |
@@ -166,11 +172,13 @@ The table below shows which secondsky plugins this skill treats as recommended c
 | `sap-btp-integration-suite` | OPTIONAL | Step 6b when side-by-side uses iFlows |
 | `sap-btp-build-work-zone-advanced` | OPTIONAL | Step 6b when UI surfaces in Work Zone |
 | `sap-btp-intelligent-situation-automation` | OPTIONAL | Step 6b when extension includes workflow logic |
+| `sap-sqlscript`, `sap-hana-cli`, `sap-hana-cloud-data-intelligence`, `sap-hana-ml` | branch-MUST for HANA-native branches | Step 6b AMDP/table-function/procedure/SQLScript/HDI/HANA ML/data-intelligence work |
+| `sap-datasphere`, `sap-sac-custom-widget`, `sap-sac-planning`, `sap-sac-scripting` | branch-MUST for Datasphere/SAC targets | Step 6b analytics targets outside embedded analytics |
+| `sap-ai-pathfinder`, `sap-ai-core`, `sap-cloud-sdk-ai` | branch-MUST for AI branches | Step 6b AI architecture, runtime, and SDK implementation |
 
-Plugins **NOT** used by this skill (out of scope):
-- `sap-sqlscript`, `sap-hana-ml`, `sap-hana-cloud-data-intelligence`, `sap-hana-cli` — HANA-native dev
-- `sap-datasphere`, `sap-sac-*` — analytics
-- `sap-ai-core` — AI infrastructure
+Plugins **not used by default**: HANA/SQLScript, Datasphere/SAC, and AI skills are intentionally
+situational. They are not part of the generic ABAP clean-core chain, but become branch-MUST when the
+plan explicitly chooses those targets or detects those artifact types.
 
 ## Cost model — by integration layer
 

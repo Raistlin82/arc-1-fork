@@ -249,7 +249,9 @@ Use the SAP documentation MCP server deliberately, not as a generic keyword dump
 2. Then run **example-oriented** queries:
    - `includeSamples=true`
 3. Use `fetch(...)` on the top hits you actually rely on.
-4. Use `sap_community_search(...)` only for edge cases, undocumented errors, or workaround hunting after official docs are insufficient.
+4. Use dedicated `sap_community_search(...)` only when exposed by tool discovery, and only for
+   edge cases, undocumented errors, or workaround hunting after official docs are insufficient.
+   Otherwise use unified `search(includeOnline=true)` with the exact symptom.
 
 The search terms below are **starting suggestions** — adapt them based on the user's specific business requirement and the architecture decisions that need to be made. Craft search queries that target the gaps in your knowledge for this particular service.
 
@@ -293,7 +295,8 @@ search(query="ABAP API release RAP business object interface C1 C0", includeSamp
 **Edge cases / troubleshooting only after official docs fail:**
 
 ```
-sap_community_search(query="<exact error text or obscure RAP symptom>")
+sap_community_search(query="<exact error text or obscure RAP symptom>")        # only when exposed
+search(query="<exact error text or obscure RAP symptom>", includeOnline=true)   # fallback
 ```
 
 **Important:** Don't just run these searches verbatim. Analyze the user's spec and craft targeted queries that fill specific knowledge gaps. If the user asks for something unusual (for example, integration with a specific SAP module, specific field types, custom numbering, collaborative draft, or released BO interface consumption), search for those specifics.
@@ -803,7 +806,8 @@ After all artifacts are created and activated:
 
 1. **Syntax check** the behavior pool:
    ```
-   SAPDiagnose(action="syntax", type="CLAS", name="ZBP_I_<entity>")
+   SAPRead(type="CLAS", name="ZBP_I_<entity>")
+   SAPDiagnose(action="syntax", type="CLAS", name="ZBP_I_<entity>", source="<behavior_pool_source>")
    ```
 
 2. **ATC check** the full stack (if ATC is available):
