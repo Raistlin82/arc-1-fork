@@ -102,7 +102,7 @@ SAPManage(action="create_package", name="<package>", description="<description>"
 - Every `abap.curr(...)` field needs `@Semantics.amount.currencyCode` above it.
 - Keep projection BDEF header as `projection;` (do not add `use etag` header lines).
 - Keep RAP preflight checks enabled (default) so deterministic TABL/BDEF/DDLX issues are blocked before activation churn. Only use `preflightBeforeWrite=false` as a local escape hatch.
-- If behavior-pool full-class writes fail with generic save errors, use `SAPWrite(action="scaffold_rap_handlers", ...)` first to derive/apply signatures, then use quickfix fallback + `SAPWrite(action="edit_method")` for method bodies.
+- If behavior-pool full-class writes fail with generic save errors, use `SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="<bp_class>", bdefName="ZI_<entity>")` first to derive/apply signatures, then use quickfix fallback + `SAPWrite(action="edit_method", type="CLAS", name="<bp_class>", method="<method>", source="<method_source>")` for method bodies.
 
 ## Step 2: Design the Data Model
 
@@ -766,8 +766,8 @@ If batch activation fails, activate sequentially in dependency order:
 If behavior pool activation fails because `METHODS ... FOR ...` signatures are missing:
 - Use `SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="<bp_class>", bdefName="ZI_<entity>")` to list missing signatures.
 - If needed, rerun with `autoApply=true` to inject signatures into class declarations plus empty method stubs.
-- If signatures are still unresolved, use `SAPDiagnose(action="quickfix", ...)` and `SAPDiagnose(action="apply_quickfix", ...)` when proposals are available.
-- Fallback to ADT editor quick-fix generation, then patch method bodies with `SAPWrite(action="edit_method", ...)`.
+- If signatures are still unresolved, use `SAPDiagnose(action="quickfix", type="CLAS", name="<bp_class>", source="<current_source>", line=<line>, column=<column>)` and `SAPDiagnose(action="apply_quickfix", type="CLAS", name="<bp_class>", source="<current_source>", line=<line>, column=<column>, proposalUri="<proposal_uri>", proposalUserContent="<proposal_user_content>")` when proposals are available.
+- Fallback to ADT editor quick-fix generation, then patch method bodies with `SAPWrite(action="edit_method", type="CLAS", name="<bp_class>", method="<method>", source="<method_source>")`.
 
 For any failing object, run syntax check to identify the issue:
 
@@ -842,7 +842,7 @@ Next steps:
   - Register in FLP launchpad (use SAPManage flp_create_catalog, flp_create_tile, flp_create_group)
   - Create proper DOMA/DTEL for reusable typing (use SAPWrite with type=DOMA/DTEL)
   - Attach SKTD documentation to the service or BDEF (optional)
-  - Review later iterations with `SAPTransport(action="history")` + `SAPRead(type="VERSIONS", ...)`
+  - Review later iterations with `SAPTransport(action="history", type="<type>", name="<name>")` + `SAPRead(type="VERSIONS", objectType="<type>", name="<name>")`
 ```
 
 ## Error Handling
@@ -852,7 +852,7 @@ Next steps:
 | Error | Cause | Fix |
 |---|---|---|
 | 415 Unsupported Media Type on DDLS/BDEF | RAP/CDS endpoint not responding as expected | Check `SAPManage(action="probe")` for system info. Verify ICF service activation. Try creating the object in ADT to confirm system capability. |
-| `Resource X does already exist` on create | Existing object or stub collision | Switch to `SAPWrite(action="update", ...)` and resend full source. Do not retry create blindly. |
+| `Resource X does already exist` on create | Existing object or stub collision | Switch to `SAPWrite(action="update", type="<type>", name="<name>", source="<source>")` and resend full source. Do not retry create blindly. |
 | Activation error: dependency not found | Objects activated in wrong order | Use sequential activation in dependency order (Step 12 fallback) |
 | Draft table not found | Draft table not yet created | Create draft table entity first, or remove `with draft` from BDEF |
 | Field mapping incomplete | BDEF field names don't match CDS aliases | Verify CDS field aliases match BDEF field references exactly |
@@ -861,7 +861,7 @@ Next steps:
 | BDEF creation/save fails with generic `[?/011]` | Behavior-pool full-class save path is unstable for RAP handler declarations | Keep class minimal, generate signatures via quickfix (MCP or ADT), then use `edit_method` for bodies |
 | Lint blocks write | Generated code has lint warnings | Review lint findings, adjust code patterns to pass lint rules |
 | Table entity creation not supported | Older on-prem system | Create table via SE11 manually, provide field list |
-| Transport required | Non-$TMP package without transport | Use `SAPTransport(action="check")` to find or create a transport — see Step 1b |
+| Transport required | Non-$TMP package without transport | Use `SAPTransport(action="check", type="<type>", name="<name>", package="<package>")` to find or create a transport — see Step 1b |
 | Lock conflict on create | Object locked by another user/transport | Wait or use a different name; check `SAPTransport(action="list")` for conflicting transports |
 | Currency reference annotation missing | `abap.curr` field has no currency semantics annotation | Add `@Semantics.amount.currencyCode` above each amount field and ensure a `abap.cuky` field exists |
 | `"draft or side" was expected, not "etag"` | Invalid projection BDEF header syntax on 7.5x | Keep header as `projection;` only |

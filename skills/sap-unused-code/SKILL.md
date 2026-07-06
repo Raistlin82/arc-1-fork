@@ -266,7 +266,7 @@ A LIKELY_UNUSED object whose callers are all UNUSED is transitively deletable. O
 | `SCMON_DATA` count = 0, `SUSG_I_DATA` count = 0 | Monitoring never activated | Stop; instruct user to activate SCMON (Step above) |
 | SCMON has data but all `SLICEID=1` and SUSG is 0 | Slice hasn't rotated; SUSG can't aggregate open slices | Use Option A (direct), skip SUSG; or run `SCMON_COLLECT_ALL` via SA38 then `SUSG_COLLECT_FROM_SCMON` |
 | `SUSG_LOG` shows "SCMON not active" | SCMON auto-deactivated (record threshold hit) | Raise threshold via `SCMON_CONF_SET_MAX_NUM_SLICES`, reactivate SCMON, accept you lost one aggregation cycle |
-| `SAP_ALLOW_FREE_SQL=false` | Admin policy | Either get it relaxed, or fall back to `SAPRead(type="TABLE_CONTENTS", name="SCMON_DATA", maxRows=…)` (also blocked by `SAP_ALLOW_DATA_PREVIEW=false`; no joins either way) — badly degrades the report |
+| `SAP_ALLOW_FREE_SQL=false` | Admin policy | Either get it relaxed, or fall back to `SAPRead(type="TABLE_CONTENTS", name="SCMON_DATA", maxRows=<max_rows>)` (also blocked by `SAP_ALLOW_DATA_PREVIEW=false`; no joins either way) — badly degrades the report |
 | 403 on `SCMON_*` / `SUSG_*` tables | Missing `S_TABU_NAM` auth | User needs auth assignment; document tables in request |
 | Scope returns > 500 candidates | User's filter too broad | Refuse; ask user to narrow (a 500-object deletion list is not actionable) |
 

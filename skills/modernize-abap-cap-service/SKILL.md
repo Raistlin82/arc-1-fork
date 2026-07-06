@@ -52,7 +52,7 @@ Exception class → HTTP code defaults:
 
 ### Step 1 — Enumerate
 
-`SAPRead(type="DEVC", name="<pkg>")` recursively, then filter customer `FUGR`, `PROG`, and `CLAS` rows. Use `SAPSearch(searchType="tadir_lookup", names=[...], objectTypes=["FUGR","PROG","CLAS"])` only to validate exact names across packages; `tadir_lookup` does not enumerate by `packageName`.
+`SAPRead(type="DEVC", name="<pkg>")` recursively, then filter customer `FUGR`, `PROG`, and `CLAS` rows. Use `SAPSearch(searchType="tadir_lookup", names=["<object_name>"], objectTypes=["FUGR","PROG","CLAS"])` only to validate exact names across packages; `tadir_lookup` does not enumerate by `packageName`.
 
 Filter out:
 - Helper / utility classes already covered by `migrate-custom-code` (those rewrite in-place, not exposed).
@@ -63,7 +63,7 @@ Filter out:
 
 Per FM / method / report:
 - `SAPRead(type="FUNC", name="<fm>", group="<fugr>", includeSignature=true)` — I/O parameters + raising classes (FUNC reads require the enclosing function group).
-- Whole-group sweep: `SAPRead(type="FUGR", name="<fugr>", expand_includes=true)` — FM bodies live in nested `LZ…U01` includes; without the flag you get only the group shell.
+- Whole-group sweep: `SAPRead(type="FUGR", name="<fugr>", expand_includes=true)` — FM bodies live in nested `LZ*U01` includes; without the flag you get only the group shell.
 - `SAPRead(type="CLAS", name="<cls>", format="structured")` — public methods + types.
 - Caller fan-in: for `DDLS` roots use `SAPContext(action="impact", type="DDLS", name="<obj>")`; for `FUGR`, `PROG`, `CLAS`, and `FUNC` use `SAPNavigate(action="references", type="<type>", name="<obj>")` (or cached `SAPContext(action="usages")` when ARC-1 cache warmup is enabled).
 

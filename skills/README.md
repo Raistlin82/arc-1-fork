@@ -131,11 +131,12 @@ Full setup is in the published [VS Code Skills guide](https://docs.arc-1-mcp.com
 
 These skills assume you have:
 1. **ARC-1 MCP server** connected and configured (SAP system access). Required for every skill that touches ABAP.
-2. **mcp-sap-docs MCP server** connected (optional but recommended — provides SAP documentation context). Used by most skills; required for the UI5 modernization skills to look up V4 binding patterns and FCL behaviour.
-3. **SAPUI5 MCP server** (`@ui5/mcp-server`). Required for `modernize-ui5-app` and `convert-ui5-to-fiori-elements` — provides the authoritative TypeScript conversion guidelines, project scaffolding, ui5-linter, and manifest validation.
-4. **Fiori MCP server** (`@sap-ux/fiori-mcp-server`). Required for `convert-ui5-to-fiori-elements` only — provides the LROP scaffold + annotation-aware page-template configuration.
-5. **A browser MCP** — `Claude_in_Chrome` or `Claude_Preview`. Used by `modernize-ui5-app` for the final render verification step (HTTP 200 alone is not a sufficient acceptance gate — see the "blank page" traps in the skill).
+2. **mcp-sap-docs MCP server** connected (optional but recommended — provides SAP documentation context). UI5/Fiori branches need either this MCP or explicit manual lookup of the official SAP docs for non-obvious V4 binding, FCL, OData, and BTP behaviour.
+3. **SAPUI5 MCP server** (`@ui5/mcp-server`) or equivalent local UI5 toolchain. Recommended for `modernize-ui5-app` and `convert-ui5-to-fiori-elements`; branch-MUST when the selected path depends on MCP-native scaffolding, manifest validation, or UI5 linter output. Otherwise satisfy the same gate with local `@ui5/linter`, `ui5.yaml`/manifest checks, TypeScript/build checks, and official SAP docs.
+4. **Fiori MCP server** (`@sap-ux/fiori-mcp-server`) or equivalent local generator flow. Recommended for `convert-ui5-to-fiori-elements`; branch-MUST when the selected path depends on Fiori-MCP LROP generation or annotation-aware page-template configuration. Otherwise use the local Fiori generator/tooling and document the fallback.
+5. **Browser automation capability**. Used by UI skills for final render verification; use whatever browser/preview MCP is actually exposed in the current agent, or perform and document manual browser verification. HTTP 200 alone is not an acceptance gate.
 6. **(Optional) Official SAP ABAP MCP server** — the `abap-mcp` server that ships with ABAP Development Tools for VS Code and is enabled in Eclipse ADT 3.60+. When connected *alongside* ARC-1, the RAP-build skills can offload the single-root managed+draft build to SAP's own *Generate ABAP Repository Objects* generators. Entirely optional and auto-detected — every skill falls back to the ARC-1 build when it's absent.
+7. **External SAP skill capabilities** (`sap-btp-best-practices`, `sap-fiori-app-development`, `sap-fiori-tools`, `sap-fiori-guidelines`, `sapui5-linter`) are capability-gated standards. Use them when installed, but do not vendor or copy their text. They become branch-MUST only where a skill explicitly marks the BTP/Fiori/UI5 path as dependent on that review or validation gate.
 
 ## Interop with the official SAP ABAP MCP server
 
@@ -181,14 +182,14 @@ Both skills produce the same RAP artifact stack. The difference is how they get 
 ### Recent ARC-1 Features These Skills Use
 
 - `SAPContext(action="impact", type="DDLS")` for RAP/CDS reuse and "what breaks if I change this?" analysis
-- `SAPDiagnose(action="cds_testcases")` for SAP-native CDS test-case discovery (CDS Test Double Framework) — powers `generate-cds-unit-test` Step 2 on SAP_BASIS 8.16+ (ABAP Platform 2025), returning per-semantic `testMethod`/`semanticType`/`calculatedField` suggestions; falls back to manual DDL semantic analysis on older releases (ARC-1 PR #351)
+- `SAPDiagnose(action="cds_testcases", name="<cds_name>")` for SAP-native CDS test-case discovery (CDS Test Double Framework) — powers `generate-cds-unit-test` Step 2 on SAP_BASIS 8.16+ (ABAP Platform 2025), returning per-semantic `testMethod`/`semanticType`/`calculatedField` suggestions; falls back to manual DDL semantic analysis on older releases (ARC-1 PR #351)
 - `SAPRead(type="VERSIONS")` and `SAPRead(type="VERSION_SOURCE")` for pattern mining and safer edits of existing RAP stacks
 - `SAPSearch(searchType="tadir_lookup", source="both")` for one-shot existence checks against both released and inactive variants, with a `splitBrain` warning when an object exists only in one source — used by `migrate-segw-to-rap` Phase 6a (ARC-1 v0.9.5+ / PR #270)
 - `SAPWrite(action="batch_create", activateAtEnd=true)` for atomic CDS-composition activation — replaces per-file + manual terminal activation in `migrate-segw-to-rap` Step 2 (ARC-1 v0.9.5+ / PR #270)
-- `SAPTransport(action="history")` for object-to-transport traceability during later iterations
-- `SAPRead(type=…, name=…, action="diff", from=…, to=…)` for server-side single-system version diffs (active↔inactive, or revision↔active) returning only hunks — powers `sap-transport-review` (ARC-1 PR #445)
+- `SAPTransport(action="history", type="<type>", name="<name>")` for object-to-transport traceability during later iterations
+- `SAPRead(type="<type>", name="<name>", action="diff", from="<from>", to="<to>")` for server-side single-system version diffs (active↔inactive, or revision↔active) returning only hunks — powers `sap-transport-review` (ARC-1 PR #445)
 - `SAPTransport(action="list", summary=true)` for a headers-only transport overview (omits `objects[]`, keeps `objectCount`) — cheap scan before drilling in, also used by `sap-transport-review` (ARC-1 PR #448)
-- `SAPLint(action="format", source=...)` / `SAPLint(action="get_formatter_settings")` for SAP-native keyword case and indentation
+- `SAPLint(action="format", source="<source>")` / `SAPLint(action="get_formatter_settings")` for SAP-native keyword case and indentation
 - `SAPRead` / `SAPWrite` for `SKTD` so generated RAP services can carry attached Markdown documentation
 - `SAPGit` when a package is already part of an abapGit or gCTS-backed delivery flow
 

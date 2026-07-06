@@ -58,7 +58,7 @@ Sub-skill of [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-
 
 ### Step 1 — Enumerate tables
 
-`SAPRead(type="DEVC", name="<pkg>")` recursively, then filter `TABL` rows whose names are in the customer namespace. Use `SAPSearch(searchType="tadir_lookup", names=[...], objectType="TABL")` only to validate exact table names across packages; `tadir_lookup` does not enumerate by `packageName`.
+`SAPRead(type="DEVC", name="<pkg>")` recursively, then filter `TABL` rows whose names are in the customer namespace. Use `SAPSearch(searchType="tadir_lookup", names=["<table_name>"], objectType="TABL")` only to validate exact table names across packages; `tadir_lookup` does not enumerate by `packageName`.
 
 ### Step 2 — Read DDIC details (per table)
 

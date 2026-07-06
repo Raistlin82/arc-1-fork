@@ -172,7 +172,7 @@ If proposals are returned:
 SAPDiagnose(action="apply_quickfix", type="<type>", name="<object_name>", source="<current_source>", line=<finding_line>, column=0, proposalUri="<proposal_uri>", proposalUserContent="<proposal_user_content>")
 ```
 
-- `apply_quickfix` returns ranged **text deltas — it does not persist**. Apply the returned deltas to the source yourself, then write the result via `SAPWrite(action="update")`. When applying multiple fixes to the same object, re-resolve each finding's line after each write (earlier edits shift later line numbers), or fix top-to-bottom.
+- `apply_quickfix` returns ranged **text deltas — it does not persist**. Apply the returned deltas to the source yourself, then write the result via `SAPWrite(action="update", type="<type>", name="<object_name>", source="<candidate>", transport="<transport>")`. When applying multiple fixes to the same object, re-resolve each finding's line after each write (earlier edits shift later line numbers), or fix top-to-bottom.
 
 > **Quickfix availability is system-dependent.** SAP only offers quickfix proposals where the system has the corresponding check/cloudification content installed. On a bare ABAP trial or a system without the Clean-Core remediation content, `getFixProposals` returns `[]` and ATC findings carry `hasQuickfix=false` — that's expected, not a bug. In that case skip straight to LLM-generated fixes (the options below). Prefer SAP quickfixes only when they actually come back.
 

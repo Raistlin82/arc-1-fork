@@ -35,6 +35,11 @@ This skill depends on:
   when they are exposed in the current runtime. If they are absent, do not call them; either run the
   branch in degraded/manual mode with local project scripts (`npm run build`, `npx tsc --noEmit`,
   app-specific lint scripts) or stop and report the missing MCP capability.
+- External SAP Fiori/UI5 skills are capability-gated standards, not vendored sources. Use
+  `sap-fiori-app-development` as the branch-MUST checklist for CAP vs standalone creation and
+  backend metadata ownership; use `sap-fiori-tools` / Fiori MCP when exposed for generation;
+  use `sap-fiori-guidelines` as the UX/accessibility/design review gate; use `sapui5-linter` or
+  local `@ui5/linter` / project lint scripts as the branch-MUST UI quality gate.
 
 > **Independent of `modernize-ui5-app.md`.** This skill does not require the modern TS app to
 > exist. The legacy app is the single source of truth for user-visible features; the FE app
@@ -946,13 +951,13 @@ What just happened (3 sentences):
     server, with extension hooks for the few cases FE templates can't express natively.
 
 ARC-1 calls used:
-  - SAPManage(action=probe)
-  - SAPRead(type=DDLS, name=<root_projection>)
-  - SAPRead(type=SRVB, name=<V4_SRVB>)
-  - SAPWrite(action=update, type=DDLS, name=<root_projection>, source=<annotated_source>, transport=<transport>) × <m> projections
-  - SAPActivate(type=DDLS, name=<root_projection>)
-  - SAPActivate(action=publish_srvb, name=<V4_SRVB>)
-  - (Optional) SAPWrite(action=update, type=BDEF, name=<bdef>, source=<bdef_source>, transport=<transport>) + SAPActivate(type=BDEF, name=<bdef>) for BDEF precheck
+  - SAPManage(action="probe")
+  - SAPRead(type="DDLS", name="<root_projection>")
+  - SAPRead(type="SRVB", name="<V4_SRVB>")
+  - SAPWrite(action="update", type="DDLS", name="<root_projection>", source="<annotated_source>", transport="<transport>") × <m> projections
+  - SAPActivate(type="DDLS", name="<root_projection>")
+  - SAPActivate(action="publish_srvb", name="<V4_SRVB>")
+  - (Optional) SAPWrite(action="update", type="BDEF", name="<bdef>", source="<bdef_source>", transport="<transport>") + SAPActivate(type="BDEF", name="<bdef>") for BDEF precheck
 
 Fiori MCP calls used (only when exposed; otherwise report "not exposed/skipped"):
   - mcp__fiori-mcp__list_functionalities

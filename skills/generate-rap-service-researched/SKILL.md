@@ -1029,7 +1029,7 @@ Fall back to sequential creation (Phase 4b). Report which objects succeeded and 
 | Activation error | Dependency order wrong | Use batch activation or sequential in dependency order |
 | Lint blocks write | Code doesn't match lint rules | Adjust generated code to pass lint, or check if lint config is too strict |
 | BDEF syntax error | Wrong field aliases or entity references | Cross-check CDS aliases with BDEF field references |
-| Transport required | Non-$TMP package without transport | Use `SAPTransport(action="check")` to find or create a transport — see Phase 1-pre |
+| Transport required | Non-$TMP package without transport | Use `SAPTransport(action="check", type="<type>", name="<name>", package="<package>")` to find or create a transport — see Phase 1-pre |
 | Lock conflict on create | Object locked by another user/transport | Wait or use a different name; check `SAPTransport(action="list")` for conflicting transports |
 | `Annotation with reference to currency code for field X is missing` | `abap.curr` field has no currency reference | Add `@Semantics.amount.currencyCode` directly above each amount field; pair with `abap.cuky` field. |
 | `"global or instance" was expected, not "none"` | Invalid BDEF auth enum on 7.5x | Use `( global )` or `( instance )`, or defer auth until handler exists. |

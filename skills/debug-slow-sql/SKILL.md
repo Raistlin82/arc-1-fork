@@ -39,24 +39,24 @@ Work top-down. Each rung is cheaper than the next and usually tells you whether 
 > hand the user the precise ST05/SAT steps below instead of pretending you reached the plan.
 
 ### 0. Orient (no execution)
-- `SAPContext(action="deps", type="<type>", name=…)` / `SAPRead(type="DDLS", name=…)` — read the CDS/ABAP
+- `SAPContext(action="deps", type="<type>", name="<name>")` / `SAPRead(type="DDLS", name="<ddls_name>")` — read the CDS/ABAP
   source. Eyeball it for the usual suspects **before** measuring: `LIKE '%term%'` (leading wildcard = no
   index), `SELECT … FROM` with no `WHERE` on a key, `SELECT *`, nested `SELECT` in a `LOOP` (N+1),
   client-side filtering, missing `FOR ALL ENTRIES` pre-check, calculated fields forcing a full scan.
-- `SAPContext(action="impact", type="DDLS", name=…)` — the CDS stack (projection → base views → tables). The
+- `SAPContext(action="impact", type="DDLS", name="<ddls_name>")` — the CDS stack (projection → base views → tables). The
   slow view is often a thin projection over a heavy base.
 - **Find the generator, not just the literal SQL.** A slow `LIKE '%…%'`/scan is often *generated* — by a search
   help, SADL/RAP, or a framework — not hand-written, so a `grep`/where-used for the literal `SELECT` comes up
   empty. Trace the generator instead: for a value-help / type-ahead screen, the **search help**
   (`DD30L.SELMETHOD` + `FUZZY_SEARCH`, `DD32S` fields) and its DSH/SADL classes (`CL_DSH_*`, the F4→WHERE
-  conversion) via `SAPSearch`/`SAPNavigate`/`SAPRead`. For an OData service, find its implementation: a **V4/RAP** binding → `SAPRead(type="SRVB", name=…)` → the service definition → the CDS view (then use `cds_sql`, rung 2). The **binding** (SRVB) name often differs from the URL's service path — if `SRVB` 404s, `SAPSearch` the service name to find the actual binding, or read the **service definition** (`SRVD`) directly for its `expose … as` entities. A **classic SEGW / Gateway V2** service has **no CDS** → find the DPC class (`SAPSearch "<SERVICE>_DPC*"`, read its `*_get_entityset` / `*_get_entity` / expand / `resolve_navigation_path` methods) and **skip rung 2**. (Don't
+  conversion) via `SAPSearch`/`SAPNavigate`/`SAPRead`. For an OData service, find its implementation: a **V4/RAP** binding → `SAPRead(type="SRVB", name="<srvb_name>")` → the service definition → the CDS view (then use `cds_sql`, rung 2). The **binding** (SRVB) name often differs from the URL's service path — if `SRVB` 404s, use `SAPSearch(searchType="object", query="<service>_DPC*", maxResults=20)` or search the service name to find the actual binding, or read the **service definition** (`SRVD`) directly for its `expose <entity> as` entities. A **classic SEGW / Gateway V2** service has **no CDS** → find the DPC class, read its `*_get_entityset` / `*_get_entity` / expand / `resolve_navigation_path` methods, and **skip rung 2**. (Don't
   confuse SE91/`WBMESSAGES`, which loads one message class in memory and searches with `CS`, with a search-help
   path that issues a real DB `LIKE`.)
 
 ### 1. Where did the time go? (one cheap call)
 For an **OData / Fiori** request:
 ```
-SAPDiagnose(action="odata_perf", url="/sap/opu/odata4/sap/…/Entity?$filter=…")
+SAPDiagnose(action="odata_perf", url="/sap/opu/odata4/sap/<service>/Entity?$filter=<filter>")
 ```
 Read the `verdict`:
 - **`db`** (`gwappdb` dominates) → the CDS/SQL query is the cost → go to rung 2.
@@ -78,7 +78,7 @@ entity/list request from the Network tab, not a `$batch` POST.)
 - `SAPDiagnose(action="cds_sql", name="I_TheView")` — the **native `CREATE VIEW`** the CDS compiles to
   (read-only; verified on 7.50/758/816). Now you see the real joins, `CAST`s, `COALESCE`s, and whether a
   sub-view drags in extra tables.
-- `SAPQuery(sql="SELECT … FROM <cds-or-base> WHERE <the filter>")` — returns `columns`/`rows` plus datapreview
+- `SAPQuery(sql="SELECT <columns> FROM <cds_or_base> WHERE <filter>")` — returns `columns`/`rows` plus datapreview
   metrics: `queryExecutionTimeMs`, `totalRows` (total matches), `rowsReturned`, and the `executedQueryString`.
   Run it with the **real filter values** from the slow request: a large `totalRows` / `queryExecutionTimeMs` for
   a small useful result = a scan/selectivity problem. It does **not** expose the HANA execution plan or buffer
@@ -108,7 +108,7 @@ SAPDiagnose(action="traces", id="<id>", analysis="dbAccesses") # which tables, c
 ```
 The `dbAccesses` view tells you *which* tables a request hit and how often (N+1 shows up as a huge count on one
 table). The `hitlist` tells you the ABAP hot path. ARC-1 can **arm** a profiler trace request itself —
-`SAPDiagnose(action="trace_start", …)`, then `trace_requests` to list and `trace_cancel` to clean up — or record
+`SAPDiagnose(action="trace_start", processType="http", objectType="url", sqlTrace=true)`, then `trace_requests` to list and `trace_cancel` to clean up — or record
 one in SAT/ST12; then list/analyze it with the `traces` action above.
 
 **Two caveats `trace_start` itself flags — heed them:** (1) an HTTP trace captures the user's *very next* matching
@@ -143,7 +143,7 @@ Records ≫ visible rows (selectivity).
 > activate the named SICF node (`/sap/bc/stmc` for the trace UI) in tcode SICF.
 
 ### 5. Static check (anytime)
-`SAPDiagnose(action="atc", type="<type>", name=…, variant="PERFORMANCE_DB")` — flags perf anti-patterns
+`SAPDiagnose(action="atc", type="<type>", name="<name>", variant="PERFORMANCE_DB")` — flags perf anti-patterns
 statically (it won't catch a runtime `LIKE` scan that depends on data, but it's free and catches the obvious
 ones).
 

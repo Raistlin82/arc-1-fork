@@ -945,9 +945,9 @@ This category is not gotchas — it's the map of **companion plugins / skills** 
 
 CAP runtime knowledge base. Covers CDS modeling, service handlers, draft semantics, authentication / authorization, deployment profiles, multitenancy. Reference for any CAP-side question that goes deeper than this skill's snapshot.
 
-### 8.2 — SAP UI5 / Fiori (`sap-fiori-tools`, `sapui5-linter`, UI5/Fiori MCP when configured)
+### 8.2 — SAP UI5 / Fiori (`sap-fiori-app-development`, `sap-fiori-tools`, `sap-fiori-guidelines`, `sapui5-linter`, UI5/Fiori MCP when configured)
 
-UI5 API explorer, control library reference, Fiori Tools scaffolding and linting. Look up control APIs, manifest schema and annotation reference through the live MCP/plugin that is actually configured; use `ui5_version_diff` from the SAP docs MCP when comparing UI5 releases. Otherwise make the UI branch manual/degraded.
+UI5 API explorer, control library reference, Fiori Tools scaffolding, Fiori app-development rules, Fiori design review and linting. Look up control APIs, manifest schema and annotation reference through the live MCP/plugin that is actually configured; use `ui5_version_diff` from the SAP docs MCP when comparing UI5 releases. Otherwise make the UI branch manual/degraded. For Level A side-by-side UI, treat app-development guidance and lint/build/browser verification as branch-MUST; design-guideline review is SHOULD and becomes branch-MUST for stakeholder-facing apps.
 
 ### 8.3 — SAP BTP service map (`sap-btp-developer-guide` or BTP service-map plugin when installed)
 
@@ -995,7 +995,7 @@ CDS model search, doc lookup and staged-model introspection. Use during explorat
 
 ### 8.14 — SAP Docs / Released-object lookup (`mcp-sap-docs` / `abap_mcp_server`)
 
-Help portal, SAP Community/blog evidence through unified `search` (plus `fetch` when exposed), SAP Discovery Center, ABAP feature matrix, `ui5_version_diff` when exposed, and `sap_search_objects` / `sap_get_object_details` for Clean Core checks. Dedicated `sap_community_search` is useful when exposed, but is not required; use unified online search otherwise. Strongly recommended companion for any S/4HANA Tier-2 proxy work; if absent, cache the manual source URL and mark confidence lower.
+Help portal, SAP Community/blog evidence through unified `search` (plus `fetch` when exposed), SAP Discovery Center service details through `sap_discovery_center_service` when a service name/id is known, ABAP feature matrix, `ui5_version_diff` when exposed, and `sap_search_objects` / `sap_get_object_details` for Clean Core checks. Dedicated `sap_community_search` is useful when exposed, but is not required; use unified online search otherwise. Do not assume a dedicated Discovery Center search function exists. Strongly recommended companion for any S/4HANA Tier-2 proxy work; if absent, cache the manual source URL and mark confidence lower.
 
 ### 8.15 — Context7 (`context7`)
 
@@ -1017,10 +1017,10 @@ fan-in risk factor from SKILL.md Step 2.
 
 ### 9.0 — How to use these recipes
 
-1. Match the object's worst findings (from `sap-clean-core-atc` + `SAPDiagnose(action="atc")`) against the tables below — worst level first.
-2. **Never invent a released successor.** The tables name the well-known ones; for anything else resolve live via `sap_get_object_details(...)` → `successorObjects` or search alternatives with `sap_search_objects(...)` (SAP docs MCP, backed by `SAP/abap-atc-cr-cv-s4hc`). Then verify the target name exists in the customer's system with `SAPSearch(searchType="tadir_lookup", names=[...])` or a normal `SAPSearch` exact match.
+1. Match the object's worst findings (from `sap-clean-core-atc` + `SAPDiagnose(action="atc", type="<type>", name="<name>")`) against the tables below — worst level first.
+2. **Never invent a released successor.** The tables name the well-known ones; for anything else resolve live with `sap_get_object_details` → `successorObjects` or search alternatives with `sap_search_objects` (SAP docs MCP, backed by `SAP/abap-atc-cr-cv-s4hc`). Then verify the target name exists in the customer's system with `SAPSearch(searchType="tadir_lookup", names=["<object_name>"])` or `SAPSearch(searchType="object", query="<object_name>", maxResults=10)`.
 3. A recipe is *done* only when the verification loop (9.4) confirms the object's re-classified level.
-4. Mechanical variants of these rewrites often ship as ATC quickfixes — try `SAPDiagnose(action="quickfix")` → `SAPDiagnose(action="apply_quickfix")` before hand-editing. `apply_quickfix` returns text deltas only; merge them into the candidate source and persist with `SAPWrite`.
+4. Mechanical variants of these rewrites often ship as ATC quickfixes — try `SAPDiagnose(action="quickfix", type="<type>", name="<name>", source="<source>", line=<line>, column=<column>)` → `SAPDiagnose(action="apply_quickfix", type="<type>", name="<name>", source="<source>", line=<line>, column=<column>, proposalUri="<proposal_uri>", proposalUserContent="<proposal_user_content>")` before hand-editing. `apply_quickfix` returns text deltas only; merge them into the candidate source and persist with `SAPWrite(action="update", type="<type>", name="<name>", source="<candidate>", transport="<tr>")`.
 
 ### 9.1 — D → B: get out of the no-API zone
 
@@ -1075,11 +1075,11 @@ Target: only released APIs (`state=released` in the API release contract). Curat
 
 ### 9.4 — Verification loop (every recipe)
 
-1. `SAPDiagnose(action="atc")` on the object — the original finding must be gone, no new P1/P2.
+1. `SAPDiagnose(action="atc", type="<type>", name="<name>")` on the object — the original finding must be gone, no new P1/P2.
 2. Re-classify: the object's level per `sap-clean-core-atc` roll-up must equal the recipe's target level (D→B recipes: no more D findings; C→A: only released references; B→A: contract visible on the API).
-3. `SAPDiagnose(action="unittest")` — regression tests from Step 6-pre still green.
+3. `SAPDiagnose(action="unittest", type="<type>", name="<name>")` — regression tests from Step 6-pre still green.
 4. `SAPRead(type="<type>", name="<name>", action="diff")` — review the rewrite as a diff before transport release.
-5. Data-access recipes only, on hot objects: no performance regression — `debug-slow-sql` ladder (`SAPDiagnose(action="odata_perf")` / `SAPDiagnose(action="cds_sql")`); a released `I_*` view with the wrong access path can be slower than the SELECT it replaced.
+5. Data-access recipes only, on hot objects: no performance regression — `debug-slow-sql` ladder (`SAPDiagnose(action="odata_perf", url="<odata_path>")` / `SAPDiagnose(action="cds_sql", name="<ddls_name>")`); a released `I_*` view with the wrong access path can be slower than the SELECT it replaced.
 
 ### 9.5 — Effort model (person-days, AI-assisted chain)
 
@@ -1204,8 +1204,11 @@ Install whichever of these are available in your environment. Each is referenced
 | Plugin / Skill | npm / vercel-labs install | Domain |
 |---|---|---|
 | `sap-cap-capire` | `npx skills add SAP/sap-cap-capire` | CAP runtime knowledge base |
-| `sapui5-linter` / UI5 MCP | environment-specific plugin or MCP install | UI5 API/lint support when available |
-| `sap-fiori-tools` | `npx skills add SAP/sap-fiori-tools` | Fiori Elements scaffolding & validation |
+| `sap-fiori-app-development` | environment-specific plugin/skill install | Fiori app creation/modification rules: CAP vs standalone, metadata ownership, tool-first flow |
+| `sap-fiori-tools` | environment-specific plugin/skill install | Fiori Elements scaffolding & validation |
+| `sap-fiori-guidelines` | environment-specific plugin/skill install | UX, accessibility and Fiori design review |
+| `sapui5-linter` / UI5 MCP | environment-specific plugin or MCP install | UI5 API/lint support when available; local `@ui5/linter` is the fallback gate |
+| `sap-btp-best-practices` | environment-specific plugin/skill install | BTP architecture/governance review; branch-MUST for production/high-risk landscapes |
 | BTP service-map plugin / `sap-btp-developer-guide` | environment-specific plugin or installed skill | BTP services map |
 | `sap-btp-connectivity` | `npx skills add SAP/sap-btp-connectivity` | Destinations, Cloud Connector |
 | `sap-btp-integration-suite` | `npx skills add SAP/sap-btp-integration-suite` | iFlow, API Management |

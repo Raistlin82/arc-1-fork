@@ -12,7 +12,7 @@ It leans on two token-cheap ARC-1 primitives so a review of a 30-object transpor
 of small diffs instead of 60 full-source reads:
 
 - `SAPTransport(action="list", summary=true)` — scan many open transports cheaply (objects omitted, `objectCount` kept), then drill into one.
-- `SAPRead(type=…, name=…, action="diff", from=…, to=…)` — server-side unified diff per object; the response is just the hunks.
+- `SAPRead(type="<type>", name="<name>", action="diff", from="<from>", to="<to>")` — server-side unified diff per object; the response is just the hunks.
 
 Complements [explain-abap-code](../explain-abap-code/SKILL.md) (deep single-object understanding) and
 [sap-object-documenter](../sap-object-documenter/SKILL.md) (written docs for a package). This skill is
@@ -71,7 +71,7 @@ Split the object list into:
   `action="diff"` returns "not supported" (their read is parsed metadata/XML, not plain-text source).
   **This is exactly the boundary SAP's own Eclipse ADT 3.6 "Object Changes" has** — it prints
   *"Feature not supported for object …"* for these same types (e.g. SRVB). Don't try to diff them.
-  For a thorough review, still read the object's metadata (e.g. `SAPRead(type="SRVB", name=…)`) so the
+  For a thorough review, still read the object's metadata (e.g. `SAPRead(type="SRVB", name="<srvb_name>")`) so the
   report names *what* the object is and that it's in the change set — just without a source diff.
 
 ## Step 3: Diff each object — pick `from`/`to` by intent

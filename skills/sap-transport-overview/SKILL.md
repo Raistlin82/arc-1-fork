@@ -114,7 +114,7 @@ Write to disk only if asked; otherwise return inline.
 ## When NOT to use this skill
 
 - **What exactly changed in a request** (source diffs) → [sap-transport-review](../sap-transport-review/SKILL.md).
-- **One object's history** ("which transports touched ZCL_X") → `SAPTransport(action="history", type=…, name=…)` directly.
+- **One object's history** ("which transports touched ZCL_X") → `SAPTransport(action="history", type="<type>", name="<name>")` directly.
 - **Cross-system** (is DEV ahead of QAS) → out of scope: ARC-1 binds one system per instance; run the CLI against each system and compare.
 
 ## Follow-up Options

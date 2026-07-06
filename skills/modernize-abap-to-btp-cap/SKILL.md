@@ -87,10 +87,21 @@ The user reviews under the staging dir, then promotes to the real CAP project (r
 
 Generated CAP project is **sandbox**. Manual next steps (not in this skill):
 
-Before deploying, run the two readiness gates on the staged project:
-1. `/cap-deployment-checklist` (sap-cap-capire plugin) — CAP-side deploy readiness
-2. `/btp-app-readiness-review` (sap-btp-developer-guide plugin) — BTP-side readiness (services, roles, entitlements)
-3. Optional, for larger landscapes (multiple extensions on one subaccount): `/btp-architecture-review` (sap-btp-best-practices)
+Before deploying, run the readiness gates on the staged project. Use external skill/plugin
+commands only when the current environment exposes them; otherwise perform the equivalent manual
+review and record the degraded gate in `docs/porting-plan.md`.
+
+1. `sap-cap-capire` — CAP-side deploy readiness.
+2. `sap-btp-developer-guide` — BTP-side readiness (services, roles, entitlements).
+3. `sap-btp-best-practices` — SHOULD for every deployable BTP side-by-side extension; branch-MUST
+   for production, multi-subaccount/multi-region, sensitive-data, principal-propagation,
+   HA/failover, or shared-landscape scenarios.
+4. `sap-fiori-app-development` + `sap-fiori-tools` — branch-MUST when Step 5 creates or modifies
+   a Fiori Elements app: decide CAP vs standalone, keep backend metadata authoritative, and prefer
+   the Fiori toolchain/MCP when exposed.
+5. `sap-fiori-guidelines` + `sapui5-linter` — branch-MUST for stakeholder-facing UI: Fiori UX /
+   accessibility review plus UI5 lint/build checks. If the plugin is absent, run local
+   `@ui5/linter` or the project's lint script.
 
 ```bash
 cd <target>/.target-cap-staging
@@ -114,15 +125,19 @@ For audit / hardening / CI gates of the generated CAP project, see [`Raistlin82/
 
 ## Recommended companion plugins
 
-From [secondsky/sap-skills](https://github.com/secondsky/sap-skills):
+From [secondsky/sap-skills](https://github.com/secondsky/sap-skills). These are external
+capabilities; do not copy their GPL-licensed text into ARC-1 docs.
 
 - `sap-abap` (recommended) — ABAP source patterns the sub-skills consume
 - `sap-abap-cds` (recommended) — CDS view patterns for Step 3
 - `sap-cap-capire` (recommended, 4 agents) — CAP scaffolding patterns for Steps 3-4
 - `sap-btp-developer-guide` (recommended) — BTP deployment for Step 6
-- `sap-fiori-tools` (SHOULD, when installed) — Fiori Elements scaffolding for Step 5
+- `sap-btp-best-practices` (SHOULD; branch-MUST for production/high-risk landscapes) — BTP account, security, operations, HA/failover and governance review before deploy hand-off
+- `sap-fiori-app-development` (branch-MUST for FE branches) — Fiori app creation/modification rules for CAP vs standalone and backend metadata ownership
+- `sap-fiori-tools` (branch-MUST when FE generation uses Fiori tooling; otherwise SHOULD) — Fiori Elements scaffolding and project validation for Step 5
+- `sap-fiori-guidelines` (SHOULD; branch-MUST for stakeholder-facing UI) — Fiori UX/accessibility/design review
 
 - `sap-api-style` (SHOULD) — `/api-style-review` on the generated `service.cds` (Step 4)
-- `sapui5-linter` (SHOULD) — `/ui5-linter-check` + `/ui5-linter-fix-plan` on the Step 5 UI
+- `sapui5-linter` (branch-MUST when Step 5 produces UI5/FE frontend) — use the installed skill/plugin when exposed; otherwise run local `@ui5/linter` or project lint scripts
 
 Plus ARC-1 MCP (mandatory — system probe + source read in Steps 1-2) and `@sap/cds-mcp` when configured (recommended — authoritative CAP docs via `search_docs` + staged-model introspection via `search_model` in Steps 3-4). If a companion plugin/MCP is missing, record the degraded path in the hand-off notes instead of assuming the command exists.

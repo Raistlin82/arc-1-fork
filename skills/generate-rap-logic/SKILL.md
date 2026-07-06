@@ -275,7 +275,7 @@ If you want the generated method body to follow SAP's formatter settings before 
 SAPLint(action="format", source="<generated_method_code>", name="<bp_class>")
 ```
 
-Use the formatted source returned by `SAPLint(action="format")` as the `source` value in the subsequent `SAPWrite(action="edit_method")`; formatting does not persist anything by itself.
+Use the formatted source returned by `SAPLint(action="format", source="<generated_method_code>", name="<bp_class>")` as the `source` value in the subsequent `SAPWrite(action="edit_method", type="CLAS", name="<bp_class>", method="<method>", source="<method_source>", transport="<transport>")`; formatting does not persist anything by itself.
 
 Before calling `edit_method`, confirm the target method exists in `SAPRead(type="CLAS", name="<bp_class>", method="*")`. If it does not exist yet, run `scaffold_rap_handlers` first, then quick-fix flow (`quickfix` + `apply_quickfix`) or ADT quick-fix fallback.
 
