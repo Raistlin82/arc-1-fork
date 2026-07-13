@@ -5,6 +5,142 @@ This is the operator view of [`SKILL.md`](./SKILL.md). Decisions are defined in
 validated ARC-1 payloads in [`action-catalog.json`](./action-catalog.json). Start with
 [`README.md`](./README.md) when onboarding.
 
+## Operator quickstart
+
+The examples in this section are skill invocations in an AI agent, not shell commands and not
+ARC-1 CLI subcommands. In Codex, invoke `$sap-erp-clean-core-refactor`; in a namespaced Claude Code
+plugin installation, use the equivalent `/arc-1:sap-erp-clean-core-refactor` command.
+
+### 0. Confirm the two layers
+
+ARC-1 provides the live SAP tools. The orchestrator is a separate skill that tells the agent how to
+use those tools. If the skill is not already installed, install it once:
+
+```bash
+npx arc-1@latest skills install sap-erp-clean-core-refactor --agent codex --global
+```
+
+Start with ARC-1 read-only. Confirm that the connection works before requesting any plan or write.
+
+### 1. Declare scope and business requirement
+
+Prefer one package and its subpackages for the first pass. A single known object is also valid. Give
+the business requirement when known; without it, standard parity and AEM decisions remain evidence
+gaps rather than agent assumptions.
+
+```text
+Use $sap-erp-clean-core-refactor on package ZSD_CUSTOM in discover mode.
+Landscape auto, domain auto, no SAP writes.
+Business requirement: sales-order approval and operational reporting.
+```
+
+For one object:
+
+```text
+Use $sap-erp-clean-core-refactor on object CLAS ZCL_ORDER_APPROVAL in discover mode.
+Landscape auto, domain auto, no SAP writes.
+```
+
+The discover result must identify the live landscape and release, ARC-1 capabilities, package and
+transport constraints, logical units, touchpoints, owners and missing evidence. Correct the scope or
+ownership before continuing.
+
+### 2. Size the work without choosing targets
+
+```text
+Use $sap-erp-clean-core-refactor on ZSD_CUSTOM in estimate mode.
+Reuse the accepted discovery evidence and remain read-only.
+```
+
+Review clusters, current A/B/C/D/Unknown evidence, unused candidates, effort ranges and confidence.
+`Unknown` is an evidence gap, never an automatic D classification.
+
+### 3. Produce the read-only plan
+
+```text
+Use $sap-erp-clean-core-refactor on ZSD_CUSTOM in plan mode.
+Landscape s4-private-cloud, domain auto, report dossier, no SAP writes.
+```
+
+The plan must resolve standard-first and AEM before selecting a Clean Core action. For every logical
+unit, review the business owner, source level, target domain, target level, exact action, operation
+IDs, evidence, confidence, gates, effort, rollback or retirement path, target package and transport.
+
+For `developer-on-stack` Level A, the plan must additionally prove all of the following:
+
+- the target package/software component is approved for embedded ABAP Cloud development;
+- `abapLanguageVersion="cloudDevelopment"` is confirmed from live object metadata when ARC-1 exposes it;
+- every relevant SAP and custom touchpoint is released under a supported contract;
+- the ABAP Cloud assessment variant passes.
+
+ATC success alone is not proof of the object language version. If current ARC-1 metadata coverage
+cannot prove the language version for an object type, attach verified ADT/package evidence manually.
+Without that evidence, retain `research_required` and do not declare Level A.
+
+### 4. Approve logical units explicitly
+
+Approve decisions per logical unit, not for the package as a whole. Use the unit identifiers emitted
+by the plan. A valid approval is concrete and records exclusions:
+
+```text
+Approve this plan subset:
+- ORDER_APPROVAL: rewrite_on_stack_abap_cloud, target package ZSD_CC
+- ORDER_LEGACY_API: create_or_use_wrapper, outcome A+B, wrapper package ZSD_CC_WRAPPERS
+- ORDER_OLD_REPORT: remove_unused
+
+Transport: DEVK900123
+Keep ORDER_EXTERNAL_SYNC as research_required. Do not execute unlisted units.
+```
+
+Key User and Kyma decisions approve a manual handoff, not an invented ARC-1 write. Wrapper approval
+must include owner, exception class, isolated package, successor watch and retirement trigger.
+
+### 5. Open only the required write ceiling
+
+Configure ARC-1 outside the skill before execution. Scope writes to the approved packages. Enable
+transport writes only when ARC-1 must create or release a transport; ordinary object writes still
+require `SAP_ALLOW_WRITES`.
+
+```text
+SAP_ALLOW_WRITES=true
+SAP_ALLOWED_PACKAGES=ZSD_CUSTOM,ZSD_CUSTOM/**,ZSD_CC,ZSD_CC/**,ZSD_CC_WRAPPERS,ZSD_CC_WRAPPERS/**
+```
+
+Only when ARC-1 must create or release a transport, also enable:
+
+```text
+SAP_ALLOW_TRANSPORT_WRITES=true
+```
+
+The server safety ceiling, authenticated user scope and native SAP authorization must all pass. Use
+the approved existing transport or create one only after the package route and target are known.
+
+### 6. Execute the approved subset
+
+```text
+Use $sap-erp-clean-core-refactor on ZSD_CUSTOM in execute mode.
+Push only ORDER_APPROVAL and ORDER_LEGACY_API to A, using approved transport DEVK900123.
+Stop after each logical unit for concrete diff approval.
+```
+
+Execution captures an as-found baseline, applies deterministic findings first, runs the selected
+architecture action, checks candidate syntax, writes through ARC-1, activates, runs ATC and tests,
+presents the concrete diff, and reclassifies the accepted unit. A failed gate stops that unit and
+does not authorize work on the next one.
+
+### 7. Review transport and govern
+
+Run `sap-transport-review` before any release. Transport release remains a separate explicit
+approval. After accepted execution, request governance:
+
+```text
+Use $sap-erp-clean-core-refactor on ZSD_CUSTOM in govern mode.
+Report KPI deltas, ATC regression, wrapper successors, exception expiry and the next review backlog.
+```
+
+The durable output is the reviewed plan plus execution evidence, not the chat transcript. Keep the
+plan under `docs/refactor/<date>-clean-core-plan.md` and update it after every accepted unit.
+
 ## End-to-end flow
 
 ```mermaid
@@ -62,6 +198,9 @@ flowchart TD
 | Decide | `sap-erp-clean-core-refactor ZPKG plan` | AEM records, decision rows, operation IDs, approvals | No |
 | Execute | `sap-erp-clean-core-refactor ZPKG execute` | accepted changes, validation evidence, handoffs | Yes, approved branches only |
 | Govern | `sap-erp-clean-core-refactor ZPKG govern` | KPIs, regression, wrapper/exemption lifecycle | No by default |
+
+These compact forms describe the mode contract; invoke them through the agent syntax shown in the
+operator quickstart.
 
 The human plan gate sits between Decide and Execute. No write-capable delegate may run before it.
 
@@ -156,5 +295,7 @@ uncontrolled commits/rollbacks or an API whose semantics cannot be stabilized.
 - Every write is inside ARC-1 package, transport and authorization gates.
 - Every generated diff has explicit approval.
 - Every changed unit has syntax, activation, ATC and applicable test evidence.
+- Every `developer-on-stack` Level A unit proves its ABAP Cloud target package, object language
+  version and released touchpoints; missing metadata blocks the A classification.
 - Composite wrapper debt and retirement triggers remain visible in governance output.
 - `sap-transport-review` passes before release.

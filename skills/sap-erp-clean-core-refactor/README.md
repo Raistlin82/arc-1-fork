@@ -19,6 +19,16 @@ For each logical unit, the orchestrator answers:
 6. Which action is executable now, which is a manual handoff, and which needs research?
 7. Which proof and governance controls make the result acceptable?
 
+## Start here
+
+Before a live system run, follow the
+[`WORKFLOW.md` operator quickstart](./WORKFLOW.md#operator-quickstart). It contains the complete
+read-only discovery, estimate, plan approval, scoped-write execution, transport review and
+governance sequence with copy-ready agent prompts.
+
+The compact forms below are skill invocations, not ARC-1 shell commands. Use the syntax supported by
+the current agent, for example `$sap-erp-clean-core-refactor` in Codex.
+
 ## Operating modes
 
 ```text
@@ -56,7 +66,7 @@ Level is a compliance dimension, not the architecture selector. Wrapper results 
 |---|---|
 | SAP standard replacement | Planned; retirement executable after parity approval |
 | Key User on-stack | Decision and owned manual handoff |
-| Developer Extensibility on-stack | Executable through ARC-1 for supported ADT objects |
+| Developer Extensibility on-stack | Executable through ARC-1 only with approved ABAP Cloud target package, proven object language version and released touchpoints |
 | Custom API release | Executable through ARC-1 with live contract evidence |
 | Wrapper | Executable on permitted landscapes with isolation and manual exception governance |
 | Cloud Foundry side-by-side | Executable through the CAP/Fiori skill chain |
@@ -69,6 +79,8 @@ Level is a compliance dimension, not the architecture selector. Wrapper results 
 - No write happens before plan approval.
 - Deterministic SAP quick fixes may share one explicit package/transport approval.
 - Mechanical agent changes and every generated redesign require concrete diff approval.
+- Developer on-stack Level A requires the `abap_cloud_target_proven` gate; missing language-version
+  metadata blocks final A classification.
 - Syntax, activation, ATC and applicable tests remain mandatory.
 - `sap-transport-review` is the final release gate.
 - C/D exceptions are visible, owned and time-bound.

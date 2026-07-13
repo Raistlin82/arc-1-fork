@@ -9,9 +9,11 @@ Architect and execute Clean Core remediation without equating Level A with BTP. 
 SAP standard, Key User on-stack, Developer Extensibility with embedded ABAP Cloud, or a
 side-by-side extension using released ERP touchpoints.
 
-Read [`README.md`](./README.md) for orientation, [`DECISION_MATRIX.md`](./DECISION_MATRIX.md) for
-human-readable decisions, [`chain.json`](./chain.json) for the executable contract and
-[`action-catalog.json`](./action-catalog.json) for validated ARC-1 payload shapes.
+Read [`README.md`](./README.md) for orientation, the
+[`WORKFLOW.md` operator quickstart](./WORKFLOW.md#operator-quickstart) before a live run,
+[`DECISION_MATRIX.md`](./DECISION_MATRIX.md) for human-readable decisions, [`chain.json`](./chain.json)
+for the executable contract and [`action-catalog.json`](./action-catalog.json) for validated ARC-1
+payload shapes.
 
 ## Modes
 
@@ -48,12 +50,14 @@ target-domain decision. Do not default to BTP Cloud Foundry.
 3. Treat missing classification evidence as `Unknown`, never automatically as D.
 4. Classify logical units, not isolated includes.
 5. Level A requires allowed technology and released status for every relevant touchpoint.
-6. Report wrappers as `A consumer + B wrapper` or `A consumer + C wrapper`.
-7. Key User and Kyma are manual handoffs until an exposed implementation capability validates.
-8. ARC-1 is the only SAP writer. Optional skills and MCP servers advise or research.
-9. Deterministic quick fixes require one explicit package/transport approval. Generative changes
+6. Developer on-stack Level A also requires an approved ABAP Cloud target package and proven object
+   language version; ATC success alone is insufficient.
+7. Report wrappers as `A consumer + B wrapper` or `A consumer + C wrapper`.
+8. Key User and Kyma are manual handoffs until an exposed implementation capability validates.
+9. ARC-1 is the only SAP writer. Optional skills and MCP servers advise or research.
+10. Deterministic quick fixes require one explicit package/transport approval. Generative changes
    always require approval of the concrete diff.
-10. A plan is not complete without evidence, confidence, owner, gates and rollback/retirement path.
+11. A plan is not complete without evidence, confidence, owner, gates and rollback/retirement path.
 
 ## Protocol
 
@@ -104,6 +108,8 @@ Write `docs/refactor/<date>-clean-core-plan.md` with:
 - business requirement, touchpoints and standard-first result;
 - one AEM record per logical unit;
 - source level, target domain, target level and action;
+- for developer on-stack Level A, target package/software component and live or manually verified
+  `abapLanguageVersion="cloudDevelopment"` evidence;
 - composite wrapper level where applicable;
 - exact operation IDs from [`action-catalog.json`](./action-catalog.json);
 - MUST/SHOULD gates, confidence, evidence, owner, effort and open questions;
@@ -118,6 +124,8 @@ the plan before execution.
 - Capture the as-found source and documentation baseline first.
 - Delegate deterministic findings to `migrate-custom-code`; do not duplicate its quick-fix loop.
 - Execute one approved logical unit at a time using the action's `operationIds` from `chain.json`.
+- Block `rewrite_on_stack_abap_cloud` unless the approved ABAP Cloud target package, object language
+  version and all released touchpoints satisfy the `abap_cloud_target_proven` gate.
 - Use `modernize-abap-to-btp-cap` only for Cloud Foundry. For Kyma, produce the handoff and stop.
 - For Key User, produce implementation steps, required SAP app, fields/extension points, owner and
   acceptance tests; do not invent an ARC-1 write.
@@ -148,7 +156,7 @@ the plan before execution.
 
 ## Supporting references
 
-- [`WORKFLOW.md`](./WORKFLOW.md): operator sequence and gates.
+- [`WORKFLOW.md`](./WORKFLOW.md#operator-quickstart): operator quickstart, sequence and gates.
 - [`INTEGRATIONS.md`](./INTEGRATIONS.md): ARC-1, local skills, SAP skills and MCP capability map.
 - [`PATTERNS.md`](./PATTERNS.md): architecture, wrapper, execution and governance patterns.
 - [`SOURCES.md`](./SOURCES.md): evidence precedence and authoritative sources.

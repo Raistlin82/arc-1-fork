@@ -100,6 +100,16 @@ if (chain) {
   const allowedTargets = new Set(['A', 'B', 'A+B', 'A+C', 'Removed', 'ArchitectureDependent', 'ResearchRequired']);
   const allowedDomains = new Set(chain.targetDomains ?? []);
 
+  if (!gates.abap_cloud_target_proven) fail('chain.json needs the abap_cloud_target_proven gate');
+  if (!actions.rewrite_on_stack_abap_cloud?.gates?.includes('abap_cloud_target_proven')) {
+    fail('rewrite_on_stack_abap_cloud must require abap_cloud_target_proven');
+  }
+  const onStackDecision = decisions.find((decision) => decision.id === 'ON_STACK_LEVEL_A');
+  const onStackFacts = new Set((onStackDecision?.conditions ?? []).map((condition) => condition.fact));
+  for (const fact of ['abapCloudTargetPackageApproved', 'abapCloudLanguageVersionProven']) {
+    if (!onStackFacts.has(fact)) fail(`ON_STACK_LEVEL_A must require ${fact}`);
+  }
+
   if (new Set(decisionIds).size !== decisionIds.length) fail('chain.json has duplicate decision ids');
   if (new Set(precedences).size !== precedences.length) fail('chain.json has duplicate decision precedence values');
 
@@ -284,6 +294,24 @@ for (const file of [WORKFLOW, SKILL_MD]) {
   const text = readText(file);
   for (const required of ['README.md', 'DECISION_MATRIX.md', 'chain.json', 'action-catalog.json']) {
     if (!text.includes(required)) fail(`${file} should reference ${required}`);
+  }
+}
+
+if (existsSync(WORKFLOW)) {
+  const workflow = readText(WORKFLOW);
+  for (const required of [
+    '## Operator quickstart',
+    'SAP_ALLOW_WRITES=true',
+    'SAP_ALLOWED_PACKAGES=',
+    'abapLanguageVersion="cloudDevelopment"',
+    'Approve decisions per logical unit',
+  ]) {
+    if (!workflow.includes(required)) fail(`${WORKFLOW} should include operator quickstart marker ${required}`);
+  }
+}
+for (const file of [README, SKILL_MD]) {
+  if (existsSync(file) && !readText(file).includes('WORKFLOW.md#operator-quickstart')) {
+    fail(`${file} should link to the WORKFLOW operator quickstart`);
   }
 }
 

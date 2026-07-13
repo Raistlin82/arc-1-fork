@@ -78,6 +78,7 @@
     "standard_gap_proven": { "severity": "must", "executor": "agent", "fallback": "research" },
     "aem_recorded": { "severity": "must", "executor": "agent", "fallback": "research" },
     "released_touchpoints": { "severity": "must", "executor": "arc-1", "fallback": "research" },
+    "abap_cloud_target_proven": { "severity": "must", "executor": "agent", "fallback": "block" },
     "transport_scoped": { "severity": "must", "executor": "arc-1", "fallback": "block" },
     "syntax_clean": { "severity": "must", "executor": "arc-1", "fallback": "block" },
     "atc_no_regression": { "severity": "must", "executor": "arc-1", "fallback": "block" },
@@ -113,7 +114,7 @@
     "rewrite_on_stack_abap_cloud": {
       "execution": "arc1_guarded",
       "localSkills": ["setup-abap-mirror", "sap-object-documenter", "generate-abap-unit-test", "generate-cds-unit-test"],
-      "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "transport_scoped", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
+      "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "abap_cloud_target_proven", "transport_scoped", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
       "operationIds": ["read_source", "read_dependencies", "write_update", "activate_object", "atc_assessment", "run_unit_tests", "read_diff"]
     },
     "keep_at_level_b": {
@@ -264,9 +265,9 @@
       "targetLevel": "A",
       "targetDomain": "developer_on_stack",
       "action": "rewrite_on_stack_abap_cloud",
-      "conditions": [{ "fact": "selectedDomain", "equals": "developer_on_stack" }, { "fact": "releasedSuccessor", "equals": true }],
-      "trigger": "The requirement is tightly coupled to the S/4 process, requires transaction consistency or high-volume local data access, and released touchpoints exist.",
-      "evidenceRequired": ["AEM decision", "released successor", "ATC assessment"]
+      "conditions": [{ "fact": "selectedDomain", "equals": "developer_on_stack" }, { "fact": "releasedSuccessor", "equals": true }, { "fact": "abapCloudTargetPackageApproved", "equals": true }, { "fact": "abapCloudLanguageVersionProven", "equals": true }],
+      "trigger": "The requirement is tightly coupled to the S/4 process, requires transaction consistency or high-volume local data access, released touchpoints exist, and the target is proven to use ABAP for Cloud Development.",
+      "evidenceRequired": ["AEM decision", "released successor", "approved ABAP Cloud target package", "ABAP Cloud object language version", "ATC assessment"]
     },
     {
       "id": "WRAPPER_CLASSIC",

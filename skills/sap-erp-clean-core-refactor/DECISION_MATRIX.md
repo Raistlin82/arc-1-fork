@@ -17,7 +17,7 @@ domain, current Clean Core level, executable capability, proof.
 | KEY_USER_LEVEL_A | 30 | B/C/D/Unknown | A | Key User on-stack | `replace_with_key_user_extensibility` | A released key-user extension point, field, UI adaptation, form or CBO fits |
 | A_RETAIN | 40 | A | A | Current allowed domain | `no_action` | Allowed technology and every relevant touchpoint are proven released |
 | CUSTOM_API_RELEASE | 50 | B/C | Architecture-dependent | Current allowed domain | `release_api` | A stable customer API is the only unreleased dependency |
-| ON_STACK_LEVEL_A | 60 | B/C/D | A | Developer on-stack | `rewrite_on_stack_abap_cloud` | Tight S/4 coupling, LUW consistency or high-volume local access favors embedded ABAP Cloud and released touchpoints exist |
+| ON_STACK_LEVEL_A | 60 | B/C/D | A | Developer on-stack | `rewrite_on_stack_abap_cloud` | Tight S/4 coupling, LUW consistency or high-volume local access favors embedded ABAP Cloud; a released successor, approved ABAP Cloud target package and object language-version proof exist |
 | WRAPPER_CLASSIC | 70 | B/C/D | A consumer + B wrapper | Developer on-stack | `create_or_use_wrapper` | No released successor exists; a documented classic API can be isolated in Private Edition/on-premise |
 | WRAPPER_INTERNAL | 71 | C/D | A consumer + C wrapper | Developer on-stack | `create_or_use_wrapper` | No released/classic successor exists and a time-bound internal-access exception is approved |
 | SIDE_BY_SIDE_CF | 80 | B/C/D/Unknown | A | Side-by-side CF | `extract_to_side_by_side_cf` | Independent lifecycle, SaaS, mobile, multi-system, loose coupling or independent scale dominates |
