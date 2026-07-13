@@ -1,0 +1,192 @@
+{
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/201-225-released-apis-and-wrappers.md": {
+    "mtime": 1783975638.4667065,
+    "ast_hash": "6f42f759474cd0ba4828e0d6fd097f02",
+    "semantic_hash": "6f42f759474cd0ba4828e0d6fd097f02"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/276-300-layering-and-extensibility-option-selection.md": {
+    "mtime": 1783975638.4676888,
+    "ast_hash": "cf69fd34f4c53a9800a3dd347cac809c",
+    "semantic_hash": "cf69fd34f4c53a9800a3dd347cac809c"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/651-675-sap-business-ai-context.md": {
+    "mtime": 1783975638.496082,
+    "ast_hash": "59b7ce3b15b135e45637ec997611ecb2",
+    "semantic_hash": "59b7ce3b15b135e45637ec997611ecb2"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/601-625-sap-business-ai-context.md": {
+    "mtime": 1783975638.4929829,
+    "ast_hash": "4c486a2932de1b7ba78e68b4763db40f",
+    "semantic_hash": "4c486a2932de1b7ba78e68b4763db40f"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/351-375-aem-and-wrapper-guides.md": {
+    "mtime": 1783975638.468569,
+    "ast_hash": "1e0024efbec326710869f93706637c27",
+    "semantic_hash": "1e0024efbec326710869f93706637c27"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/901-925-appendix-key-user-and-deep-dive.md": {
+    "mtime": 1783975638.5004158,
+    "ast_hash": "76a36f2def4aafa170b81165f03744d0",
+    "semantic_hash": "76a36f2def4aafa170b81165f03744d0"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/251-275-layering-and-extensibility-option-selection.md": {
+    "mtime": 1783975638.46741,
+    "ast_hash": "244a67fd41d7f1ddf775374263a7d197",
+    "semantic_hash": "244a67fd41d7f1ddf775374263a7d197"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/451-475-governance-system-setup-deployment.md": {
+    "mtime": 1783975638.4710438,
+    "ast_hash": "51e2e83064f13b82b343f8d3c747614d",
+    "semantic_hash": "51e2e83064f13b82b343f8d3c747614d"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/026-050-introduction-clean-core-principles.md": {
+    "mtime": 1783975638.4606388,
+    "ast_hash": "ab207b59332f9902635a9a366b893b87",
+    "semantic_hash": "ab207b59332f9902635a9a366b893b87"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/376-400-governance-system-setup-deployment.md": {
+    "mtime": 1783975638.4688141,
+    "ast_hash": "eabaab9121f5d7bb258bfaa741be53fa",
+    "semantic_hash": "eabaab9121f5d7bb258bfaa741be53fa"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/101-125-abap-cloud-developer-extensibility.md": {
+    "mtime": 1783975638.4651635,
+    "ast_hash": "8b713fbf17754235ff3ff4d87fb2f84b",
+    "semantic_hash": "8b713fbf17754235ff3ff4d87fb2f84b"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/826-850-appendix-key-user-and-deep-dive.md": {
+    "mtime": 1783975638.4992716,
+    "ast_hash": "5365f2c36bb02259a8462b3f2b2c38b4",
+    "semantic_hash": "5365f2c36bb02259a8462b3f2b2c38b4"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/426-450-governance-system-setup-deployment.md": {
+    "mtime": 1783975638.4700465,
+    "ast_hash": "81b1593188c35aa99fcaefc7f5a62b44",
+    "semantic_hash": "81b1593188c35aa99fcaefc7f5a62b44"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/701-725-sap-business-ai-context.md": {
+    "mtime": 1783975638.497405,
+    "ast_hash": "d63039f43f46900075d33faa153d81fa",
+    "semantic_hash": "d63039f43f46900075d33faa153d81fa"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/676-700-sap-business-ai-context.md": {
+    "mtime": 1783975638.4969487,
+    "ast_hash": "1b25a5b75e7fb72773310765f3a507bb",
+    "semantic_hash": "1b25a5b75e7fb72773310765f3a507bb"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/726-750-resources-and-references.md": {
+    "mtime": 1783975638.4977856,
+    "ast_hash": "e3b8edb8ecd386ba453a571e4ffd54a4",
+    "semantic_hash": "e3b8edb8ecd386ba453a571e4ffd54a4"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/926-927-appendix-key-user-and-deep-dive.md": {
+    "mtime": 1783975638.5008705,
+    "ast_hash": "34d3bf5b2b67b6a3fb2bfddff99889f2",
+    "semantic_hash": "34d3bf5b2b67b6a3fb2bfddff99889f2"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/876-900-appendix-key-user-and-deep-dive.md": {
+    "mtime": 1783975638.4999719,
+    "ast_hash": "daa7363fb7d3f659c3df9dacbc13801e",
+    "semantic_hash": "daa7363fb7d3f659c3df9dacbc13801e"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/051-075-clean-core-levels-a-b-c-d.md": {
+    "mtime": 1783975638.4615996,
+    "ast_hash": "944e136f853278ade8e8587faeb7c71f",
+    "semantic_hash": "944e136f853278ade8e8587faeb7c71f"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/751-775-resources-and-references.md": {
+    "mtime": 1783975638.4980683,
+    "ast_hash": "b24eca27ec41ce114a3e0d58793087fe",
+    "semantic_hash": "b24eca27ec41ce114a3e0d58793087fe"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/551-575-custom-code-transition-atc.md": {
+    "mtime": 1783975638.4894488,
+    "ast_hash": "35da6bc9ae2d094fb7b9f9229d5c5ff7",
+    "semantic_hash": "35da6bc9ae2d094fb7b9f9229d5c5ff7"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/776-800-resources-and-references.md": {
+    "mtime": 1783975638.4984663,
+    "ast_hash": "166ddae1bee1acdd86f31061146372e4",
+    "semantic_hash": "166ddae1bee1acdd86f31061146372e4"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/526-550-brownfield-conversion-runbook.md": {
+    "mtime": 1783975638.488124,
+    "ast_hash": "d2affda85852fa1dc1b8aeba69607861",
+    "semantic_hash": "d2affda85852fa1dc1b8aeba69607861"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/851-875-appendix-key-user-and-deep-dive.md": {
+    "mtime": 1783975638.4996367,
+    "ast_hash": "3506863d0cac90d4efd618bca6f0cf75",
+    "semantic_hash": "3506863d0cac90d4efd618bca6f0cf75"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/801-825-appendix-key-user-and-deep-dive.md": {
+    "mtime": 1783975638.4988809,
+    "ast_hash": "f73be7eca95d7178b5cc9a520053c82e",
+    "semantic_hash": "f73be7eca95d7178b5cc9a520053c82e"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/401-425-governance-system-setup-deployment.md": {
+    "mtime": 1783975638.4692318,
+    "ast_hash": "ec42337db79a96c2e1c53101149167c7",
+    "semantic_hash": "ec42337db79a96c2e1c53101149167c7"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/126-150-abap-cloud-developer-extensibility.md": {
+    "mtime": 1783975638.4656878,
+    "ast_hash": "8ec95d6ad539ac095b875d8794ccf9c6",
+    "semantic_hash": "8ec95d6ad539ac095b875d8794ccf9c6"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/501-525-brownfield-conversion-runbook.md": {
+    "mtime": 1783975638.4876804,
+    "ast_hash": "86c6cea90506815533edea513e7f1221",
+    "semantic_hash": "86c6cea90506815533edea513e7f1221"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/151-175-level-a-side-by-side-sap-build-btp.md": {
+    "mtime": 1783975638.4660687,
+    "ast_hash": "d23269a9d3716587f8a4970c729efa20",
+    "semantic_hash": "d23269a9d3716587f8a4970c729efa20"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/626-650-sap-business-ai-context.md": {
+    "mtime": 1783975638.4950864,
+    "ast_hash": "47a4f45a48e8db9858d1426e26d2bc91",
+    "semantic_hash": "47a4f45a48e8db9858d1426e26d2bc91"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/076-100-level-a-on-stack-key-user.md": {
+    "mtime": 1783975638.4644446,
+    "ast_hash": "84a095a4e5e713a571a64af93e5b9292",
+    "semantic_hash": "84a095a4e5e713a571a64af93e5b9292"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/226-250-architect-transition-level-a.md": {
+    "mtime": 1783975638.467148,
+    "ast_hash": "5f80e3dfff92b5f55e1fea1e078ec01c",
+    "semantic_hash": "5f80e3dfff92b5f55e1fea1e078ec01c"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/326-350-aem-and-wrapper-guides.md": {
+    "mtime": 1783975638.4682782,
+    "ast_hash": "e1085edfada0bf4330d5027f80371b01",
+    "semantic_hash": "e1085edfada0bf4330d5027f80371b01"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/301-325-layering-and-extensibility-option-selection.md": {
+    "mtime": 1783975638.4679873,
+    "ast_hash": "87f6a6be4d4fd36d6001040cba6b5cd9",
+    "semantic_hash": "87f6a6be4d4fd36d6001040cba6b5cd9"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/176-200-released-apis-and-wrappers.md": {
+    "mtime": 1783975638.4664226,
+    "ast_hash": "cb0bb4741e3d17c349489a10356fb7c1",
+    "semantic_hash": "cb0bb4741e3d17c349489a10356fb7c1"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/476-500-brownfield-conversion-runbook.md": {
+    "mtime": 1783975638.481308,
+    "ast_hash": "2d440e74656bf21929e4c13a6330cfee",
+    "semantic_hash": "2d440e74656bf21929e4c13a6330cfee"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/576-600-custom-code-transition-atc.md": {
+    "mtime": 1783975638.490643,
+    "ast_hash": "5bbbc2c16cb00da3516339f8c33e2062",
+    "semantic_hash": "5bbbc2c16cb00da3516339f8c33e2062"
+  },
+  "/Users/gabriele.rendina/tools/arc-1/skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility/raw/001-025-introduction-clean-core-principles.md": {
+    "mtime": 1783975638.459698,
+    "ast_hash": "4837709121e46d8136b6f1d15a1211f4",
+    "semantic_hash": "4837709121e46d8136b6f1d15a1211f4"
+  }
+}

@@ -1,94 +1,154 @@
-# SAP Authoritative Sources — JIT lookup catalog
+# Clean Core Evidence Sources
 
-This file is the **catalog of authoritative SAP documentation sources** that the [`sap-erp-clean-core-refactor`](./SKILL.md) skill consults just-in-time when it needs evidence for a specific custom-code finding. It is **NOT a pre-crawled knowledge base**; it is a **list of URLs + how to query each one**.
+The orchestrator uses a local curated knowledge base first, then live system evidence and official
+SAP sources for release-specific facts. It never treats a search snippet or community answer as
+sufficient evidence for a write decision.
 
-The skill reads this file and decides which sources to consult per finding, within a bounded per-finding lookup budget. Results are cached locally under `.cache/sap-clean-core/` for 30 days (stable docs) or 7 days (community / blogs).
+## Evidence precedence
 
-## Tier 1 — Git-cloned sources (free, weekly refresh, no Apify cost)
+| Priority | Source | What it proves |
+|---:|---|---|
+| 1 | Live ARC-1 system evidence | Actual release, components, object state, dependencies, ATC findings, transports and tests |
+| 2 | Local curated Clean Core knowledge | Architecture rules, AEM criteria, levels, wrappers, governance and page provenance |
+| 3 | Official structured SAP object data | Released API/extension-point status and successors by edition/release |
+| 4 | Official SAP Help, product documentation and samples | Product behavior, supported technology and implementation guidance |
+| 5 | SAP Notes and lifecycle sources | Release-specific corrections/exceptions requiring authenticated access |
+| 6 | SAP Community/blogs | Symptom discovery only after official sources are insufficient |
 
-These are SAP-maintained git repositories that can be `git clone`d locally and refreshed via `git pull --ff-only`. They are the **first source consulted** for every finding because they are free, fast, and authoritative.
+When sources conflict, the plan records the conflict. Live system evidence wins for current object
+state; official SAP release-specific documentation wins for supportability; the unit remains
+`ResearchRequired` until the conflict is resolved.
 
-| ID | Source | URL | Domain | Refresh strategy |
-|---|---|---|---|---|
-| `abap-atc-cr-cv-s4hc` | SAP API Release State repository | https://github.com/SAP/abap-atc-cr-cv-s4hc | Released ABAP object authority — JSON files per object class, per edition (Public Cloud / Private Cloud / On-Premise) | `git clone --depth 1`, weekly `git pull --ff-only` |
-| `sap-samples-cap-sflight` | SAP-samples — CAP SFlight reference | https://github.com/SAP-samples/cap-sflight | Canonical CAP service + Fiori Elements V4 example | `git clone --depth 1`, weekly `git pull --ff-only` |
-| `sap-samples-cloud-cap-samples` | SAP-samples — CAP samples (multi-domain) | https://github.com/SAP-samples/cloud-cap-samples | Multiple side-by-side patterns: orders, hello-world, sflight, … | `git clone --depth 1`, weekly `git pull --ff-only` |
-| `sap-samples-btp-cap-multitenant-saas` | SAP-samples — multitenant CAP SaaS | https://github.com/SAP-samples/btp-cap-multitenant-saas | Multi-customer extension pattern | `git clone --depth 1`, weekly `git pull --ff-only` |
-| `sap-samples-cap-event-handling` | SAP-samples — CAP event handling | https://github.com/SAP-samples/cap-sample-event-handling | Event Mesh / NATS subscription patterns | `git clone --depth 1`, weekly `git pull --ff-only` |
-| `sap-samples-odata-v4-cds-cap-fiori` | SAP-samples — OData V4 + CDS + CAP + Fiori | https://github.com/SAP-samples/odata-v4-cds-cap-fiori | End-to-end OData V4 / CAP / FE V4 example | `git clone --depth 1`, weekly `git pull --ff-only` |
-| `sap-samples-btp-typescript` | SAP-samples — BTP TypeScript app | https://github.com/SAP-samples/btp-build-business-application-with-typescript | TypeScript CAP scaffolding | `git clone --depth 1`, weekly `git pull --ff-only` |
-| `sap-cloud-sdk` | SAP Cloud SDK (docs only) | https://github.com/SAP/cloud-sdk | JS/TS/Java SDK for consuming S/4 + BTP services | `git clone --depth 1 --filter=blob:none`, weekly `git pull --ff-only` |
+## Local knowledge base
 
-**Operational note**: if the Tier 1 repos are not already present, the pre-flight should clone them under `.cache/git/` or mark the tier as unavailable in the plan header. Total size after clone ≈ 100-200 MB. Weekly refresh is bandwidth-only (no compute cost).
+Path: `knowledge/clean-core-extensibility/`
 
-## Tier 2 — JIT Apify lookups (per-page cost, user pays at lookup time)
+| Artifact | Runtime role |
+|---|---|
+| `decision-rules.json` | Compact, curated rules with topics, source pages and confidence |
+| `ARC1_RUNTIME_ACTION_MAP.md` | Mapping from knowledge concepts to decisions and validated ARC-1 operations |
+| `graphify-out/graph.json` | Full concept/relation graph for exploration and future index refinement |
+| `graphify-out/graph.curated.json` | Deterministic alias-merged graph with explicit curated bridges and no zero-degree nodes |
+| `graphify-out/CURATION.md` | Curation metrics and the explicit non-executable bridges added to the source graph |
+| `graphify-out/GRAPH_REPORT.md` | Communities, quality observations and graph summary |
+| `graphify-out/graph.html` | Interactive human exploration |
+| `raw/*.md` | Page-bounded source extraction used to audit a rule without loading the full document |
 
-These are HTTP / SPA sources that cannot be efficiently mirrored offline. They are queried on-demand via Apify only when a finding's evidence requires it, and only for the specific page that holds the answer (not a full-site crawl).
+The source PDF is not packaged. The curated index preserves its title/version and page references;
+raw chunks preserve enough local context to audit each rule. Graph generation caches and the local
+PDF symlink are build inputs, not runtime skill content.
 
-| ID | Source | URL | Domain | Apify actor | Est. cost / page |
-|---|---|---|---|---|---|
-| `api-sap-com` | SAP API Hub | https://api.sap.com/ | OData service lifecycle (released / sandbox / deprecated), Communication Scenario membership, version history | `apify/puppeteer-scraper` (React SPA) | ~€0.01 |
-| `help-sap-clean-core` | SAP Help Portal — Clean Core | https://help.sap.com/docs/btp/sap-business-technology-platform/clean-core | Clean Core principles + Levels A/B/C/D definitions | `apify/website-content-crawler` | ~€0.005 |
-| `help-sap-btp` | SAP Help Portal — BTP | https://help.sap.com/docs/btp/sap-business-technology-platform | BTP services, runtime, eventing | `apify/website-content-crawler` | ~€0.005 |
-| `help-sap-s4hana-cloud` | SAP Help Portal — S/4HANA Cloud | https://help.sap.com/docs/SAP_S4HANA_CLOUD | S/4HANA Cloud feature docs | `apify/website-content-crawler` | ~€0.005 |
-| `help-sap-abap-development` | SAP Help Portal — ABAP for Cloud Development | https://help.sap.com/docs/abap-cloud | ABAP Cloud language reference, released-API catalog | `apify/website-content-crawler` | ~€0.005 |
-| `help-sap-integration-suite` | SAP Help Portal — Integration Suite | https://help.sap.com/docs/integration-suite | iFlow design, API Management | `apify/website-content-crawler` | ~€0.005 |
-| `help-sap-event-mesh` | SAP Help Portal — Event Mesh | https://help.sap.com/docs/event-mesh | BTP Event Mesh | `apify/website-content-crawler` | ~€0.005 |
-| `developers-clean-core` | developers.sap.com — Clean Core topic | https://developers.sap.com/topics/clean-core.html | Clean Core tutorials | `apify/website-content-crawler` | ~€0.005 |
-| `cap-cloud-sap` | SAP CAP — capire documentation | https://cap.cloud.sap/docs/ | CAP runtime, CDS, deployment | `apify/website-content-crawler` | ~€0.005 |
-| `sapui5-sdk` | SAPUI5 SDK Reference | https://sapui5.hana.ondemand.com/sdk/ | UI5 / Fiori Elements V4 controls and annotations | `apify/website-content-crawler` | ~€0.005 |
-| `community-sap-com` | SAP Community Q&A | https://community.sap.com/ | Recent symptom-specific troubleshooting | `apify/website-content-crawler` (recent-90d filter) | ~€0.01 |
-| `blogs-sap-com` | SAP Blogs | https://community.sap.com/t5/technology-blogs-by-sap/bg-p/technology-blog-sap | Architecture / pattern essays from SAP engineers | `apify/website-content-crawler` (tag-filtered) | ~€0.01 |
-| `fiori-design` | SAP Fiori Design Guidelines | https://experience.sap.com/fiori-design-web/ | Fiori UX guidance | `apify/website-content-crawler` | ~€0.005 |
-| `discovery-center` | SAP Discovery Center | https://discovery-center.cloud.sap/ | Reference architectures | `apify/puppeteer-scraper` (SPA) | ~€0.01 |
-| `learning-sap-com` | learning.sap.com / openSAP | https://learning.sap.com/ | Clean Core / extensibility courses | `apify/puppeteer-scraper` (SPA, some pages auth-gated) | ~€0.01 |
+During repository work, query the compact layer with:
 
-**Operational note**: every Tier 2 lookup hits `.cache/sap-clean-core/<topic-hash>/<source-id>-<yyyy-mm-dd>.md` first. Cache TTL: 30 days for stable docs, 7 days for community / blogs. Within the TTL window, repeat lookups are free.
+```text
+npm run clean-core:query -- wrapper on-stack
+npm run clean-core:query -- atc exemption --json
+npm run clean-core:graph
+```
 
-## Tier 3 — Manual-consultation sources (auth-gated, NOT crawled)
+No result means the orchestrator must use the lookup ladder or return `ResearchRequired`; it must
+not improvise a rule from graph proximity.
 
-These sources require S-user credentials and **cannot be automated** without the customer providing valid login. They are listed for awareness only; the skill emits "consult manually" pointers when they apply.
+## Primary knowledge source
 
-| ID | Source | URL | Auth | Purpose |
-|---|---|---|---|---|
-| `launchpad-support` | SAP Notes | https://launchpad.support.sap.com/ | S-user required | Authoritative SAP Notes for specific code paths / corrections |
-| `me-sap-com` | Software Lifecycle | https://me.sap.com/ | S-user required | Product lifecycle, release information |
-| `support-sap-com` | Support Catalog | https://support.sap.com/ | S-user required | Support documentation, incident management |
-
-## Tier 4 — MCP-server-backed lookup (preferred when installed)
-
-When the consuming environment has these MCP servers configured, the skill prefers them over Apify (faster, often free, better structured). **Do tool discovery first** and record the exact namespace in the plan header: current clients may expose the same capability as `mcp__mcp_sap_docs__*`, `mcp__abap_mcp_server__*`, or an equivalent SAP docs server. Never hardcode a namespace in generated instructions.
-
-| MCP server | Replaces Apify for | When preferred |
+| ID | Source | Coverage |
 |---|---|---|
-| `mcp-sap-docs` / `abap_mcp_server` — `sap_get_object_details` | abap-atc-cr-cv-s4hc exact-object queries (release states + successors) | Always for known object names; this is the highest-confidence Clean Core lookup |
-| `mcp-sap-docs` / `abap_mcp_server` — `sap_search_objects` | abap-atc-cr-cv-s4hc discovery by keyword, application component, object type, or clean-core level | When looking for released alternatives before guessing successor names |
-| `mcp-sap-docs` / `abap_mcp_server` — unified `search` (+ `fetch` when exposed) | `help-sap-*`, ABAP/RAP docs, SAP Community/blog evidence when included by the server | Use for doc-shaped questions. If `fetch` is not exposed, rely on the returned URL/snippet and cite/cache the result |
-| `mcp-sap-docs` / `abap_mcp_server` — dedicated `sap_community_search` when exposed | `community-sap-com` + `blogs-sap-com` rows | Only for exact errors, obscure symptoms, or workaround hunting after official docs are insufficient. If absent, use unified `search(includeOnline=true)` |
-| `mcp-sap-docs` / `abap_mcp_server` — `sap_discovery_center_service` when a service name/id is known; `sap_discovery_center_search` only when exposed; unified `search(...)` for fallback discovery | `discovery-center` row (SPA scrape) | Prefer the exposed structured service-details tool when available. Do not assume a dedicated Discovery Center search function exists; discover service names through the exposed Discovery Center search, unified search, or manual source review |
-| `mcp-sap-docs` / `abap_mcp_server` — `abap_feature_matrix` | language-feature availability lookups | Step 1 bootstrap + Step 6a "can I use this syntax on this release?" |
-| `mcp-sap-docs` — `ui5_version_diff` when exposed | `sapui5-sdk` upgrade/release-delta lookup | UI5/Fiori branches when comparing framework versions or deciding if a local workaround can be removed |
-| `abap_mcp_server` — `abap_lint` | none; secondary lint sanity check | Optional snippet-level check only. Do not replace ARC-1 `SAPLint`, which is system-aware and uses the current ARC-1 config/release profile |
-| `@sap/cds-mcp` — `search_docs` / `search_model` | `cap-cloud-sap` row; plus staged-CAP-model introspection Apify can't do | When the finding concerns the CAP side (Step 6b, `modernize-abap-cap-*`) |
-| `context7` | Generic library docs (non-SAP) | When the lookup is about an npm package or non-SAP library |
+| `clean-core-extensibility-architects-2026-07` | *Clean Core Extensibility for Architects - SAP Cloud ERP Private*, v20.9D, July 2026 | Clean Core levels, Key User, Developer Extensibility, side-by-side, AEM, wrappers, ATC, governance, brownfield transition and KPIs |
 
-With SAP docs MCP + `@sap/cds-mcp` both connected, Tier 2 shrinks to the genuinely page-shaped lookups (`api-sap-com` service lifecycle pages, `learning-sap-com`, or auth-gated pages) — the typical refactor cost drops accordingly. If neither Apify nor the relevant MCP server is configured, the plan remains valid but marks those lookups as manual/degraded.
+Important curated page groups:
 
-## When-to-use heuristic — what source for what finding
+| Topic | Pages |
+|---|---|
+| Levels A/B/C/D | 51-75, 566-568 |
+| Level A Key User | 76-125, 801-900 |
+| Developer Extensibility and embedded ABAP Cloud | 126-150 |
+| Side-by-side and SAP Build | 151-225 |
+| On-stack versus side-by-side selection | 281, 301-325 |
+| AEM and wrapper guidance | 326-375 |
+| Governance and system setup | 401-475 |
+| Brownfield custom-code transition | 476-550 |
+| AI fixes, wrappers, ATC and exemptions | 551-600 |
 
-| Finding category | Tier 1 (git) | Tier 2 (Apify) | Tier 3 (manual) |
-|---|---|---|---|
-| `non-released-api` | `abap-atc-cr-cv-s4hc` (check object status) | `api-sap-com` (find released alternative service) | `launchpad-support` (SAP Note for migration path) |
-| `direct-db-access` | `abap-atc-cr-cv-s4hc` (released CDS view available?) | `help-sap-abap-development` (released-CDS catalog) | — |
-| `modification` (Level D) | — | `help-sap-clean-core` (BAdI / enhancement Level B pattern) | `launchpad-support` (mandatory SAP Note for the modification) |
-| `enhancement-point` (Level B eligible) | — | `developers-clean-core` (tutorial for key-user extensibility) | — |
-| `side-by-side candidate` | `sap-samples-*` (matching pattern repo) + `sap-cloud-sdk` | `cap-cloud-sap` + `help-sap-btp` (target framework docs) | — |
-| `unused` (zero SCMON hits) | — | — | — (remove after stakeholder sign-off; no doc lookup needed) |
+Page references are validated for type and uniqueness by `check:clean-core-skills`; content changes
+require human review because page numbers alone cannot prove semantic accuracy.
 
-## Refresh discipline
+## Live ARC-1 evidence
 
-**Tier 1 git-clones**: weekly `git pull --ff-only` for each repo. Cost: bandwidth only.
+Use operation IDs from [`action-catalog.json`](./action-catalog.json):
 
-**Tier 2 Apify cache**: per-entry TTL applies. The cache is local to the project (under `.cache/sap-clean-core/`), not shared across projects. Users with multiple projects on the same machine can symlink the cache to a shared location.
+| Question | Operations |
+|---|---|
+| What system and release is this? | `system_probe`, `read_system` |
+| What custom code exists? | `inventory_package`, `exact_tadir_lookup`, `read_source` |
+| Who depends on it? | `read_dependencies`, `find_references` |
+| What is the current Clean Core evidence? | `atc_assessment`, `read_api_state` |
+| Did remediation work? | `syntax_check`, `activate_object`, `atc_assessment`, `run_unit_tests`, `read_diff` |
+| Is deletion/release safe? | `find_references`, `transport_check` |
 
-**No centralized infrastructure**: this skill does NOT maintain a centralized KB. There is no weekly cron crawling everything; there is no shared cache for all users. Every project owns its own cache; every Apify call is on the user's own account.
+ARC-1 ATC cannot by itself prove business suitability, standard parity, Key User fit or target
+architecture. Those require the AEM evidence pack and owner decisions.
+
+## Official structured SAP object sources
+
+Prefer an exposed SAP documentation MCP exact-object tool. Current clients may expose equivalent
+functions under different namespaces, so discover the capability rather than hardcoding it.
+
+Fallback structured source:
+
+| Source | URL | Use |
+|---|---|---|
+| SAP Cloudification Repository data | https://github.com/SAP/abap-atc-cr-cv-s4hc | Released object status and successors by edition |
+
+For a known SAP object, record object type, edition, source release, release state, successor,
+retrieval date and source URL. A name-only keyword match is not enough.
+
+## Official documentation
+
+| Source | URL | Use |
+|---|---|---|
+| SAP Help - Clean Core | https://help.sap.com/docs/btp/sap-business-technology-platform/clean-core | Clean Core concepts and extensibility guidance |
+| SAP Help - ABAP Cloud | https://help.sap.com/docs/abap-cloud | Language version, released APIs and developer extensibility |
+| SAP Business Accelerator Hub | https://api.sap.com/ | Released remote APIs and events |
+| SAP CAP documentation | https://cap.cloud.sap/docs/ | CAP side-by-side implementation |
+| SAP BTP documentation | https://help.sap.com/docs/btp/sap-business-technology-platform | Runtime, security and service architecture |
+| SAP Fiori Design Guidelines | https://experience.sap.com/fiori-design-web/ | UX and accessibility decisions |
+| SAP Discovery Center | https://discovery-center.cloud.sap/ | BTP services and reference missions |
+| SAP samples | https://github.com/SAP-samples | Supported implementation examples, never classification authority |
+
+Prefer official search/fetch capabilities when exposed. Use page crawling only for the exact page
+needed and cache the result with retrieval date; do not perform broad recurring crawls as part of a
+normal plan.
+
+## Authenticated/manual sources
+
+| Source | Use | Plan behavior |
+|---|---|---|
+| SAP Notes / SAP for Me | release-specific corrections, user-exit exceptions, product support | Emit note number and manual verification owner |
+| Maintenance Planner/product lifecycle | compatibility and lifecycle | Record manual evidence link/date |
+| Customer architecture/governance tools | AEM decisions, business ownership, exemptions, KPIs | Link or export evidence; never invent completion |
+
+## Community evidence
+
+SAP Community and blogs may help locate an obscure error or candidate successor. They cannot alone
+authorize API release, wrapper exceptions, deletion or production architecture. Confirm every
+material claim with live system evidence or an official SAP source.
+
+## Required evidence record
+
+Every non-trivial decision stores:
+
+```json
+{
+  "claim": "The target can consume a released API",
+  "sourceType": "live-system-or-official-sap",
+  "sourceId": "object-and-edition-specific-id",
+  "sourceLocation": "URL or PDF pages",
+  "retrievedAt": "YYYY-MM-DD",
+  "appliesTo": "system release and logical unit",
+  "confidence": "high|medium|low",
+  "openConflict": null
+}
+```
+
+Cache age never upgrades confidence. Recheck API release state, supported contracts and successor
+availability before execution even when planning evidence is cached.

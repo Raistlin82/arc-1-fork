@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "scenarios": [
+    { "id": "standard_replacement", "facts": { "sourceLevel": "D", "standardParity": "acceptable" }, "expectedDecision": "STANDARD_FIRST" },
+    { "id": "unused_unit", "facts": { "sourceLevel": "C", "standardParity": "gap", "unusedProven": true }, "expectedDecision": "ANY_TO_REMOVED" },
+    { "id": "key_user_field", "facts": { "sourceLevel": "C", "standardParity": "gap", "unusedProven": false, "keyUserFit": true, "releasedExtensionPoint": true }, "expectedDecision": "KEY_USER_LEVEL_A" },
+    { "id": "existing_a_on_stack", "facts": { "sourceLevel": "A", "standardParity": "gap", "unusedProven": false, "allTouchpointsReleased": true, "technologyAllowed": true }, "expectedDecision": "A_RETAIN" },
+    { "id": "release_customer_api", "facts": { "sourceLevel": "C", "standardParity": "gap", "unusedProven": false, "keyUserFit": false, "customerOwnedApi": true, "onlyUnreleasedDependency": true, "supportedReleaseContract": true }, "expectedDecision": "CUSTOM_API_RELEASE" },
+    { "id": "embedded_abap_cloud", "facts": { "sourceLevel": "D", "standardParity": "gap", "unusedProven": false, "keyUserFit": false, "selectedDomain": "developer_on_stack", "releasedSuccessor": true }, "expectedDecision": "ON_STACK_LEVEL_A" },
+    { "id": "classic_wrapper", "facts": { "sourceLevel": "C", "standardParity": "gap", "unusedProven": false, "keyUserFit": false, "selectedDomain": "developer_on_stack", "landscape": "s4_private_cloud", "releasedSuccessor": false, "classicApiAvailable": true, "wrapperApproved": true }, "expectedDecision": "WRAPPER_CLASSIC" },
+    { "id": "internal_wrapper", "facts": { "sourceLevel": "D", "standardParity": "gap", "unusedProven": false, "keyUserFit": false, "selectedDomain": "developer_on_stack", "landscape": "s4_on_premise", "releasedSuccessor": false, "classicApiAvailable": false, "internalExceptionApproved": true }, "expectedDecision": "WRAPPER_INTERNAL" },
+    { "id": "side_by_side_saas", "facts": { "sourceLevel": "C", "standardParity": "gap", "unusedProven": false, "keyUserFit": false, "selectedDomain": "side_by_side_cf", "releasedIntegrationBoundary": true }, "expectedDecision": "SIDE_BY_SIDE_CF" },
+    { "id": "kyma_manual", "facts": { "sourceLevel": "C", "standardParity": "gap", "unusedProven": false, "keyUserFit": false, "selectedDomain": "side_by_side_kyma" }, "expectedDecision": "SIDE_BY_SIDE_KYMA_MANUAL" },
+    { "id": "hybrid_extension", "facts": { "sourceLevel": "C", "standardParity": "gap", "unusedProven": false, "keyUserFit": false, "selectedDomain": "hybrid", "releasedIntegrationBoundary": true }, "expectedDecision": "HYBRID" },
+    { "id": "keep_b_private", "facts": { "sourceLevel": "B", "standardParity": "gap", "unusedProven": false, "keyUserFit": false, "selectedDomain": "classic_on_stack", "landscape": "s4_private_cloud", "documentedClassicTechnology": true }, "expectedDecision": "B_KEEP_PRIVATE" },
+    { "id": "mechanical_only", "facts": { "sourceLevel": "B", "standardParity": "gap", "unusedProven": false, "keyUserFit": false, "selectedDomain": "developer_on_stack", "releasedSuccessor": false, "deterministicFindingsOnly": true }, "expectedDecision": "MECHANICAL_REMEDIATION" },
+    { "id": "public_cloud_refuses_b", "facts": { "sourceLevel": "B", "standardParity": "gap", "unusedProven": false, "keyUserFit": false, "selectedDomain": "classic_on_stack", "landscape": "s4_public_cloud", "documentedClassicTechnology": true }, "expectedDecision": "ANY_TO_RESEARCH" },
+    { "id": "unknown_stays_research", "facts": { "sourceLevel": "Unknown", "standardParity": "gap", "unusedProven": false, "keyUserFit": false }, "expectedDecision": "ANY_TO_RESEARCH" }
+  ]
+}

@@ -1,337 +1,191 @@
 ---
 name: migrate-custom-code
-description: ATC-driven S/4HANA custom code migration — runs ATC readiness checks, groups findings, and generates clean-core replacement code following modern ABAP patterns. Use when asked to "migrate this Z program", "fix ATC findings", "modernize this code for S/4HANA", "clean-core fixes", or "ABAP Cloud readiness for this object".
+description: Applies selected SAP ATC quick fixes and bounded mechanical ABAP corrections to one approved logical unit through ARC-1. Uses exact quickfix payloads, explicit package/transport approval, syntax/activation/ATC/unit-test gates and confidence-based human review. Use after Clean Core classification when findings are deterministic or mechanical; return architectural redesigns, wrappers, RAP/CAP migrations and unresolved findings to the parent orchestrator.
 ---
 
 # Migrate Custom Code
 
-ATC-driven S/4HANA custom code migration assistant with automated fix proposals.
-
-This skill replicates SAP Joule's "Custom Code Migration" capability by combining ARC-1 (SAP system access) with the SAP documentation MCP (`search`, `fetch`, `sap_get_object_details`, `sap_search_objects`, `sap_community_search`, when exposed). It runs ATC readiness checks, groups and explains findings, and generates replacement code following modern ABAP patterns.
-
-## Smart Defaults (apply silently, do NOT ask)
-
-| Setting | Default | Rationale |
-|---|---|---|
-| Object type | Auto-detect via `SAPSearch(searchType="object", query="<object_name>")` | Don't make user look up the type |
-| ATC variant | System default | Use what's configured on the system |
-| Scope | `fix` (explain + fix proposals) | Most actionable output |
-| Priority filter | All priorities (start with Priority 1 errors) | Don't miss anything, but fix most critical first |
+This is the canonical executor for deterministic and bounded mechanical ATC remediation. It does
+not choose the Clean Core target architecture. Use `sap-clean-core-atc` for classification and
+`sap-erp-clean-core-refactor` for standard, Key User, on-stack, side-by-side, wrapper or retirement
+decisions.
 
 ## Input
 
-The user provides an object or package to check (e.g., `ZCL_SALES_HANDLER`, `Z_REPORT_POSTING`, `ZSALES_PKG`).
-
-Only the **object name** is required. If the user provides just an object name, auto-detect the type and proceed with the default variant and fix scope.
-
-Optionally, the user may specify:
-- **Object type** (default: auto-detect via `SAPSearch(searchType="object", query="<object_name>", maxResults=10)`)
-- **Target release variant** (e.g., `S4HANA_2023`, `S4HANA_READINESS`; default: system default)
-- **Scope** — `explain` (findings only) or `fix` (explain + fix proposals; default: `fix`)
-
-If the user provides an object name without a type, resolve it before running ATC:
-
-```
-SAPSearch(searchType="object", query="<object_name>", maxResults=10)
+```text
+<type> <name> --transport=<request> [--variant=<assessment-variant>]
+                   [--findings=<ids-or-lines>] [--approval-scope=object|package-transport]
 ```
 
-Use an exact-name match. If multiple exact matches exist, ask the user which type to use. If the input is a package, skip object search and use `SAPRead(type="DEVC", name="<package_name>")`.
+Require:
 
-## Step 1: Run ATC Readiness Check
+- an approved object/logical unit and finding set;
+- current source and package;
+- an explicit transport for transportable objects;
+- operator approval scoped either to this object or to deterministic fixes in the named
+  package/transport.
 
-> **ATC gotchas (verified live on S/4HANA 2023):**
-> - **ATC skips `$TMP` / local objects.** A check run against a `$TMP` object resolves to an empty object set and returns **zero findings** — this is not "clean code", it's "not checked". Run ATC against objects in a **transportable package**. If the user points you at `$TMP` code, say so and ask them to assign it to a transportable package first.
-> - **The check variant must exist on the system.** `ABAP_CLOUD_READINESS` is the standard name on SAP BTP ABAP / S/4HANA Cloud, but on-premise systems often ship `S4HANA_READINESS_<release>` (e.g. `S4HANA_READINESS_2023`) or `SAP_CLOUD_PLATFORM_DEFAULT` instead. If the named variant is absent, fall back to the system default (omit `variant`).
+This skill never creates or releases a transport. The parent orchestrator owns transport planning
+and `sap-transport-review`.
 
-### 1a. Run ATC on the target object
+## Confidence policy
 
-```
-SAPDiagnose(action="atc", type="<type>", name="<object_name>", variant="<variant>")
-```
-
-If no variant was specified, run with the system default first (omitting `variant` uses the system's configured default check variant):
-
-```
-SAPDiagnose(action="atc", type="<type>", name="<object_name>")
-```
-
-Then suggest a readiness variant if available (e.g., `S4HANA_READINESS_2023`, `ABAP_CLOUD_READINESS`). If a run returns zero findings on code you expect to be flagged, first confirm the object is **not** in `$TMP` (see the gotcha above).
-
-### 1b. For package-level checks — find all objects first
-
-```
-SAPRead(type="DEVC", name="<package_name>")
-```
-
-This returns all objects in the package. Then run ATC on each object individually. For large packages, prioritize PROG, CLAS, FUGR, FUNC types first as they typically contain the most migration-relevant findings.
-
-## Step 2: Group and Prioritize Findings
-
-Organize findings into a structured summary. Deduplicate findings with the same checkTitle across multiple locations.
-
-### Summary Table
-
-Present findings grouped by priority and category:
-
-```
-Migration Readiness Report for <object_name>
-=============================================
-
-Total findings: <N>
-  Priority 1 (Errors):   <n>
-  Priority 2 (Warnings): <n>
-  Priority 3 (Info):     <n>
-
-| # | Priority | Check | Category | Count | Affected Objects |
-|---|----------|-------|----------|-------|------------------|
-| 1 | 1 | Use of obsolete statement MOVE | Syntax Change | 3 | Z_REPORT_POSTING |
-| 2 | 1 | Call to released API CL_GUI_ALV_GRID | Deprecated API | 1 | Z_REPORT_POSTING |
-| 3 | 2 | SELECT...ENDSELECT pattern | Performance | 5 | Z_REPORT_POSTING |
-| ...
-```
-
-### Categories
-
-Group findings into these categories:
-- **Deprecated API**: Calls to functions, classes, or methods that are deprecated or not released in S/4HANA
-- **Syntax Change**: Obsolete ABAP statements that must be replaced
-- **Semantic Change**: Behavior differences in S/4HANA (e.g., changed table structures, removed fields)
-- **Performance**: Patterns that need optimization for S/4HANA
-- **Simplification**: Items from the S/4HANA simplification list
-
-Ask the user: **"Which findings should I explain and fix? (all / specific numbers / errors only)"**
-
-## Step 3: Explain Findings
-
-For each selected finding, provide a detailed explanation.
-
-### 3a. Read the affected source code
-
-```
-SAPRead(type="<type>", name="<object_name>")
-```
-
-Show the code context around each finding (the line with the issue and a few lines before/after).
-
-### 3b. Search documentation for migration guidance
-
-Use the SAP documentation MCP through tool discovery. The currently supported general documentation call is `search(query=...)`; use `fetch(id=...)` only with IDs returned by `search`.
-
-```
-search(query="<checkTitle> S/4HANA migration", includeOnline=true, includeSamples=false, abapFlavor="<cloud|standard>")
-search(query="<deprecated_api> replacement ABAP", includeOnline=true, includeSamples=false, abapFlavor="<cloud|standard>")
-```
-
-For specific simplification items:
-
-```
-search(query="<simplification_item_id> simplification list", includeOnline=true, includeSamples=false)
-```
-
-For SAP object replacements, prefer released-object lookup over keyword search:
-
-```
-sap_get_object_details(object_type="<type>", object_name="<deprecated_api>", system_type="<target>", target_clean_core_level="A")
-sap_search_objects(query="<business capability or successor keyword>", system_type="<target>", clean_core_level="A", limit=10)
-```
-
-### 3c. Search SAP Notes / community only through exposed tools
-
-There is no guaranteed dedicated SAP Notes tool. Do not call a Notes-specific function unless
-tool discovery exposes it in the current runtime. Use the unified docs search instead. Escalate
-to dedicated community search only when it is exposed; otherwise use unified online search with
-the exact error text:
-
-```
-search(query="<checkTitle> SAP Note S/4HANA", includeOnline=true, includeSamples=false)
-sap_community_search(query="<exact error text or obscure migration symptom>")        # only when exposed
-search(query="<exact error text or obscure migration symptom>", includeOnline=true)   # fallback
-```
-
-### 3d. Present explanation for each finding
-
-For each finding, present:
-- **What**: The finding description and where it occurs (file, line)
-- **Why**: Why this is a problem for S/4HANA (compatibility, removal, behavior change)
-- **Replacement**: The recommended modern ABAP pattern or API to use instead
-- **Impact**: Risk level of the change (low = syntax swap, medium = logic change, high = redesign needed)
-
-## Step 4: Generate Fix Proposals
-
-For each fixable finding, generate replacement code based on documentation and modern ABAP patterns.
-
-### 4a. Check SAP quickfix first (before LLM-generated fixes)
-
-For each finding location, first check whether SAP provides a native quickfix:
-
-```
-SAPDiagnose(action="quickfix", type="<type>", name="<object_name>", source="<current_source>", line=<finding_line>, column=0)
-```
-
-If proposals are returned:
-- Present them as **SAP-verified fixes** (higher confidence than LLM-generated fixes)
-- If the user selects one, apply it and get exact text deltas:
-
-```
-SAPDiagnose(action="apply_quickfix", type="<type>", name="<object_name>", source="<current_source>", line=<finding_line>, column=0, proposalUri="<proposal_uri>", proposalUserContent="<proposal_user_content>")
-```
-
-- `apply_quickfix` returns ranged **text deltas — it does not persist**. Apply the returned deltas to the source yourself, then write the result via `SAPWrite(action="update", type="<type>", name="<object_name>", source="<candidate>", transport="<transport>")`. When applying multiple fixes to the same object, re-resolve each finding's line after each write (earlier edits shift later line numbers), or fix top-to-bottom.
-
-> **Quickfix availability is system-dependent.** SAP only offers quickfix proposals where the system has the corresponding check/cloudification content installed. On a bare ABAP trial or a system without the Clean-Core remediation content, `getFixProposals` returns `[]` and ATC findings carry `hasQuickfix=false` — that's expected, not a bug. In that case skip straight to LLM-generated fixes (the options below). Prefer SAP quickfixes only when they actually come back.
-
-> **Match the proposal to the finding — don't blindly apply `proposals[0]`.** `quickfix` returns *every* proposal applicable at that source position, which often includes generic **refactorings** unrelated to the finding (verified live on S/4HANA 2023: a position returned "Rename", "Convert to attribute", "Convert to importing parameter", "Extract local variable", …). Pick the proposal whose `name`/`description` actually addresses the finding; ignore the rest.
-
-> **Refactoring-style proposals can't be auto-applied here.** Proposals whose `uri` contains `/providers/refactoring/` (rename / convert-to-X / extract / introduce) are interactive refactorings that ride the separate `/sap/bc/adt/refactorings` multi-step flow — `apply_quickfix` returns **HTTP 500** for them (verified live). They are not finding fixes; skip them for automated apply and fall back to an LLM-generated fix. Only proposals from non-refactoring providers apply cleanly through `apply_quickfix`.
-
-### Fix Options
-
-Present 4 options per finding:
-1. **Apply** — Auto-write the fix via ARC-1
-2. **Show** — Display the before/after diff without applying
-3. **Skip** — Move to the next finding
-4. **SAP Quick Fix** — Apply SAP's quickfix proposal when available (preferred over LLM-generated fix)
-
-Group related fixes that can be applied together (e.g., multiple deprecated statements in the same method).
-
-### Common Migration Patterns
-
-Use these replacement patterns when generating fixes:
-
-| Old Pattern | New Pattern | Notes |
+| Class | Definition | Write policy |
 |---|---|---|
-| `CALL FUNCTION '<fm>'` | Class method call | Find replacement class in documentation |
-| `SELECT...ENDSELECT` | `SELECT INTO TABLE` + loop | Avoid row-by-row processing |
-| `MOVE-CORRESPONDING src TO dst` | `dst = CORRESPONDING #( src )` | New ABAP syntax |
-| `READ TABLE itab WITH KEY k = v` | `line_exists( itab[ k = v ] )` or `VALUE #( itab[ k = v ] OPTIONAL )` | Use table expressions |
-| `FORM/PERFORM` | Method call | Extract to class method |
-| `DESCRIBE TABLE itab LINES lv_cnt` | `lv_cnt = lines( itab )` | Built-in function |
-| `CALL METHOD obj->method` | `obj->method( )` | Functional call syntax |
-| `CREATE OBJECT obj TYPE cls` | `obj = NEW cls( )` | NEW operator |
-| `TRANSLATE str TO UPPER CASE` | `str = to_upper( str )` | Built-in function |
-| Classic DB view | CDS view entity | Redesign required |
-| `WRITE:` / ALV list | Fiori / RAP service | Major redesign |
+| High | SAP-proposed quickfix delta, applied with unchanged opaque proposal data, syntax clean | May use prior package/transport approval |
+| Medium | Bounded agent-authored mechanical correction with no architecture change | Concrete diff approval required |
+| Low | Generated redesign, uncertain behavior, syntax failure or incomplete affected sources | No write; return proposal to parent |
 
-## Step 5: Apply Selected Fixes
+Examples of low/architectural residue: replacing SAP GUI, redesigning authorization, changing LUW
+semantics, introducing a wrapper, migrating SEGW/RAP/CAP, replacing internal tables with a new data
+model, or selecting a released successor whose business parity is not proven.
 
-### 5a. Normalize and pre-check the candidate source
+## Protocol
 
-For full-source fixes, run deterministic candidate transforms first. Both calls return candidate source; they do not persist anything:
+### 1. Baseline
 
-```
-SAPLint(action="lint_and_fix", source="<candidate_source>", name="<object_name>")
-SAPLint(action="format", source="<candidate_after_lint_fix>", name="<object_name>")
-```
+1. Read active source and object versions.
+2. Confirm package, transport and open-lock context.
+3. Run the selected ATC assessment:
 
-Then syntax-check the exact source you intend to write:
-
-```
-SAPDiagnose(action="syntax", type="<type>", name="<object_name>", source="<fixed_source>")
+```text
+SAPDiagnose(action="atc", type="CLAS", name="ZCL_EXAMPLE", variant="ABAP_CLOUD_READINESS")
+SAPRead(type="CLAS", name="ZCL_EXAMPLE")
+SAPRead(type="VERSIONS", name="ZCL_EXAMPLE", objectType="CLAS")
 ```
 
-If syntax errors are introduced, do not write. Show the diff, explain the error, and fall back to manual correction.
+If the requested variant is unavailable, stop for target-relevant findings unless the parent plan
+explicitly accepts a named degraded fallback. No findings is not success until checked-object
+coverage is proven.
 
-### 5b. Apply fixes
+### 2. Group findings
 
-For method-level fixes in classes:
+Group by exact source unit and line. For classes, preserve main/definitions/implementations/macros/
+testclasses boundaries. For function groups and programs, include all affected includes in the
+logical unit.
 
-```
-SAPWrite(action="edit_method", type="CLAS", name="<class>", method="<method>", source="<fixed_source>", transport="<transport>")
-```
+Order:
 
-For full-source updates (programs, functions):
+1. deterministic SAP quickfixes;
+2. safe lint/format candidates;
+3. medium-confidence mechanical corrections;
+4. low-confidence/architectural residue returned to parent.
 
-```
-SAPWrite(action="update", type="<type>", name="<object_name>", source="<fixed_source>", transport="<transport>")
-```
+### 3. Preview quickfix
 
-For `edit_method`, if you only have a method body rather than full class source, the pre-write `source="<fixed_source>"` syntax check above is not applicable. Write the method body, then validate the saved class immediately:
+For each selected finding, pass current source and exact position:
 
-```
-SAPRead(type="<type>", name="<object_name>")
-SAPDiagnose(action="syntax", type="<type>", name="<object_name>", source="<saved_source>")
-```
-
-If syntax errors are introduced: revert by writing back the original source and report the issue.
-
-### 5c. Activate
-
-```
-SAPActivate(type="<type>", name="<object_name>")
+```text
+SAPDiagnose(action="quickfix", type="CLAS", name="ZCL_EXAMPLE", source="<current_source>", line=17, column=1)
 ```
 
-## Step 6: Re-validate
+Do not choose a proposal solely by label. Record proposal URI, opaque user content and every
+affected object/source URI. Reject the automated path when:
 
-Run ATC again to confirm findings are resolved:
+- no proposal matches the selected finding;
+- affected source content is unavailable;
+- the proposal crosses the approved package/transport scope;
+- the delta includes unrelated refactoring;
+- the proposal changes architecture or behavior beyond the finding.
 
-```
-SAPDiagnose(action="atc", type="<type>", name="<object_name>", variant="<variant>")
-```
+### 4. Apply proposal in memory
 
-### Report results
+Pass proposal data through exactly:
 
-Present a final summary:
-
-```
-Migration Fix Summary for <object_name>
-========================================
-
-Findings fixed:             <n>
-Findings remaining:         <n>
-Findings needing manual fix: <n>
-
-Fixed:
-  - [FIXED] Use of obsolete statement MOVE (3 occurrences)
-  - [FIXED] SELECT...ENDSELECT replaced with SELECT INTO TABLE
-
-Remaining:
-  - [MANUAL] CL_GUI_ALV_GRID replacement requires UI redesign
-  - [SKIPPED] User skipped FORM/PERFORM migration
-
-Next steps:
-  - Address remaining manual findings
-  - Run full regression tests
-  - Consider running ATC on dependent objects
+```text
+SAPDiagnose(action="apply_quickfix", type="CLAS", name="ZCL_EXAMPLE", source="<current_source>", line=17, column=1, proposalUri="<proposal_uri>", proposalUserContent="<opaque_user_content>")
 ```
 
-## Error Handling
+For a multi-object proposal, also pass every `proposalAffectedObjects` entry returned by preview,
+including current content. Merge deltas in memory and rebase later proposals on the latest
+candidate; never apply multiple stale deltas independently.
 
-### Common Issues and Fixes
+### 5. Normalize and validate candidate
 
-| Error | Cause | Fix |
-|---|---|---|
-| ATC variant not found | Variant doesn't exist on this system | Re-run default ATC on the same object without `variant`: `SAPDiagnose(action="atc", type="<type>", name="<object_name>")` |
-| Object locked by another user | Object is being edited elsewhere | Inform user, suggest trying later or contacting the lock holder |
-| Fix causes new syntax error | Generated replacement code is incorrect | Revert to original source, show the diff, suggest manual correction |
-| No mcp-sap-docs available | Documentation MCP not configured | Explain findings using ATC finding text only, recommend user check SAP Help Portal |
-| Package has too many objects | Large package with 100+ objects | Suggest breaking into smaller batches by sub-package or object type |
-| ATC returns no findings | Object is already S/4HANA ready | Inform user — no findings is good news, suggest checking with a stricter variant |
-| Transport required but not provided | Object is in a transportable package | Ask user for transport request number before applying fixes |
+```text
+SAPLint(action="lint_and_fix", source="<candidate_source>", name="ZCL_EXAMPLE")
+SAPLint(action="format", source="<candidate_source>")
+SAPDiagnose(action="syntax", type="CLAS", name="ZCL_EXAMPLE", source="<candidate_source>")
+```
 
-## Notes
+`lint_and_fix` and `format` return candidates. They do not persist source. Review their deltas and
+exclude unrelated formatting when it would obscure the functional fix.
 
-### BTP vs On-Premise Differences
+If syntax fails, do not write. Store the candidate and diagnostic as a low-confidence proposal.
 
-- **BTP**: Limited ATC variants — primarily cloud readiness checks. BTP objects already use ABAP Cloud syntax, so migration focus is different: deprecated released APIs, not classic ABAP constructs. Fewer findings expected since ABAP Cloud enforces modern patterns.
-- **On-Premise**: Full range of S/4HANA readiness variants available (2020, 2021, 2022, 2023+). Classic ABAP objects may have many findings. FORM/PERFORM, function modules, classic reports, and DB views are common migration targets. Custom Code Migration Worklist (SCMA) may provide additional context.
+### 6. Approval gate
 
-### Quickfix Availability
+- High-confidence deterministic delta: confirm it is inside the previously approved package and
+  transport scope.
+- Medium-confidence mechanical delta: show the concrete diff and require explicit approval.
+- Low-confidence delta: stop without write.
 
-- SAP quickfixes are available for many common ATC findings (for example obsolete statements, missing declarations, straightforward syntax issues).
-- Not every finding has a quickfix. Deprecated API replacements and architecture-level redesign usually still require manual/LLM-guided refactoring.
+### 7. Persist and activate
 
-### What This Skill Does NOT Do
+```text
+SAPWrite(action="update", type="CLAS", name="ZCL_EXAMPLE", source="<approved_candidate>", transport="DEVK900001")
+SAPActivate(action="activate", type="CLAS", name="ZCL_EXAMPLE")
+```
 
-- **No transport management**: User is responsible for creating and releasing transport requests
-- **No migration dossier**: Handles one object or one package finding workflow — for reviewed, saved, or visual package-level dossiers, use [sap-migration-dossier](../sap-migration-dossier/SKILL.md)
-- **No custom ATC variant creation**: Uses existing ATC variants on the system
-- **No table structure migration**: Cannot modify DDIC table structures (e.g., field length changes for S/4HANA)
-- **No test execution**: Does not run regression tests after fixes — user should validate manually or use generate-abap-unit-test skill
+For multiple affected objects, write all approved candidates under the same scope and activate as
+a batch. A partial write is a failure: restore from the captured version baseline or leave the
+transport explicitly blocked for recovery.
 
-### When to Use This Skill
+### 8. Regression proof
 
-- When preparing custom code for S/4HANA migration
-- When checking if code meets ABAP Cloud readiness standards
-- When investigating ATC findings and needing explanation + fix proposals
-- When modernizing legacy ABAP code patterns (FORM, obsolete statements)
-- NOT for greenfield development — use generate-rap-service for new objects
+Run applicable tests and ATC again:
+
+```text
+SAPDiagnose(action="unittest", type="CLAS", name="ZCL_EXAMPLE", coverage=true)
+SAPDiagnose(action="atc", type="CLAS", name="ZCL_EXAMPLE", variant="ABAP_CLOUD_READINESS")
+```
+
+For CDS/RAP logical units, run the available CDS tests, behavior/unit tests and sibling activation
+checks selected by the parent plan. Compare findings before and after:
+
+- selected findings removed;
+- no net ATC regression;
+- no activation error;
+- tests green or an explicit parent-approved manual fallback;
+- unrelated findings unchanged or explained.
+
+Failure triggers rollback/recovery from the as-found version baseline and blocks acceptance.
+
+## Output
+
+```json
+{
+  "logicalUnit": "ZCL_EXAMPLE",
+  "approvalScope": "package-transport",
+  "transport": "DEVK900001",
+  "applied": [
+    {
+      "finding": "finding-id",
+      "confidence": "high",
+      "proposalUri": "provider-uri",
+      "affectedObjects": ["ZCL_EXAMPLE"]
+    }
+  ],
+  "manualReview": [],
+  "architecturalResidue": [],
+  "validation": {
+    "syntax": "pass",
+    "activation": "pass",
+    "tests": "pass",
+    "atcRegression": 0
+  }
+}
+```
+
+Return architectural residue with finding, source location, reason it is non-mechanical, evidence
+needed and recommended parent action. Do not attempt to solve it inside this skill.
+
+## Guardrails
+
+- Never ask ARC-1 to invent a quickfix URI or opaque user content.
+- Never persist the preview response without inspecting the returned delta.
+- Never auto-apply an agent-authored correction under the deterministic approval scope.
+- Never skip unit tests merely because syntax and ATC pass.
+- Never report success from an empty ATC result without coverage evidence.
+- Never release the transport from this skill.
+- Never transform a business/architecture decision into a mechanical fix.

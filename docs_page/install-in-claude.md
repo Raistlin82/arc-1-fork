@@ -12,10 +12,32 @@ Find your row, then jump to that section.
 | **Claude Code** | remotely (BTP Cloud Foundry) | [`claude mcp add --transport http`](#remote-btp-cloud-foundry-custom-connector) | add separately |
 
 !!! info "MCPB is local-only; skills don't live inside it"
-    The `.mcpb` bundle and a remote connector both wire up the **tools** only. The 18 SAP
+    The `.mcpb` bundle and a remote connector both wire up the **tools** only. The SAP
     [skills](skills.md) (RAP, CDS, ABAP Unit, clean-core, UI5 modernization) are a *separate*
-    layer. The **Claude Code plugin** is the only artifact that bundles the MCP server **and** the
-    skills in one install — so for Claude Code, prefer the plugin.
+    layer. The **Claude Code plugin** installs the MCP server and skills together. For other
+    agents, the npm package includes the same skills and exposes the opt-in installer described
+    below.
+
+## Install bundled skills from the npm package
+
+`npm install` and `npx arc-1` never modify agent directories automatically. Install the bundled
+skills explicitly after installing or starting ARC-1:
+
+```bash
+# All skills in the current project's portable .agents/skills directory
+npx arc-1@latest skills install
+
+# All skills globally for Codex
+npx arc-1@latest skills install --agent codex --global
+
+# Only the Clean Core orchestrator
+npx arc-1@latest skills install sap-erp-clean-core-refactor --agent codex --global
+```
+
+Supported targets are `agents`, `claude-code`, `cursor`, `github-copilot`, `codex`, `gemini` and
+`opencode`. Use `--dry-run` to preview, `--force` to replace an existing copy, or
+`--destination <dir>` for a custom location. The external `npx skills add arc-mcp/arc-1` workflow
+remains available when lockfiles and cross-repository skill updates are preferred.
 
 ---
 

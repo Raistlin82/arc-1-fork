@@ -146,6 +146,14 @@ ARC-1's strategy is to stay close to documented and discoverable ADT behavior, p
   npx arc-1@latest --url https://your-sap-host:44300 --user YOUR_USER
   ```
 
+  The npm package also contains every ARC-1 skill. Install them explicitly for your agent; ARC-1
+  never changes agent directories during `npm install`:
+
+  ```bash
+  npx arc-1@latest skills install --agent codex --global
+  npx arc-1@latest skills install sap-erp-clean-core-refactor --agent codex --global
+  ```
+
 - **Trying it out on your laptop?** → [Quickstart](https://docs.arc-1-mcp.com/quickstart/)
 - **Full local dev setup (Docker, cookie extractor, client configs)?** → [Local Development](https://docs.arc-1-mcp.com/local-development/)
 - **Deploying for a team / BTP?** → [Deployment](https://docs.arc-1-mcp.com/deployment/)

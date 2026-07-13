@@ -22,9 +22,33 @@ namespaced as `/arc-1:<skill>` (e.g. `/arc-1:generate-rap-service`). Manage it w
 > custom connector)? Use the `skills` CLI below to add just the skills — the plugin is only needed
 > when you also want it to wire up the bundled MCP server.
 
-## Install the skills via the `skills` CLI (any agent)
+## Install skills bundled with the ARC-1 npm package
 
-The fastest way is `npx skills` — it auto-detects the agents installed in your project (Claude Code, Cursor, GitHub Copilot, OpenCode, Gemini CLI, Codex, …) and installs into the right paths.
+The published npm package contains this entire `skills/` tree. Installation is explicit; running
+the MCP server or `npm install` does not modify agent directories.
+
+```bash
+# Install all skills in the current project's portable .agents/skills directory
+npx arc-1@latest skills install
+
+# Install globally for a specific agent
+npx arc-1@latest skills install --agent codex --global
+
+# Install one skill
+npx arc-1@latest skills install sap-erp-clean-core-refactor --agent codex --global
+
+# Preview or replace an existing copy
+npx arc-1@latest skills install --agent codex --global --dry-run
+npx arc-1@latest skills install --agent codex --global --force
+```
+
+Supported `--agent` values: `agents`, `claude-code`, `cursor`, `github-copilot`, `codex`, `gemini`,
+and `opencode`. `agents` is the project-local portable default. Use `--destination <dir>` when the
+client has a custom skill root.
+
+## Install the skills via the external `skills` CLI
+
+Use `npx skills` when you want its agent auto-detection, lockfile and repository update workflow.
 
 ```bash
 # Install all ARC-1 skills into the current project

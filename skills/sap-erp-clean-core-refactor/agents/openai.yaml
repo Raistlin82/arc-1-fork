@@ -1,0 +1,4 @@
+interface:
+  display_name: "SAP Clean Core Architect"
+  short_description: "Decide and govern SAP Clean Core refactoring."
+  default_prompt: "Use $sap-erp-clean-core-refactor to assess this SAP custom-code scope, choose the evidence-backed Clean Core target, and produce a governed plan before any execution."

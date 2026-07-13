@@ -1,0 +1,6 @@
+**/source/
+**/graphify-out/.graphify*
+**/graphify-out/cache/
+**/graphify-out/cost.json
+**/graphify-out/.graphify_python
+**/.graphify_python

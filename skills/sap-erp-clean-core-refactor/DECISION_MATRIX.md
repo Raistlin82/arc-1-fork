@@ -1,69 +1,75 @@
 # Clean Core Decision Matrix
 
-Canonical source-to-target matrix for `sap-erp-clean-core-refactor`.
+This is the readable form of [`chain.json`](./chain.json). The JSON manifest is authoritative for
+precedence, gates, skill dispatch and ARC-1 operation IDs. [`action-catalog.json`](./action-catalog.json)
+is authoritative for tool payload shapes.
 
-Use this file during `plan` to turn the Clean Core classification into a concrete action. The
-machine-readable companion is [`./chain.json`](./chain.json); keep the `ID` values in sync because
-`npm run check:clean-core-skills` validates both files.
+## Decision order
 
-## Common Pre-Decision Flow
+Apply rows by ascending precedence and stop at the first fully evidenced match. A/B/C/D is not the
+first architectural choice. The order is: SAP standard, unused code, extension use case, target
+domain, current Clean Core level, executable capability, proof.
 
-Every row below assumes this evidence already exists:
+| Decision ID | Priority | Source | Target level | Target domain | Action | Select when |
+|---|---:|---|---|---|---|---|
+| STANDARD_FIRST | 10 | Any | A | Standard | `replace_with_standard` | SAP standard covers the requirement with approved parity |
+| ANY_TO_REMOVED | 20 | Any | Removed | Retired | `remove_unused` | Runtime and static evidence prove no valid consumer |
+| KEY_USER_LEVEL_A | 30 | B/C/D/Unknown | A | Key User on-stack | `replace_with_key_user_extensibility` | A released key-user extension point, field, UI adaptation, form or CBO fits |
+| A_RETAIN | 40 | A | A | Current allowed domain | `no_action` | Allowed technology and every relevant touchpoint are proven released |
+| CUSTOM_API_RELEASE | 50 | B/C | Architecture-dependent | Current allowed domain | `release_api` | A stable customer API is the only unreleased dependency |
+| ON_STACK_LEVEL_A | 60 | B/C/D | A | Developer on-stack | `rewrite_on_stack_abap_cloud` | Tight S/4 coupling, LUW consistency or high-volume local access favors embedded ABAP Cloud and released touchpoints exist |
+| WRAPPER_CLASSIC | 70 | B/C/D | A consumer + B wrapper | Developer on-stack | `create_or_use_wrapper` | No released successor exists; a documented classic API can be isolated in Private Edition/on-premise |
+| WRAPPER_INTERNAL | 71 | C/D | A consumer + C wrapper | Developer on-stack | `create_or_use_wrapper` | No released/classic successor exists and a time-bound internal-access exception is approved |
+| SIDE_BY_SIDE_CF | 80 | B/C/D/Unknown | A | Side-by-side CF | `extract_to_side_by_side_cf` | Independent lifecycle, SaaS, mobile, multi-system, loose coupling or independent scale dominates |
+| SIDE_BY_SIDE_KYMA_MANUAL | 81 | B/C/D/Unknown | Architecture-dependent | Side-by-side Kyma | `plan_kyma_side_by_side` | Kyma is selected; current ARC-1 CAP implementation is CF-only, so execution is a handoff |
+| HYBRID | 90 | B/C/D/Unknown | Architecture-dependent | Hybrid | `hybrid_extension` | On-stack transactional responsibilities and side-by-side responsibilities both exist |
+| B_KEEP_PRIVATE | 100 | B | B | Classic on-stack | `keep_at_level_b` | Private Edition/on-premise permits B and no justified A business case exists |
+| MECHANICAL_REMEDIATION | 110 | B/C/D | Architecture-dependent | Current allowed domain | `migrate_custom_code` | Selected findings are deterministic quick fixes or bounded mechanical corrections |
+| ANY_TO_RESEARCH | 999 | Any | ResearchRequired | Research | `research_required` | Any required evidence, owner, successor, capability, target or parity remains uncertain |
 
-1. `bootstrap-system-context` captured release, components, system type and ARC-1 feature flags.
-2. `sap-transport-overview` checked open-request conflicts.
-3. ARC-1 inventory clustered TADIR rows into logical units.
-4. `sap-clean-core-atc` classified every unit A/B/C/D.
-5. `explain-abap-code` analyzed every non-A unit.
-6. JIT lookup resolved released successors through SAP docs MCP / cache / Apify / manual evidence.
+`Unknown` is not Level D. D requires evidence of a modification, forbidden technology or no-API
+zone. Missing evidence always lands on `ANY_TO_RESEARCH`.
 
-## System-Type Modifier
+## Landscape constraints
 
-| System type | Compliance floor | Effect |
-|---|---|---|
-| BTP ABAP Environment / S/4HANA Public Cloud | A only | `keep_at_level_b` is forbidden. B/C/D rows must escalate to A or become `research_required`. |
-| S/4HANA on-prem / Private Cloud | A or B | B is acceptable when documented, justified and verified. |
+| Landscape | Compliance floor | Wrapper policy | Level B policy |
+|---|---|---|---|
+| S/4HANA Public Cloud | A | No B/C wrapper implementation | Not allowed |
+| BTP ABAP Environment | A | Consumer may call a released remote/on-stack API; no local classic wrapper | Not allowed |
+| S/4HANA Private Cloud | A preferred; B permitted | A+B allowed; A+C only as governed, time-bound exception | Allowed with AEM rationale; no ATC exemption for informational B findings |
+| S/4HANA on-premise | A preferred; B permitted | A+B allowed; A+C only as governed, time-bound exception | Allowed with AEM rationale; no ATC exemption for informational B findings |
 
-## Source -> Target Matrix
+## Target-domain selector
 
-| ID | Source | Target | Action | Trigger | Skill sequence | Required gates |
-|---|---|---|---|---|---|---|
-| A_TO_A_NO_ACTION | A | A | `no_action` | Unit already uses released APIs / allowed extension model | none | Keep classification evidence in the plan |
-| B_TO_B_KEEP_B | B | B | `keep_at_level_b` | On-prem/PCE unit is compliant enough but cannot justify A cheaply | `sap-object-documenter` | SKTD rationale, ATC exemption evidence, not allowed on Public Cloud |
-| B_TO_A_RELEASE_API | B | A | `release_api` | Stable Z/Y API is the only thing keeping consumers below A | ARC-1 API state/read/manage tools; `sap-api-style` when exposed | fan-in stability check, owner sign-off, `SAPManage(action="set_api_state")`, ATC reclassification |
-| B_TO_A_REWRITE_IN_PLACE | B | A | `rewrite_in_place` | B dependency has a released successor or can be re-based cleanly | `generate-abap-unit-test` / `generate-cds-unit-test`; `generate-rap-logic` when behavior logic is involved | quickfix first, lint/format, syntax, ATC, unittest, human diff |
-| B_TO_A_EXTRACT_SIDE_BY_SIDE | B | A | `extract_to_side_by_side` | A cannot be reached safely inside ERP, but ERP-side object can be replaced/retired | `modernize-abap-to-btp-cap` -> `modernize-abap-cap-schema` -> `modernize-abap-cap-service` -> UI branch as needed | CAP compile/build, BTP/Fiori/UI5 gates, QA parity, old ERP object deprecated/retired |
-| C_TO_B_REWRITE_IN_PLACE | C | B | `rewrite_in_place` | Internal API can be replaced by documented classic/on-prem API, and B is acceptable | `generate-abap-unit-test` / `generate-cds-unit-test`; specialist skill if matched below | quickfix first, lint/format, syntax, ATC no D/C regression, unittest, human diff |
-| C_TO_A_REWRITE_IN_PLACE | C | A | `rewrite_in_place` | Internal/unreleased construct has a verified released successor | tests -> rewrite per PATTERNS 9.2 -> ARC-1 write/activate | successor verified, syntax, ATC reclassifies A, unittest, human diff |
-| C_TO_A_RELEASE_API | C | A | `release_api` | C is caused only by consuming an unreleased Z/Y dependency | ARC-1 API state/read/manage tools; `sap-api-style` when exposed | owner sign-off, fan-in stability, API state visible, consumers reclassify |
-| C_TO_A_EXTRACT_SIDE_BY_SIDE | C | A | `extract_to_side_by_side` | GUI-bound, file/frontend, external API, or side-by-side is cheaper/cleaner | `modernize-abap-to-btp-cap` chain plus UI/BTP branch gates | CAP/BTP/UI gates, QA parity, old ERP object deprecated/retired |
-| D_TO_B_REWRITE_IN_PLACE | D | B | `rewrite_in_place` | Modification, implicit enhancement, native SQL, BDC, kernel/OS access can land on documented on-prem construct | tests -> quickfix -> rewrite; `debug-slow-sql` for data-access hot paths | no D findings remain, syntax, ATC, unittest, human diff |
-| D_TO_A_EXTRACT_SIDE_BY_SIDE | D | A | `extract_to_side_by_side` | D finding cannot be made cloud-clean inside ERP or Public Cloud forbids B | `modernize-abap-to-btp-cap` chain plus branch-specific gates | ERP-side object removed/deprecated, CAP/BTP/UI gates, QA parity |
-| D_TO_A_REWRITE_IN_PLACE_RARE | D | A | `rewrite_in_place` | D finding has a verified released direct successor | tests -> rewrite -> ARC-1 write/activate | successor verified, syntax, ATC reclassifies A, unittest, human diff |
-| ANY_TO_REMOVED | Any | Removed | `remove_unused` | Runtime/static evidence says no real consumers | `sap-unused-code` evidence plus ARC-1 references/delete | stakeholder sign-off, final `SAPNavigate(action="references")`, `SAPWrite(action="delete")` |
-| ANY_TO_RESEARCH_REQUIRED | Any | ResearchRequired | `research_required` | Successor, ownership, fan-in, compliance target or business parity is uncertain | `explain-abap-code`; `sap-migration-dossier` when stakeholder artifact is needed | no write; issue remains in research backlog |
+| Signal | Prefer on-stack | Prefer side-by-side |
+|---|---:|---:|
+| Same S/4 transaction and strong consistency | Yes | No |
+| High-volume or latency-sensitive S/4 data access | Yes | No |
+| Extension of an existing S/4 application | Yes | Usually no |
+| Non-SAP users, consumer-grade or native mobile UX | Usually no | Yes |
+| SaaS, multi-system hub or cross-backend process | No | Yes |
+| Independent operations, scaling, downtime or release cadence | No | Yes |
+| Responsibilities split across both groups | Hybrid | Hybrid |
 
-## Specialized Dispatches
+## Action inventory
 
-These are refinements of the action column above.
+Primary actions are shown in the decision rows. Specialized dispatches remain explicit:
 
-| Condition | Action ID | Parent action | Target | Skill sequence |
-|---|---|---|---|---|
-| Only mechanical / quickfixable ATC findings | `migrate_custom_code` | `rewrite_in_place` | ATC-dependent | `migrate-custom-code` |
-| SEGW OData V2 service | `migrate_segw_to_rap` | `rewrite_in_place` or `extract_to_side_by_side` | A | `migrate-segw-to-rap` |
-| Analytical ALV/read-only report | `analytical_embedded` | `rewrite_in_place` | A | `generate-analytics-star-schema` -> `generate-cds-analytical-query` |
-| RAP behavior implementation gap | `rap_logic` | `rewrite_in_place` | A or B | `generate-rap-logic` |
-| Full production RAP stack, rare | `rap_full_stack_researched` | `rewrite_in_place` | A | `generate-rap-service-researched` |
-| Small greenfield CRUD/prototype, not a refactor default | `greenfield_rap_may` | MAY only | A | `generate-rap-service` |
+| Action | Role |
+|---|---|
+| `migrate_segw_to_rap` | SEGW OData V2 replacement inside an on-stack or side-by-side decision |
+| `analytical_embedded` | Embedded analytics replacement for aggregate/read-only reporting |
+| `rap_logic` | RAP behavior implementation inside an approved on-stack design |
+| `rap_full_stack_researched` | Production RAP stack after research and plan approval |
+| `greenfield_rap_may` | MAY-only prototype path; never a default production refactor |
 
-## Verification Contract
+## Non-negotiable evidence
 
-Every code-changing row ends with:
-
-1. `SAPDiagnose(action="syntax", type="<type>", name="<name>", source="<candidate>")`
-2. `SAPWrite(...)` / `SAPActivate(...)` only after local gates pass
-3. `SAPDiagnose(action="atc", type="<type>", name="<name>")`
-4. `SAPDiagnose(action="unittest", type="<type>", name="<name>")` when applicable
-5. `SAPRead(type="<type>", name="<name>", action="diff")`
-6. `sap-transport-review` before release
-7. `debug-slow-sql` when the changed unit is a hot data-access path
+- Standard-first and AEM reasoning precede a target decision.
+- Level A requires all relevant touchpoints to be released, not just one dependency.
+- Releasing one custom API upgrades only that dependency. Reclassify every consumer afterward.
+- Wrapper output is composite and records the wrapper's own B or C debt separately.
+- Key User and Kyma actions are plan/handoff paths until an exposed, validated implementation
+  capability exists.
+- Generative writes require diff approval. Deterministic SAP quick fixes may share one explicit
+  package-and-transport approval, but still require syntax, activation, ATC and tests.

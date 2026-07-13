@@ -31,6 +31,7 @@ import { initLogger } from './server/logger.js';
 import { loadPlugins } from './server/plugin-loader.js';
 import { buildAdtConfig, getConfiguredToolDefinitions, VERSION } from './server/server.js';
 import type { ConfigSource, ServerConfig } from './server/types.js';
+import { installBundledSkills, SKILL_AGENTS, type SkillAgent } from './skills-installer.js';
 
 // Load .env without printing dotenv tips to stdout.
 config({ quiet: true });
@@ -227,6 +228,51 @@ program
   .action(() => {
     console.log(`ARC-1 v${VERSION}`);
   });
+
+const skillsCmd = program.command('skills').description('Install the ARC-1 agent skills bundled with this package');
+skillsCmd
+  .command('install [skill]')
+  .description('Install all bundled skills, or one named skill, without modifying agent directories silently')
+  .addOption(new Option('--agent <agent>', 'Target agent').choices([...SKILL_AGENTS]).default('agents'))
+  .option('--global', 'Install in the selected agent global skill directory', false)
+  .option('--project <dir>', 'Project root for a project-local install', process.cwd())
+  .option('--destination <dir>', 'Explicit skill destination; overrides --agent/--global/--project')
+  .option('--force', 'Replace existing copies of selected skills', false)
+  .option('--dry-run', 'Show what would be installed without writing', false)
+  .action(
+    (
+      skill: string | undefined,
+      opts: {
+        agent: SkillAgent;
+        global: boolean;
+        project: string;
+        destination?: string;
+        force: boolean;
+        dryRun: boolean;
+      },
+    ) => {
+      try {
+        const result = installBundledSkills({
+          agent: opts.agent,
+          global: opts.global,
+          projectDir: opts.project,
+          destination: opts.destination,
+          skill,
+          force: opts.force,
+          dryRun: opts.dryRun,
+        });
+        const verb = result.dryRun ? 'Would install' : 'Installed';
+        console.log(`${verb} ${result.installed.length} skill(s) in ${result.destination}`);
+        if (result.installed.length) console.log(`  ${result.installed.join(', ')}`);
+        if (result.skipped.length)
+          console.log(`Skipped ${result.skipped.length} existing skill(s): ${result.skipped.join(', ')}`);
+        if (result.skipped.length && !opts.force) console.log('Use --force to replace existing copies.');
+      } catch (err) {
+        console.error(err instanceof Error ? err.message : String(err));
+        process.exitCode = 2;
+      }
+    },
+  );
 
 // Config show command — dumps resolved effective policy + source attribution
 const configCmd = program.command('config').description('Configuration inspection');

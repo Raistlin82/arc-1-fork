@@ -1,264 +1,162 @@
 ---
 name: sap-erp-clean-core-refactor
-description: Plans and executes a Clean Core refactor of SAP ABAP custom code (Z*/Y*). Inventories objects via ARC-1, classifies them as Level A/B/C/D (via `sap-clean-core-atc`), and decides per logical unit (a program + its includes = one unit) whether to rewrite-in-place, extract to a side-by-side BTP extension, keep at Level B, or remove. Documentation lookups are just-in-time (no pre-built KB). Use when asked to "refactor custom code to Clean Core", "plan side-by-side extensions", "Clean Core return on ERP", or to produce a documented migration plan.
+description: Plans, estimates, executes and governs SAP Clean Core extensibility for Z/Y custom code across S/4HANA Public Cloud, Private Cloud, on-premise, embedded ABAP Cloud and BTP. Uses a curated SAP Clean Core knowledge base plus live ARC-1 evidence to choose SAP standard, Key User on-stack, Developer Extensibility on-stack, Cloud Foundry side-by-side, hybrid, wrapper, Level B retention or retirement paths. Use for Clean Core refactoring, AEM extension decisions, wrapper strategy, custom API release, package migration planning and governed remediation.
 ---
 
-# SAP ERP — Clean Core Refactor
+# SAP ERP Clean Core Refactor
 
-Plans and executes the refactor of ABAP custom code to Clean Core. Three modes:
+Architect and execute Clean Core remediation without equating Level A with BTP. Level A may be
+SAP standard, Key User on-stack, Developer Extensibility with embedded ABAP Cloud, or a
+side-by-side extension using released ERP touchpoints.
 
-| Mode | What it does | Writes? |
+Read [`README.md`](./README.md) for orientation, [`DECISION_MATRIX.md`](./DECISION_MATRIX.md) for
+human-readable decisions, [`chain.json`](./chain.json) for the executable contract and
+[`action-catalog.json`](./action-catalog.json) for validated ARC-1 payload shapes.
+
+## Modes
+
+| Mode | Result | SAP writes |
 |---|---|---|
-| `discover` | Inventory the Z*/Y* package | No |
-| `estimate` | Inventory + cluster + classify + type-aware fan-in, then instantiate the [PATTERNS §9.5 effort model](./PATTERNS.md) with the REAL numbers → emit `docs/refactor/<date>-effort-estimate.md` (person-day sizing, no per-unit decisions yet) | No |
-| `plan` (default) | Everything `estimate` does + understanding pass + per-unit decisions → emit `docs/refactor/<date>-clean-core-plan.md` (supersedes the estimate with decision-refined effort) | No |
-| `execute` | Apply the plan: rewrite ABAP, scaffold BTP extensions, document Level B keepers, remove unused. Logs ACTUAL effort per unit for §9.5 calibration | Yes (with per-unit confirmation) |
+| `discover` | Landscape, capability and logical-unit inventory | No |
+| `estimate` | Inventory, classification, clusters and effort ranges | No |
+| `plan` | Approved-target proposal, decision record, action sequence and evidence gaps | No |
+| `execute` | Apply only approved and currently supported actions | Yes |
+| `govern` | KPI baseline, ATC regression, exception/wrapper lifecycle and review backlog | No by default |
 
 ## Input
 
-```
+```text
 <package-or-object> [mode] [flags]
 ```
 
-Examples:
-- `ZFI estimate` — person-day sizing from the real system state, before committing to a plan
-- `ZFI plan` — typical first call (default target = `btp-cf`)
-- `ZCL_INVOICE_HANDLER plan` — single-object focus
-- `ZFI execute` — apply plan with per-unit confirmation
-- `ZFI plan --target=btp-kyma --aggressive` — Kyma side-by-side target + push Level B → A
-
-**Flags**:
-
-| Flag | Effect |
-|---|---|
-| `--target=btp-cf` (default) `· btp-kyma · onprem-kyma` | Side-by-side runtime when extracting to BTP |
-| `--target-level=A` (synonym of `--aggressive`) | Prefer Level A everywhere; explore B→A escalation |
-| `--target-level=B` | Settle for B; cheaper paths preferred |
-| `--push-to-a=A,B,C` | Selective B→A for listed objects only |
-| `--force-refresh` | Bypass the 30-day cache; re-query sources |
-| `--budget=N` | Per-finding JIT lookup budget (default 5; Apify only when configured) |
-| `--report=dossier` | Emit the plan through [`../sap-migration-dossier/SKILL.md`](../sap-migration-dossier/SKILL.md) (HTML/JSON/CSV/graph + review cards) instead of the plain markdown plan |
-
-After plan emission, edit `docs/refactor/<date>-clean-core-plan.md` to override any decision before `execute`.
-
-## Decision tree (per logical unit)
-
-"Object" below means the **logical unit** from Step 2 (main + includes / FUGR / RAP stack) — a bare include never gets its own decision.
-
-| Start Level | Default Target | Path |
+| Flag | Values | Rule |
 |---|---|---|
-| A | A | no_action |
-| Unused | — | remove_unused (with sign-off) |
-| C | **A** | `rewrite_in_place` via released API (or `extract_to_side_by_side` if no equivalent; `keep_at_level_b` if only data-access) |
-| D | **B** | `rewrite_in_place` via BAdI / enhancement-point (or `extract_to_side_by_side` if BAdI not feasible or `--target-level=A`) |
-| B | **B** | `keep_at_level_b` (default). Escalates to A only with `--aggressive` / `--push-to-a` / `--target-level=A` |
+| `--landscape` | `auto`, `s4-public-cloud`, `s4-private-cloud`, `s4-on-premise`, `btp-abap-environment` | Probe when `auto`; never silently assume Public Cloud or BTP |
+| `--domain` | `auto`, `standard`, `key-user`, `developer-on-stack`, `side-by-side-cf`, `side-by-side-kyma`, `hybrid` | `auto` runs AEM; Kyma is plan-only |
+| `--target-level` | `A`, `B` | Optional constraint, not a deployment selector |
+| `--push-to-a` | comma-separated logical units | Selective escalation after architecture review |
+| `--force-refresh` | boolean | Ignore cached external evidence |
+| `--report` | `markdown`, `dossier` | `dossier` delegates to `sap-migration-dossier` |
 
-**Target levels are expected landings, not ceilings.** "D → B" means the *realistic* landing of an in-place rewrite (the official home for internals-coupling is a BAdI/enhancement spot — a documented classic API = Level B; released cloud enhancement spots are a small subset). When a finding has a 1:1 released successor (PATTERNS 9.2), the rewrite lands at A directly — and the Step 7 re-classification records whatever level was actually achieved. The in-place path that cannot reach A is exactly what `extract_to_side_by_side` is for.
+If landscape or business requirement cannot be inferred from live context, ask once before the
+target-domain decision. Do not default to BTP Cloud Foundry.
 
-**System-type modifier** — the tree above assumes an on-prem/private-cloud system. Resolve the system type once in Step 1 (`bootstrap-system-context` probe → `system-info.md`) and apply:
+## Invariants
 
-| Where the code must live | Compliance floor | Effect on the tree |
+1. Decide from the business requirement and extension touchpoints before using A/B/C/D.
+2. Search for SAP standard before designing an extension.
+3. Treat missing classification evidence as `Unknown`, never automatically as D.
+4. Classify logical units, not isolated includes.
+5. Level A requires allowed technology and released status for every relevant touchpoint.
+6. Report wrappers as `A consumer + B wrapper` or `A consumer + C wrapper`.
+7. Key User and Kyma are manual handoffs until an exposed implementation capability validates.
+8. ARC-1 is the only SAP writer. Optional skills and MCP servers advise or research.
+9. Deterministic quick fixes require one explicit package/transport approval. Generative changes
+   always require approval of the concrete diff.
+10. A plan is not complete without evidence, confidence, owner, gates and rollback/retirement path.
+
+## Protocol
+
+### 1. Establish context
+
+- Delegate system discovery to `bootstrap-system-context` and transport conflicts to
+  `sap-transport-overview`.
+- Confirm ARC-1 with `SAPManage(action="probe")`.
+- Record landscape, release, installed components, available ADT features, write ceiling, package
+  allowlist, transport policy, ATC variants and optional MCP/skill capabilities.
+- Load the smallest relevant evidence pack from
+  `knowledge/clean-core-extensibility/decision-rules.json`. Use
+  `npm run clean-core:query -- <terms>` during repository development.
+
+### 2. Inventory logical units and touchpoints
+
+- Use operation `inventory_package`; recurse into subpackages.
+- Use `exact_tadir_lookup` only for known names. Detect legacy SEGW through generated classes,
+  service evidence and targeted lookup because DEVC inventory may omit it.
+- Cluster PROG/includes, FUGR/FUNC/includes, CLAS/local includes and complete CDS/RAP stacks.
+- For each unit record UI, forms, reports, integrations/events, business logic/BAdIs, APIs,
+  persistence, runtime use, fan-in, ownership and transport state.
+- Delegate usage evidence to `sap-unused-code`, classification to `sap-clean-core-atc`, intent
+  explanation to `explain-abap-code`, and dossier output when requested.
+
+### 3. Run the architecture decision
+
+For every logical unit, in this order:
+
+1. Can SAP standard replace it with acceptable parity?
+2. Is the unit unused?
+3. Which extension use case and touchpoints remain?
+4. Does Key User extensibility fit?
+5. If development is required, do on-stack or side-by-side signals dominate?
+6. What are the current level and all relevant API/extension-point release states?
+7. Can a released successor or released custom API reach A?
+8. If not, is an isolated wrapper allowed and governable?
+9. Which implementation capability is actually available?
+
+Resolve the first fully evidenced row in [`DECISION_MATRIX.md`](./DECISION_MATRIX.md). Otherwise
+select `research_required`.
+
+### 4. Emit the plan
+
+Write `docs/refactor/<date>-clean-core-plan.md` with:
+
+- landscape and capability matrix;
+- business requirement, touchpoints and standard-first result;
+- one AEM record per logical unit;
+- source level, target domain, target level and action;
+- composite wrapper level where applicable;
+- exact operation IDs from [`action-catalog.json`](./action-catalog.json);
+- MUST/SHOULD gates, confidence, evidence, owner, effort and open questions;
+- Key User/Kyma manual handoff packages;
+- governance baseline and continuous controls.
+
+`estimate` stops before per-unit target approval. `plan` remains read-only. The operator may edit
+the plan before execution.
+
+### 5. Execute approved capabilities
+
+- Capture the as-found source and documentation baseline first.
+- Delegate deterministic findings to `migrate-custom-code`; do not duplicate its quick-fix loop.
+- Execute one approved logical unit at a time using the action's `operationIds` from `chain.json`.
+- Use `modernize-abap-to-btp-cap` only for Cloud Foundry. For Kyma, produce the handoff and stop.
+- For Key User, produce implementation steps, required SAP app, fields/extension points, owner and
+  acceptance tests; do not invent an ARC-1 write.
+- For wrappers, isolate the wrapper package/component, release only the wrapper API, rewrite the
+  consumers, record the exception and retirement trigger, and test after upgrades.
+- Reclassify after every accepted unit. One released dependency does not prove the whole consumer A.
+
+### 6. Prove and govern
+
+- Every changed unit must pass syntax, activation, ATC, applicable tests and approved diff.
+- Use `sap-transport-review` before release.
+- `govern` reports Clean Core Share, Technical Debt Score, Unused Code Share and Business
+  Modifications, plus ATC regression, wrapper successor watch, exception expiry and SAP API
+  changelog review.
+- Use `ABAP_CLOUD_READINESS` for A assessment when available. Use a governed customer copy of
+  `ABAP_CLOUD_DEVELOPMENT_DEFAULT` for development/transport blocking. Record fallbacks.
+- Do not create exemptions for informational Level B findings. C/D exceptions must be explicit,
+  finding-level, time-bound and owned.
+
+## Confidence policy
+
+| Change | Confidence | Automation |
 |---|---|---|
-| BTP ABAP Environment / S/4HANA Public Cloud | **A only** — Level B is non-compliant there (see `sap-clean-core-atc`, "BTP vs On-Premise") | `keep_at_level_b` is NOT an option. D → `extract_to_side_by_side` (or full rewrite to A); C → A mandatory; every B row escalates as if `--target-level=A` were set |
-| S/4HANA on-prem / Private Cloud (goal = survive upgrades) | A + B both compliant | Table applies as written; C → B is an acceptable cheaper stop when no released equivalent exists |
+| SAP-proposed deterministic quick fix, syntax clean | High | May persist after one package/transport approval |
+| Mechanical transformation without SAP proposal | Medium | Diff approval required |
+| Generated redesign or wrapper | Variable | Diff approval, tests and owner approval required |
+| Syntax-failing or incomplete proposal | Low | Never write; retain as proposal/research |
 
-**Side-by-side outcome** = Level A on the ERP side (the Z object disappears; logic lives on BTP under separate Clean Core gate).
+## Supporting references
 
-**`release_api` shortcut (C/D → A without a rewrite).** When an object is C or D *only because it consumes another Z/Y object* that has no released API contract, the cheapest path is releasing the dependency itself. First read the current contract with `SAPRead(type="API_STATE", name="<dep>", objectType="<type>")`, verify stability with the type-aware fan-in resolver from Step 2 (`SAPContext(action="impact", type="DDLS")` for CDS; `SAPNavigate(action="references")` or cached `SAPContext(action="usages")` for non-CDS) plus owner sign-off, then call `SAPManage(action="set_api_state", name="<dep>", objectType="<type>", contract="C1", transport="<tr>")`. Contracts C0-C4 are type- and release-dependent — don't pre-judge; send the default and let SAP's error list the supported ones. The same move completes a B→A escalation: after a rewrite stabilizes a Z-API (CDS view, class), release it so every consumer drops to Level A. A released contract is a compatibility promise.
+- [`WORKFLOW.md`](./WORKFLOW.md): operator sequence and gates.
+- [`INTEGRATIONS.md`](./INTEGRATIONS.md): ARC-1, local skills, SAP skills and MCP capability map.
+- [`PATTERNS.md`](./PATTERNS.md): architecture, wrapper, execution and governance patterns.
+- [`SOURCES.md`](./SOURCES.md): evidence precedence and authoritative sources.
+- [`knowledge/clean-core-extensibility/ARC1_RUNTIME_ACTION_MAP.md`](./knowledge/clean-core-extensibility/ARC1_RUNTIME_ACTION_MAP.md): knowledge-to-runtime bridge.
 
-## Workflow
+## Refusal rules
 
-### Step 1 — Pre-flight
-
-- Verify ARC-1 MCP is connected with `SAPSearch(searchType="object", query="<pkg>", maxResults=10)`. ARC-1 is required because it is the only writer.
-- Build a capability matrix for optional lookups/reviewers: `mcp-sap-docs` / `abap_mcp_server` if available, Apify MCP if available, `@sap/cds-mcp`, context7, Fiori MCP, UI5 MCP, and companion plugin skills. Missing optional tools degrade to documented fallback/manual mode; do not block the read-only plan unless the missing tool is required for the selected execution branch. Record external SAP skills as capability names, not copied content: baseline `sap-btp-best-practices`, `sapui5-linter`, `sap-fiori-guidelines`, `sap-fiori-app-development`, `sap-fiori-tools`; plus branch-specific skills such as `sap-fiori-create-cli`, `sap-fiori-eslint-plugin`, `sapui5-cli`, `sap-fiori-add-visual-filter`, `sap-fiori-analytical-chart`, `sap-btp-service-manager`, `sap-sqlscript`, `sap-hana-cli`, `sap-hana-ml`, `sap-hana-cloud-data-intelligence`, `sap-datasphere`, `sap-sac-*`, `sap-ai-pathfinder`, `sap-ai-core`, and `sap-cloud-sdk-ai` when their triggers below apply.
-- Resolve `$TARGET` (`--target=…` or ask once).
-- One-time per system: run [`../bootstrap-system-context/SKILL.md`](../bootstrap-system-context/SKILL.md) to capture release / ATC preset / formatter into `system-info.md`. With mcp-sap-docs connected, also snapshot `abap_feature_matrix` for the captured release — Step 6a rewrites must only use language features that exist there.
-- Transport-conflict scan: [`../sap-transport-overview/SKILL.md`](../sap-transport-overview/SKILL.md) — if any object of the package sits in someone else's open transport, flag it now (an object locked in two requests stalls Step 6.5).
-- Init `.cache/sap-clean-core/` (gitignored).
-
-### Step 2 — Inventory + impact analysis
-
-- Enumerate Z*/Y* objects: `SAPRead(type="DEVC", name="<pkg>")` (walk subpackages recursively). Use `SAPSearch(searchType="tadir_lookup", names=["<object_name>"])` only for exact cross-package validation of names you already collected; `source="both"` is optional and requires SQL scope. `DEVC` omits legacy SEGW rows, so detect SEGW through MPC/DPC class names, service searches, and, when SQL is allowed, `tadir_lookup source="both"` / targeted TADIR checks.
-- Cheap red-flag pre-scan: `SAPRead(type="<source_type>", name="<object_name>", grep="EXEC SQL|CALL 'SYSTEM'|CALL TRANSACTION|SUBMIT ")` per source-bearing object — spots forbidden statements without downloading full sources; feeds the classification step's triage order (worst first).
-- Dead-code: delegate to [`../sap-unused-code/SKILL.md`](../sap-unused-code/SKILL.md) (requires `SAP_ALLOW_FREE_SQL=true`).
-- **Cluster into logical units.** TADIR granularity lies: a legacy "object" is usually N rows (main program + its includes, function group + FMs + `LZ…` includes, a CDS/RAP stack). Classification and decisions operate on the **compilation unit**, never on a bare include:
-
-| TADIR rows | Logical unit | How to resolve membership |
-|---|---|---|
-| PROG main + INCL includes | one unit | `SAPRead(type="PROG")` on the main, parse real `INCLUDE` statements, then `SAPRead(type="INCL")` for members; use `SAPContext(action="deps", type="PROG")` for dependency context and `SAPNavigate(action="references")` to detect shared includes — never `SAPContext(action="structure")`, which is TABL-only |
-| FUGR + FUNCs + `LZ…` includes | one unit | `SAPRead(type="FUGR", expand_includes=true)`; dynpros are NOT reachable via ADT — flag for manual review |
-| CLAS (+ CCDEF/CCIMP/testclasses) | one unit | ADT already treats the class as the unit |
-| DDLS + DCLS + DDLX + BDEF + SRVD + SRVB | one unit (RAP/CDS stack) | `SAPContext(action="impact", type="DDLS")` sibling detection from the CDS root |
-| SEGW MPC/DPC/`*_EXT` + model | one unit | routed to `migrate-segw-to-rap` as a whole |
-
-  An include referenced by 2+ mains is a **shared component**: it gets ONE decision, coordinated across the units that use it (`SAPNavigate(action="references")` surfaces the fan-in). ATC runs on the unit's main object; includes inherit its findings; the A-D roll-up is the worst level across the unit; the plan emits **one row per unit**, listing its members.
-- **Impact analysis** for every non-A candidate is type-aware: DDLS/RAP roots use `SAPContext(action="impact", type="DDLS", includeIndirect=<needed>)`; non-CDS objects use `SAPNavigate(action="references", type="<type>", name="<name>")`; cached `SAPContext(action="usages")` is allowed only when ARC-1 cache warmup is enabled. Fan-in count drives effort × risk:
-
-| Fan-in | Risk × | Strategy |
-|---|---|---|
-| 0 | 0× | `remove_unused` candidate |
-| 1-3 internal | 1× | low-risk `rewrite_in_place` |
-| 4-10 | 2× | medium-risk; keep a thin adapter when rewriting |
-| 11-50 | 4× | prefer `extract_to_side_by_side` if BTP available |
-| 50+ | 8× | mandatory `research_required` (architectural review) |
-
-### Step 3 — Classification
-
-Delegate to [`../sap-clean-core-atc/SKILL.md`](../sap-clean-core-atc/SKILL.md). Receive back per-unit Level A/B/C/D (ATC runs on each unit's main object) + ATC finding categories.
-
-### Step 4 — Understand, JIT lookup, decide
-
-**4-0 — Understanding pass (systematic, every non-A unit).** Before any decision, run [`../explain-abap-code/SKILL.md`](../explain-abap-code/SKILL.md) on each unit in scope: purpose, control flow, dependency context. Persist the output to `docs/refactor/analysis/<unit>.md` — it feeds the decision below, the plan's evidence column, and Step 6's rewrite/test-generation context. No SAP-side cost (reads only); Level-A units skip (nothing to decide). Deciding the fate of code nobody has read is how refactors go wrong.
-
-For each non-A finding, consult sources in this order until evidence is sufficient (bounded by `--budget`):
-
-1. **Cache hit**: `.cache/sap-clean-core/<sha256-of-topic>/<source>-<date>.md` (30-day TTL stable / 7-day community).
-2. **Tier-1 git** (free): grep `abap-atc-cr-cv-s4hc`, curated `SAP-samples`, `cloud-sdk` (all installed as local clones).
-3. **Tier-4 MCP** (free when installed): `mcp-sap-docs` / `abap_mcp_server` — `sap_get_object_details` for release states, `sap_community_search` when exposed (otherwise unified `search(includeOnline=true)`), `sap_discovery_center_service` when the service name/id is known, unified `search(...)` for reference-architecture discovery, `abap_feature_matrix` for release-gated language features, and `ui5_version_diff` for UI5 upgrade deltas when exposed; `@sap/cds-mcp` (`search_docs`/`search_model`) for the CAP side; `context7` for non-SAP libraries.
-4. **Tier-2 Apify** (paid, ~€0.005-0.02/page): `api.sap.com`, `help.sap.com`, `developers.sap.com`, community, blogs.
-5. **Pattern mining** (free, optional): `SAPRead(type="VERSIONS", name="<obj>", objectType="<type>")` + `SAPRead(type="VERSION_SOURCE", versionUri="<uri>")` for the customer's own history — find how similar Z objects have already been migrated. Cuts rewrite effort 30-50%.
-
-If budget exhausts without an answer, flag `research_required` and go back to the unit's 4-0 analysis for a deeper pass (method-level, `SAPRead` with `method` surgery) before giving up.
-
-Full source catalog: [`./SOURCES.md`](./SOURCES.md). Battle-tested patterns referenced for decision-making: [`./PATTERNS.md`](./PATTERNS.md).
-
-### Step 5 — Emit plan
-
-Write `docs/refactor/<date>-clean-core-plan.md` with one row per logical unit (members listed):
-
-| Object | Start Level | Target Level | Decision | Replacement / Pattern | Effort | Risk | KB evidence |
-
-Effort is estimated per [`PATTERNS.md §9.5`](./PATTERNS.md) (person-day model: fixed run costs + per-unit scenario × fan-in band + extra conditions); the plan header carries the fixed-cost subtotal and the grand total so stakeholders see both.
-
-**`estimate` mode — actualizing §9.5 with the real situation.** Runs the read-only pipeline up to fan-in, then matches every unit to a §9.5.2 scenario row **mechanically and auditably** — each assignment cites its signals:
-
-| Signal | Source | Drives |
-|---|---|---|
-| Unit type + member count | Step 2 clustering | scenario row (PROG/FUGR/CLAS/SEGW/RAP stack) |
-| Start level + finding categories | Step 3 classification | From→To column; mechanical-only units → covered by Phase 0 (≈0 per-unit) |
-| Fan-in count | Step 2 type-aware resolver (`SAPContext impact` for DDLS, `SAPNavigate references` / cached `SAPContext usages` for non-CDS) | multiplier band (×1/×2/×4/50+→dedicated) |
-| `REUSE_ALV_*`/`WRITE` hits, MPC/DPC members, dynpro presence | Step 2 grep pre-scan + FUGR read | report/SEGW rows; +dynpro condition |
-| Existing test classes per unit | inventory (testclasses includes) | +20–30% no-tests condition |
-
-Output `docs/refactor/<date>-effort-estimate.md`: instantiated fixed-cost table (real unit counts), per-unit table (unit, scenario, band, pd range, signals), aggregates per scenario/level, top-10 effort drivers, assumptions + confidence notes. `plan` later refines it (human decisions can move units between scenarios); `execute` logs actuals per unit so the §9.5 baselines get recalibrated per system — estimate → plan → actuals is the calibration loop that makes the numbers quotable.
-
-Plus: inventory summary, side-by-side extension catalog (per `extract` outcome), suggested sequencing (quick wins → in-place phase 1 → in-place phase 2 → side-by-side parallel), research backlog, source citations.
-
-**User reviews the plan and edits any decision** before `execute`.
-
-With `--report=dossier` (or whenever the plan must be shared with stakeholders who won't read raw markdown), delegate emission to [`../sap-migration-dossier/SKILL.md`](../sap-migration-dossier/SKILL.md): it already produces inventory + usage + ATC + clean-core review cards with Markdown/HTML/JSON/CSV/graph outputs. Feed it the per-unit decision table from this step as extra input; keep `docs/refactor/<date>-clean-core-plan.md` as the editable source of truth for `execute`.
-
-### Step 6 — Execute (opt-in)
-
-**As-found baseline (systematic, before ANY write — quickfixes included).** Two snapshots of the state you found:
-1. Source: [`../setup-abap-mirror/SKILL.md`](../setup-abap-mirror/SKILL.md) — abapGit-style local mirror, cheap `git diff` evidence for the whole run.
-2. Documentation: [`../sap-object-documenter/SKILL.md`](../sap-object-documenter/SKILL.md) batch pass over every unit in the plan → `docs/refactor/baseline/<date>/` (purpose, style Classic/Modern/Mixed, dependencies, as-is). This is the "before" picture reviewers and auditors will ask for; regenerate after Step 7 for the "after".
-
-**Phase 0 — package-wide mechanical burn-down (lights-out).** Immediately after plan approval, sweep every `rewrite_in_place` / mechanical-only object in one pass, but remember these tools transform source; they do not persist by themselves. For each source-bearing object: read active source, run `SAPDiagnose(action="quickfix", type="<type>", name="<name>", source="<source>", line=<line>, column=<column>)` at matching ATC finding positions, select only proposals whose description matches the finding, call `SAPDiagnose(action="apply_quickfix", type="<type>", name="<name>", source="<source>", line=<line>, column=<column>, proposalUri="<proposal_uri>", proposalUserContent="<proposal_user_content>")` to get text deltas, merge the deltas, run `SAPLint(action="lint_and_fix", source="<candidate>", name="<name>")`, then `SAPLint(action="format", source="<candidate>")`, validate with `SAPDiagnose(action="syntax", type="<type>", name="<name>", source="<candidate>")`, persist with `SAPWrite(action="update", type="<type>", name="<name>", source="<candidate>", transport="<phase0-tr>")`, and `SAPActivate(type="<type>", name="<name>")`. No per-object confirmation needed for this mechanical phase, but the own transport must be reviewed with `sap-transport-review`. Re-run `SAPDiagnose(action="atc", type="<type>", name="<name>")` afterwards to refresh plan numbers before the generative loop.
-
-Then, per object, ask confirmation and dispatch:
-
-| Decision | Action |
-|---|---|
-| `rewrite_in_place` | ⓪ Residual mechanical findings first: `SAPDiagnose(action="quickfix", type="<type>", name="<name>", source="<source>", line=<line>, column=<column>)` → `SAPDiagnose(action="apply_quickfix", type="<type>", name="<name>", source="<source>", line=<line>, column=<column>, proposalUri="<proposal_uri>", proposalUserContent="<proposal_user_content>")` → merge deltas into the candidate source — Phase 0 already swept the package; this catches what surfaces during the rewrite itself. ① Generate regression test via [`../generate-abap-unit-test/SKILL.md`](../generate-abap-unit-test/SKILL.md) or [`../generate-cds-unit-test/SKILL.md`](../generate-cds-unit-test/SKILL.md) (CDS on 8.16+: seed from `SAPDiagnose(action="cds_testcases", name="<cds_name>")`). ② Rewrite candidate source, run `SAPLint(action="lint_and_fix", source="<candidate>", name="<name>")`, `SAPLint(action="format", source="<candidate>")`, and `SAPDiagnose(action="syntax", type="<type>", name="<name>", source="<candidate>")`; only then `SAPWrite(action="update", type="<type>", name="<name>", source="<candidate>", transport="<tr>")` + `SAPActivate(type="<type>", name="<name>")`. ③ Cheap `sap-abap` cloud review BEFORE the ATC round-trip when the plugin exposes it. ④ `SAPDiagnose(action="atc", type="<type>", name="<name>")` + ⑤ `SAPDiagnose(action="unittest", type="<type>", name="<name>")`. ⑥ Review the edit as a diff: `SAPRead(type="<type>", name="<name>", action="diff")` active-vs-previous. ⑦ Rollback if regression: read history with `SAPRead(type="VERSIONS", objectType="<type>", name="<name>")`, fetch the chosen revision through `SAPRead(type="VERSION_SOURCE", versionUri="<revision_uri>")`, then restore it with `SAPWrite(action="update", type="<type>", name="<name>", source="<revision_source>", transport="<tr>")`. (Same ⓪–⑦ as WORKFLOW.md's cage.) For RAP behavior pool delegate to [`../generate-rap-logic/SKILL.md`](../generate-rap-logic/SKILL.md) |
-| `extract_to_side_by_side` | Delegate to [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-cap/SKILL.md). ABAP source stays deprecated-tagged until QA confirms parity. UI side: [`../convert-ui5-to-fiori-elements/SKILL.md`](../convert-ui5-to-fiori-elements/SKILL.md) (annotation-driven LROP) or [`../modernize-ui5-app/SKILL.md`](../modernize-ui5-app/SKILL.md) (freestyle TypeScript, for non-standard UX). For Level A side-by-side, run BTP/Fiori/UI5 gates according to the dependency table below; missing gates make the branch degraded/manual, not silently complete |
-| `keep_at_level_b` | Delegate to [`../sap-object-documenter/SKILL.md`](../sap-object-documenter/SKILL.md) (SKTD rationale + ATC exemption) |
-| `remove_unused` | Stakeholder sign-off → `SAPNavigate(action="references", type="<type>", name="<name>")` last-check → `SAPWrite(action="delete", type="<type>", name="<name>", transport="<tr>")` |
-
-**Branch dependency table for side-by-side / Level A paths.** Use exact commands only when the
-installed skill/plugin exposes them. If the capability is branch-MUST and no equivalent fallback is
-available, stop that branch or mark it manual/degraded in the plan.
-
-| Trigger in the plan | Severity | Companion capabilities |
-|---|---|---|
-| Any deployable BTP extension | SHOULD; branch-MUST for production, multi-subaccount/multi-region, sensitive data, principal propagation, HA/failover, or shared landscapes | `sap-btp-best-practices`, `sap-btp-developer-guide` |
-| Extension creates, binds, or automates BTP service instances | SHOULD; branch-MUST when service lifecycle is part of the deliverable | `sap-btp-service-manager` plus the target-service docs MCP / Discovery Center lookup when exposed |
-| Extension consumes S/4 APIs through destinations | SHOULD; branch-MUST when destination auth is the acceptance blocker | `sap-btp-connectivity` destination diagnostic when exposed; otherwise manual destination / Cloud Connector / auth / principal-propagation checks |
-| CAP service or side-by-side API surface | SHOULD | `sap-cap-capire`, `sap-api-style`, `@sap/cds-mcp` when exposed |
-| Fiori Elements app generated or modified | branch-MUST | `sap-fiori-app-development`, `sap-fiori-tools`; `sap-fiori-create-cli` or Fiori MCP as generation path when exposed |
-| Freestyle UI5 app generated or modernized | branch-MUST for UI quality | `sapui5-cli`, `sapui5-linter`, `sap-fiori-eslint-plugin`, local `@ui5/linter` / project lint scripts when plugin commands are absent |
-| Stakeholder-facing UI | branch-MUST | `sap-fiori-guidelines` plus browser/build verification; `sap-fiori-add-visual-filter` / `sap-fiori-analytical-chart` when the accepted UX includes those analytical controls |
-| AMDP, HANA procedures, table functions, SQLScript, HDI administration | branch-MUST | `sap-sqlscript`, `sap-hana-cli`; `sap-hana-cloud-data-intelligence` for HANA Cloud modeling/data intelligence; `sap-hana-ml` only when ML artifacts are in scope |
-| Analytics replacement targets outside embedded analytics | branch-MUST for that target | `sap-datasphere`, `sap-sac-custom-widget`, `sap-sac-planning`, `sap-sac-scripting` as applicable |
-| AI-assisted or AI-runtime extension | branch-MUST for AI branch | `sap-ai-pathfinder` for architecture fit, `sap-ai-core` for runtime/service operation, `sap-cloud-sdk-ai` for SDK implementation |
-
-**Specialized rewrite dispatches** (recognize these shapes before falling back to the generic rewrite):
-
-| Object shape | Delegate to |
-|---|---|
-| SEGW OData V2 service (MPC/DPC/MPC_EXT/DPC_EXT classes) | [`../migrate-segw-to-rap/SKILL.md`](../migrate-segw-to-rap/SKILL.md) — reverse-engineer to RAP V4, don't rewrite the generated classes |
-| Analytical Z report (ALV over aggregates, no transaction) | [`../generate-analytics-star-schema/SKILL.md`](../generate-analytics-star-schema/SKILL.md) → [`../generate-cds-analytical-query/SKILL.md`](../generate-cds-analytical-query/SKILL.md) — the clean-core successor is an embedded-analytics cube + query, not a transactional LROP |
-| Object whose plan row lists ONLY mechanical/priority ATC findings | [`../migrate-custom-code/SKILL.md`](../migrate-custom-code/SKILL.md) — the standalone finding-driven fixer covers it without the full 6a pipeline |
-
-New decision arm — `release_api`: read `SAPRead(type="API_STATE", name="<dep>", objectType="<type>")`, run `sap-api-style` review on the API surface when exposed, get owner sign-off, then `SAPManage(action="set_api_state", name="<dep>", objectType="<type>", contract="C1", transport="<tr>")` on the unreleased Z dependency (see Decision tree note). Idempotent; SAP's "No changes were made" is a no-op success.
-
-Transport: `SAPTransport(action="check", type="<type>", name="<name>", package="<package>")` → `SAPTransport(action="create", description="<description>", package="<package>")` → optional `SAPTransport(action="reassign", id="<tr>", owner="<user>")` only when ownership must change. Optional `SAPGit(action="commit")` if `SAP_ALLOW_GIT_WRITES=true`.
-
-### Step 7 — Verify
-
-Run `SAPDiagnose(action="atc", type="<type>", name="<name>")` + `SAPDiagnose(action="unittest", type="<type>", name="<name>")` on each changed source object, and use `sap-clean-core-atc` again for the package-level roll-up. Net ATC regression aborts the loop. For data-access rewrites on hot objects (direct SELECT → released `I_*` CDS view), verify performance did not regress with [`../debug-slow-sql/SKILL.md`](../debug-slow-sql/SKILL.md) — a released view with the wrong access path can be slower than the SELECT it replaced. Before releasing the transport, gate the changed set with [`../sap-transport-review/SKILL.md`](../sap-transport-review/SKILL.md) (per-object diffs + risk flags). Optional `analyze-chat-session` at session end for learnings.
-
-> **ATC skips `$TMP`/local objects** — zero findings on a local package means "not checked", not "clean". Classification and regression gates only work on transportable packages (see [`../sap-clean-core-atc/SKILL.md`](../sap-clean-core-atc/SKILL.md)).
-
-## Cost
-
-| Item | Cost |
-|---|---|
-| ARC-1 MCP / arc-1 native skills / Tier-1 git clones / MCP-server lookups | €0 |
-| Tier-2 Apify per page | €0.005-0.02 |
-| Typical refactor (50-200 objects) | **€0.50-€5 total**, user pays own Apify account |
-| Re-run within 30 days (cache hits) | €0 |
-| `--aggressive` mode delta | +30-50% |
-
-No centralized infra. No pre-built KB. Manual mode (no Apify) works at zero cost but slower.
-
-## Companion files
-
-| File | What |
-|---|---|
-| [`./README.md`](./README.md) | **Human entry point** — concise overview of what the orchestrator does, how it decides, what is safe, and which detailed file to read next |
-| [`./WORKFLOW.md`](./WORKFLOW.md) | **Operator's guide** — the 5 things you type, plus the full delegation map (which skill runs where, whether it is chain / stock arc-1 / external plugin / MCP) |
-| [`./DECISION_MATRIX.md`](./DECISION_MATRIX.md) | Canonical source-level → target-level matrix: action, trigger, skill sequence and gates per Clean Core path |
-| [`./chain.json`](./chain.json) | Machine-readable chain manifest used by `npm run check:clean-core-skills` to keep decisions, skills and gates synchronized |
-| [`./SOURCES.md`](./SOURCES.md) | 26 authoritative SAP sources + optional MCP connectors across 4 tiers (Tier-1 git / Tier-2 Apify / Tier-3 manual / Tier-4 MCP) |
-| [`./PATTERNS.md`](./PATTERNS.md) | ~90 battle-tested patterns in 9 categories (UI5/FE V4, CAP/TS, BTP/Kyma deployment target matrix, security, customizing, lifecycle, events, ecosystem plugins, **ABAP level-escalation recipes D→B / C→A / B→A**). Consulted during Step 1 target resolution, Step 4 decision, Step 6a in-place rewrite + Step 6b side-by-side scaffold |
-| [`./INTEGRATIONS.md`](./INTEGRATIONS.md) | Step-by-step mapping: refactor phase × ARC-1 MCP tool × arc-1 native skill × secondsky/sap-skills plugin |
-
-## Recommended companion plugins
-
-**Strongly recommended** (from [secondsky/sap-skills](https://github.com/secondsky/sap-skills)); if a plugin command is unavailable, continue only with the documented degraded path or make the branch manual. These are external skills/plugins: consult them when installed, but do not vendor or copy their GPL-licensed text into ARC-1 docs.
-- `sap-abap` — ABAP language patterns (Step 6 rewrite ABAP) + cloud-readiness review gate when exposed (Step 6a)
-- `sap-abap-cds` — CDS view design (Step 6 when introducing CDS)
-- `sap-cap-capire` — CAP framework + 4 dispatchable agents (Step 6 side-by-side) + CAP deployment checklist when exposed
-- `sap-btp-developer-guide` — BTP reference (Step 1 target resolution) + BTP app-readiness review when exposed
-
-**SHOULD / branch-MUST**:
-- `sap-api-style` — API-style review before every `release_api` (Step 6d) and on side-by-side `service.cds` design (Step 6b), using exact plugin commands only when exposed
-- `sap-fiori-app-development` — branch-MUST for Fiori Elements app creation/modification: decide CAP vs standalone, keep backend metadata authoritative, and use the Fiori toolchain first when exposed
-- `sap-fiori-tools` / `sap-fiori-create-cli` — branch-MUST when the Level A path includes generated Fiori Elements UI; if Fiori MCP/tooling is absent, use the documented local generator/manual fallback and mark the branch degraded
-- `sap-fiori-guidelines` — SHOULD for UX/accessibility/design review of any generated or modernized UI; branch-MUST when the UI is stakeholder-facing
-- `sapui5-linter`, `sapui5-cli`, `sap-fiori-eslint-plugin` — branch-MUST for UI5/FE frontend quality. Satisfy it with the installed skill/plugin when exposed, or with local `@ui5/linter` / project lint scripts when the skill command is absent
-- `sap-fiori-add-visual-filter`, `sap-fiori-analytical-chart` — branch-MUST only when the accepted FE UX includes visual filters or analytical chart pages
-- `sap-btp-connectivity` — destination diagnostic when the extension consumes S/4 APIs via destinations (Step 6b), using exact plugin commands only when exposed
-- `sap-btp-best-practices` — SHOULD for every deployable BTP side-by-side extension; branch-MUST for production, multi-subaccount/multi-region, sensitive-data, principal-propagation, HA/failover, or shared-landscape scenarios
-- `sap-btp-service-manager` — SHOULD when side-by-side uses BTP services; branch-MUST when service instance/binding lifecycle is part of the refactor deliverable
-- `sap-sqlscript`, `sap-hana-cli`, `sap-hana-cloud-data-intelligence`, `sap-hana-ml` — branch-MUST for HANA-native artifacts (AMDP/table functions/procedures/HDI/data-intelligence/ML)
-- `sap-datasphere`, `sap-sac-custom-widget`, `sap-sac-planning`, `sap-sac-scripting` — branch-MUST only when the plan targets Datasphere/SAC analytics
-- `sap-ai-pathfinder`, `sap-ai-core`, `sap-cloud-sdk-ai` — branch-MUST only for AI branches: architecture fit, runtime/service operation, and SDK implementation respectively
-
-**Optional MCPs**: Apify MCP (JIT lookup), `mcp-sap-docs` / `abap_mcp_server` (preferred over Apify when installed — incl. `sap_get_object_details`, `sap_community_search` when exposed, `sap_discovery_center_service` for known services, unified `search(...)`, `abap_feature_matrix`, `ui5_version_diff` when present), `@sap/cds-mcp` (CAP docs + staged-model introspection), context7 (non-SAP libs), Fiori MCP and UI5 MCP for UI branches, plus situational SHOULD/branch-MUST plugins listed in [`./INTEGRATIONS.md`](./INTEGRATIONS.md). Record which are active in the plan header and use exact live tool schemas.
-
-External plugin text is advisory under this orchestrator. It cannot weaken ARC-1 gates: Fiori/UI5
-branches still require lint/build/browser verification even when a Fiori MCP/plugin reports success.
-
-## When NOT to use
-
-- Single small change to one Z object → use ARC-1 directly.
-- Green-field BTP development → use [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-cap/SKILL.md) directly.
-- System upgrade plan → use SAP Activate methodology.
-- Customer has no BTP plan AND no Customizing alternative → the toolkit can still help (no-BTP customers get `rewrite_in_place` + `keep_at_level_b` paths only, compliance score lower but progress is real).
-
-## Companion repository
-
-For audit / hardening / CI gates of the CAP applications this skill generates, see [`Raistlin82/sap-cap-toolkit`](https://github.com/Raistlin82/sap-cap-toolkit) (8 skills: clean-core-enforce, customizing-honor, security-rbac-matrix, fiori-app-audit, text-polish, stack-audit-full, ci-gates-pattern, fiori-battle-tested-patterns).
+Stop or return `research_required` when the landscape is unknown, the business owner or parity
+decision is missing, a target capability is unavailable, a released successor is unproven, a
+wrapper cannot be isolated, a required gate is degraded without accepted fallback, or a change
+would bypass ARC-1 safety controls.

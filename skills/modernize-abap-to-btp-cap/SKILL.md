@@ -12,7 +12,7 @@ Different from [`../migrate-custom-code/SKILL.md`](../migrate-custom-code/SKILL.
 ## Input
 
 ```
-<Z-package> <target-dir> [--cap-runtime=node] [--skip=…] [--apply]
+<Z-package> <target-dir> [--deployment=cf] [--cap-runtime=node] [--skip=…] [--apply]
 ```
 
 Examples:
@@ -23,7 +23,8 @@ Examples:
 
 | Aspect | Default |
 |---|---|
-| Target | `public_cloud` (Clean Core L-A goal) |
+| Deployment | Cloud Foundry (`cf`) only; Kyma is an explicit unsupported/manual handoff |
+| Source landscape | Read from `bootstrap-system-context`; never silently assume Public Cloud |
 | CAP runtime | Node.js — the only supported value (Java deferred to v2) |
 | OData | V4 |
 | Fiori pattern | List Report + Object Page (LROP) |
@@ -40,7 +41,7 @@ The orchestrator runs the 6 sub-steps below sequentially. Each can be re-run ind
 | Step | Sub-skill | Produces |
 |---|---|---|
 | 1 | (this orchestrator) Pre-flight + skeleton | CAP `cds init`-style structure under `<target>/.target-cap-staging/`, package.json with `@sap/cds ^9` + `@cap-js/hana` + `@cap-js/sqlite` |
-| 2 | Clean Core gap analysis | `docs/clean-core-gap.md` with per-object A/B/C/D level + replacement suggestions. **Gate**: > 30% C/D → recommend `migrate-custom-code` first |
+| 2 | Clean Core gap analysis | `docs/clean-core-gap.md` with logical-unit A/B/C/D/Unknown evidence, released ERP boundary and unresolved dependencies |
 | 3 | [`../modernize-abap-cap-schema/SKILL.md`](../modernize-abap-cap-schema/SKILL.md) | `db/schema.cds` from Z-tables / DDIC structures |
 | 4 | [`../modernize-abap-cap-service/SKILL.md`](../modernize-abap-cap-service/SKILL.md) | `srv/service.cds` + handler stubs from FMs / programs |
 | 5 | Fiori Elements V4 scaffold | `app/<namespace>/` LROP with annotations |
@@ -49,18 +50,23 @@ The orchestrator runs the 6 sub-steps below sequentially. Each can be re-run ind
 ## Pre-flight
 
 ```
-SAPManage(action="probe")   # verify ARC-1 + ADT + CDS/RAP availability
+SAPManage(action="probe")
 ```
 
-If CDS/RAP unavailable → stop (cannot inventory). If package in `$TMP` → warn user to use a transportable package first.
+Inventory does not require RAP availability. If CDS/RAP features are unavailable, record which
+source artifacts cannot be modeled directly and continue with the supported ABAP/DDIC inventory.
+Block only the specific target step that requires an unavailable capability. If the package is in
+`$TMP`, require a transportable retirement/API-boundary plan before production cutover.
 
 Validate `<target-dir>` is empty or contains a previous staging output only. Refuse to overwrite an existing CAP project without explicit confirmation.
 
 ## Gates
 
-- **Clean Core gap > 30% C/D objects** → warn, recommend `migrate-custom-code` first, then retry
+- **Unknown ERP touchpoint or unreleased boundary** → stop that integration as `ResearchRequired`;
+  do not treat moving code to BTP as proof of a clean ERP boundary
 - **No released equivalent found for a critical object** → flag in `clean-core-gap.md`; user decides whether to extract custom logic to CAP side-by-side or block
 - **Target dir not empty / not staging** → refuse without `--apply` confirmation
+- **Deployment other than Cloud Foundry** → produce an architecture handoff and stop before scaffold/deploy execution
 
 If the source project has a Clean Core CI gate (`scripts/ci/check-s4-compat-coverage.sh` or equivalent), invoke it after staging — drift detection against `SAP/abap-atc-cr-cv-s4hc`.
 
@@ -126,7 +132,7 @@ For audit / hardening / CI gates of the generated CAP project, see [`Raistlin82/
 - Single-object refactor (not whole package) → invoke a sub-skill directly
 - Multi-package coordinated migration → split per package, run orchestrator N times
 - Java CAP runtime → v2 (not yet supported)
-- Kyma deployment → v2 (defaults to CF for now)
+- Kyma deployment → architecture/manual handoff; this skill executes Cloud Foundry only
 
 ## Recommended companion plugins
 

@@ -1,7 +1,45 @@
 {
-  "version": 1,
+  "version": 2,
   "orchestrator": "sap-erp-clean-core-refactor",
-  "modes": ["estimate", "plan", "execute"],
+  "modes": ["discover", "estimate", "plan", "execute", "govern"],
+  "decisionStages": [
+    "standard_first",
+    "extension_use_case",
+    "target_domain",
+    "clean_core_classification",
+    "capability_resolution",
+    "execution_and_proof"
+  ],
+  "landscapes": {
+    "s4_public_cloud": {
+      "allowedLevels": ["A"],
+      "allowedDomains": ["standard", "key_user_on_stack", "developer_on_stack", "side_by_side_cf", "hybrid", "retired"]
+    },
+    "btp_abap_environment": {
+      "allowedLevels": ["A"],
+      "allowedDomains": ["developer_on_stack", "side_by_side_cf", "hybrid", "retired"]
+    },
+    "s4_private_cloud": {
+      "allowedLevels": ["A", "B", "C_exception"],
+      "allowedDomains": ["standard", "key_user_on_stack", "developer_on_stack", "classic_on_stack", "side_by_side_cf", "hybrid", "retired"]
+    },
+    "s4_on_premise": {
+      "allowedLevels": ["A", "B", "C_exception"],
+      "allowedDomains": ["standard", "key_user_on_stack", "developer_on_stack", "classic_on_stack", "side_by_side_cf", "hybrid", "retired"]
+    }
+  },
+  "targetDomains": [
+    "standard",
+    "key_user_on_stack",
+    "developer_on_stack",
+    "classic_on_stack",
+    "side_by_side_cf",
+    "side_by_side_kyma_manual",
+    "hybrid",
+    "current_allowed_domain",
+    "retired",
+    "research"
+  ],
   "skillCoverage": {
     "self": ["sap-erp-clean-core-refactor"],
     "planCore": [
@@ -35,211 +73,299 @@
     "learning": ["analyze-chat-session"],
     "mayOnly": ["generate-rap-service"]
   },
+  "gateCatalog": {
+    "plan_approved": { "severity": "must", "executor": "human", "fallback": "block" },
+    "standard_gap_proven": { "severity": "must", "executor": "agent", "fallback": "research" },
+    "aem_recorded": { "severity": "must", "executor": "agent", "fallback": "research" },
+    "released_touchpoints": { "severity": "must", "executor": "arc-1", "fallback": "research" },
+    "transport_scoped": { "severity": "must", "executor": "arc-1", "fallback": "block" },
+    "syntax_clean": { "severity": "must", "executor": "arc-1", "fallback": "block" },
+    "atc_no_regression": { "severity": "must", "executor": "arc-1", "fallback": "block" },
+    "tests_green": { "severity": "must", "executor": "arc-1", "fallback": "human_review" },
+    "generative_diff_approved": { "severity": "must", "executor": "human", "fallback": "block" },
+    "owner_approved": { "severity": "must", "executor": "human", "fallback": "block" },
+    "parity_approved": { "severity": "must", "executor": "human", "fallback": "block" },
+    "unused_proven": { "severity": "must", "executor": "agent", "fallback": "research" },
+    "wrapper_isolated": { "severity": "must", "executor": "agent", "fallback": "block" },
+    "wrapper_exception_governed": { "severity": "must", "executor": "human", "fallback": "block" },
+    "manual_handoff_recorded": { "severity": "must", "executor": "agent", "fallback": "block" },
+    "governance_baseline": { "severity": "should", "executor": "agent", "fallback": "degraded" }
+  },
   "actions": {
     "no_action": {
+      "execution": "read_only",
       "localSkills": [],
-      "gates": ["classification evidence retained"]
+      "gates": ["released_touchpoints", "governance_baseline"],
+      "operationIds": ["atc_assessment", "read_api_state"]
+    },
+    "replace_with_standard": {
+      "execution": "hybrid",
+      "localSkills": ["sap-object-documenter"],
+      "gates": ["standard_gap_proven", "owner_approved", "parity_approved", "transport_scoped"],
+      "operationIds": ["read_source", "find_references", "delete_object", "transport_check"]
+    },
+    "replace_with_key_user_extensibility": {
+      "execution": "manual_handoff",
+      "localSkills": ["sap-object-documenter"],
+      "gates": ["standard_gap_proven", "aem_recorded", "manual_handoff_recorded", "parity_approved"],
+      "operationIds": ["read_source", "read_dependencies", "read_governance_document"]
+    },
+    "rewrite_on_stack_abap_cloud": {
+      "execution": "arc1_guarded",
+      "localSkills": ["setup-abap-mirror", "sap-object-documenter", "generate-abap-unit-test", "generate-cds-unit-test"],
+      "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "transport_scoped", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
+      "operationIds": ["read_source", "read_dependencies", "write_update", "activate_object", "atc_assessment", "run_unit_tests", "read_diff"]
     },
     "keep_at_level_b": {
+      "execution": "documented_exception",
       "localSkills": ["sap-object-documenter"],
-      "gates": ["on-prem-or-pce-only", "SKTD rationale", "ATC exemption evidence"]
+      "gates": ["aem_recorded", "owner_approved", "governance_baseline"],
+      "operationIds": ["atc_assessment", "read_governance_document"]
     },
     "release_api": {
+      "execution": "arc1_guarded",
       "localSkills": [],
-      "gates": ["API_STATE read", "type-aware fan-in", "owner sign-off", "sap-api-style when exposed", "set_api_state", "ATC reclassification"]
+      "gates": ["plan_approved", "owner_approved", "transport_scoped", "atc_no_regression"],
+      "operationIds": ["read_api_state", "find_references", "release_api", "atc_assessment"]
     },
-    "rewrite_in_place": {
-      "localSkills": ["setup-abap-mirror", "sap-object-documenter", "generate-abap-unit-test", "generate-cds-unit-test"],
-      "gates": ["quickfix first", "lint_and_fix", "format", "syntax", "write", "activate", "ATC", "unittest", "human diff"]
+    "create_or_use_wrapper": {
+      "execution": "arc1_guarded_composite",
+      "localSkills": ["setup-abap-mirror", "sap-object-documenter", "generate-abap-unit-test"],
+      "gates": ["plan_approved", "aem_recorded", "wrapper_isolated", "wrapper_exception_governed", "owner_approved", "transport_scoped", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
+      "operationIds": ["read_api_state", "find_references", "create_wrapper_class", "activate_object", "release_api", "write_update", "atc_assessment", "run_unit_tests", "write_governance_document"]
     },
-    "extract_to_side_by_side": {
-      "localSkills": [
-        "modernize-abap-to-btp-cap",
-        "modernize-abap-cap-schema",
-        "modernize-abap-cap-service",
-        "convert-ui5-to-fiori-elements",
-        "modernize-ui5-app"
-      ],
-      "gates": ["CAP compile/build", "BTP readiness", "Fiori/UI5 gates when UI exists", "QA parity", "ERP object retired or deprecated"]
+    "extract_to_side_by_side_cf": {
+      "execution": "delegated_guarded",
+      "localSkills": ["modernize-abap-to-btp-cap", "modernize-abap-cap-schema", "modernize-abap-cap-service", "convert-ui5-to-fiori-elements", "modernize-ui5-app"],
+      "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "owner_approved", "parity_approved", "transport_scoped"],
+      "operationIds": ["read_source", "read_dependencies", "read_api_state", "transport_check"]
+    },
+    "plan_kyma_side_by_side": {
+      "execution": "manual_handoff",
+      "localSkills": ["sap-migration-dossier"],
+      "gates": ["aem_recorded", "manual_handoff_recorded", "owner_approved"],
+      "operationIds": ["read_source", "read_dependencies", "read_api_state"]
+    },
+    "hybrid_extension": {
+      "execution": "composite",
+      "localSkills": ["sap-object-documenter", "modernize-abap-to-btp-cap"],
+      "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "owner_approved", "parity_approved", "transport_scoped"],
+      "operationIds": ["read_source", "read_dependencies", "read_api_state", "transport_check"]
     },
     "remove_unused": {
+      "execution": "arc1_guarded",
       "localSkills": ["sap-unused-code"],
-      "gates": ["runtime/static unused evidence", "stakeholder sign-off", "final references check", "delete via ARC-1"]
+      "gates": ["unused_proven", "owner_approved", "transport_scoped"],
+      "operationIds": ["find_references", "delete_object", "transport_check"]
     },
     "research_required": {
+      "execution": "read_only",
       "localSkills": ["explain-abap-code", "sap-migration-dossier"],
-      "gates": ["no write", "research backlog entry", "owner decision"]
+      "gates": ["manual_handoff_recorded"],
+      "operationIds": ["read_source", "read_dependencies", "find_references", "read_api_state"]
     },
     "migrate_custom_code": {
+      "execution": "arc1_guarded",
       "localSkills": ["migrate-custom-code"],
-      "gates": ["ATC finding grouping", "quickfix first", "syntax", "ATC re-run"]
+      "gates": ["plan_approved", "transport_scoped", "syntax_clean", "atc_no_regression", "tests_green"],
+      "operationIds": ["atc_assessment", "quickfix_preview", "quickfix_apply", "syntax_check", "write_update", "activate_object", "run_unit_tests"]
     },
     "migrate_segw_to_rap": {
+      "execution": "delegated_guarded",
       "localSkills": ["migrate-segw-to-rap"],
-      "gates": ["generated MPC/DPC not hand-rewritten", "RAP V4 active", "service binding published"]
+      "gates": ["plan_approved", "released_touchpoints", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
+      "operationIds": ["read_source", "batch_create_objects", "activate_batch", "publish_service_binding", "atc_assessment"]
     },
     "analytical_embedded": {
+      "execution": "delegated_guarded",
       "localSkills": ["generate-analytics-star-schema", "generate-cds-analytical-query"],
-      "gates": ["cube generated", "analytical query generated", "ATC", "performance check when hot"]
+      "gates": ["plan_approved", "syntax_clean", "atc_no_regression", "generative_diff_approved"],
+      "operationIds": ["batch_create_objects", "activate_batch", "atc_assessment"]
     },
     "rap_logic": {
+      "execution": "delegated_guarded",
       "localSkills": ["generate-rap-logic"],
-      "gates": ["behavior pool syntax", "ATC", "unittest"]
+      "gates": ["plan_approved", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
+      "operationIds": ["write_update", "activate_object", "atc_assessment", "run_unit_tests"]
     },
     "rap_full_stack_researched": {
+      "execution": "delegated_guarded",
       "localSkills": ["generate-rap-service-researched"],
-      "gates": ["research summary", "plan approval", "syntax", "ATC", "activation"]
+      "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
+      "operationIds": ["batch_create_objects", "activate_batch", "publish_service_binding", "atc_assessment", "run_unit_tests"]
     },
     "greenfield_rap_may": {
+      "execution": "may_only",
       "localSkills": ["generate-rap-service"],
-      "gates": ["MAY only", "not default for production refactor"]
+      "gates": ["owner_approved"],
+      "operationIds": ["batch_create_objects", "activate_batch"]
     }
   },
   "decisions": [
     {
-      "id": "A_TO_A_NO_ACTION",
-      "source": ["A"],
-      "target": "A",
-      "action": "no_action",
-      "default": true,
-      "trigger": "Unit already uses released APIs or an allowed extension model."
-    },
-    {
-      "id": "B_TO_B_KEEP_B",
-      "source": ["B"],
-      "target": "B",
-      "action": "keep_at_level_b",
-      "default": true,
-      "trigger": "On-prem/PCE unit is compliant enough and A is not worth the cost."
-    },
-    {
-      "id": "B_TO_A_RELEASE_API",
-      "source": ["B"],
-      "target": "A",
-      "action": "release_api",
-      "default": true,
-      "trigger": "Stable Z/Y API can be released to make consumers A."
-    },
-    {
-      "id": "B_TO_A_REWRITE_IN_PLACE",
-      "source": ["B"],
-      "target": "A",
-      "action": "rewrite_in_place",
-      "default": false,
-      "trigger": "B dependency has a verified released successor."
-    },
-    {
-      "id": "B_TO_A_EXTRACT_SIDE_BY_SIDE",
-      "source": ["B"],
-      "target": "A",
-      "action": "extract_to_side_by_side",
-      "default": false,
-      "trigger": "A cannot be reached safely inside ERP."
-    },
-    {
-      "id": "C_TO_B_REWRITE_IN_PLACE",
-      "source": ["C"],
-      "target": "B",
-      "action": "rewrite_in_place",
-      "default": true,
-      "trigger": "Internal API can land on a documented on-prem construct."
-    },
-    {
-      "id": "C_TO_A_REWRITE_IN_PLACE",
-      "source": ["C"],
-      "target": "A",
-      "action": "rewrite_in_place",
-      "default": true,
-      "trigger": "Internal/unreleased construct has a verified released successor."
-    },
-    {
-      "id": "C_TO_A_RELEASE_API",
-      "source": ["C"],
-      "target": "A",
-      "action": "release_api",
-      "default": true,
-      "trigger": "C is caused only by consuming unreleased Z/Y dependency."
-    },
-    {
-      "id": "C_TO_A_EXTRACT_SIDE_BY_SIDE",
-      "source": ["C"],
-      "target": "A",
-      "action": "extract_to_side_by_side",
-      "default": true,
-      "trigger": "GUI-bound or side-by-side replacement is cleaner."
-    },
-    {
-      "id": "D_TO_B_REWRITE_IN_PLACE",
-      "source": ["D"],
-      "target": "B",
-      "action": "rewrite_in_place",
-      "default": true,
-      "trigger": "No-API-zone finding can land on documented on-prem construct."
-    },
-    {
-      "id": "D_TO_A_EXTRACT_SIDE_BY_SIDE",
-      "source": ["D"],
-      "target": "A",
-      "action": "extract_to_side_by_side",
-      "default": true,
-      "trigger": "D finding cannot be made cloud-clean inside ERP or Public Cloud forbids B."
-    },
-    {
-      "id": "D_TO_A_REWRITE_IN_PLACE_RARE",
-      "source": ["D"],
-      "target": "A",
-      "action": "rewrite_in_place",
-      "default": false,
-      "trigger": "D finding has a verified released direct successor."
+      "id": "STANDARD_FIRST",
+      "precedence": 10,
+      "sourceLevels": ["A", "B", "C", "D", "Unknown"],
+      "targetLevel": "A",
+      "targetDomain": "standard",
+      "action": "replace_with_standard",
+      "conditions": [{ "fact": "standardParity", "equals": "acceptable" }],
+      "trigger": "SAP standard covers the business requirement with acceptable parity.",
+      "evidenceRequired": ["business requirement", "standard capability", "parity decision"]
     },
     {
       "id": "ANY_TO_REMOVED",
-      "source": ["Any"],
-      "target": "Removed",
+      "precedence": 20,
+      "sourceLevels": ["A", "B", "C", "D", "Unknown"],
+      "targetLevel": "Removed",
+      "targetDomain": "retired",
       "action": "remove_unused",
-      "default": true,
-      "trigger": "Runtime/static evidence says no real consumers."
+      "conditions": [{ "fact": "unusedProven", "equals": true }],
+      "trigger": "Runtime and static evidence show no valid consumer.",
+      "evidenceRequired": ["runtime usage", "static references", "owner approval"]
     },
     {
-      "id": "ANY_TO_RESEARCH_REQUIRED",
-      "source": ["Any"],
-      "target": "ResearchRequired",
+      "id": "KEY_USER_LEVEL_A",
+      "precedence": 30,
+      "sourceLevels": ["B", "C", "D", "Unknown"],
+      "targetLevel": "A",
+      "targetDomain": "key_user_on_stack",
+      "action": "replace_with_key_user_extensibility",
+      "conditions": [{ "fact": "keyUserFit", "equals": true }, { "fact": "releasedExtensionPoint", "equals": true }],
+      "trigger": "The requirement fits an available key-user extension point, custom field, UI adaptation, form or custom business object.",
+      "evidenceRequired": ["extension use case", "released extension point", "manual implementation handoff"]
+    },
+    {
+      "id": "A_RETAIN",
+      "precedence": 40,
+      "sourceLevels": ["A"],
+      "targetLevel": "A",
+      "targetDomain": "current_allowed_domain",
+      "action": "no_action",
+      "conditions": [{ "fact": "allTouchpointsReleased", "equals": true }, { "fact": "technologyAllowed", "equals": true }],
+      "trigger": "The current implementation already uses allowed technology and all relevant touchpoints are released.",
+      "evidenceRequired": ["ATC assessment", "API release state"]
+    },
+    {
+      "id": "CUSTOM_API_RELEASE",
+      "precedence": 50,
+      "sourceLevels": ["B", "C"],
+      "targetLevel": "ArchitectureDependent",
+      "targetDomain": "current_allowed_domain",
+      "action": "release_api",
+      "conditions": [{ "fact": "customerOwnedApi", "equals": true }, { "fact": "onlyUnreleasedDependency", "equals": true }, { "fact": "supportedReleaseContract", "equals": true }],
+      "trigger": "Consumers are non-A only because a stable customer-owned API lacks a supported release contract.",
+      "evidenceRequired": ["supported contract", "fan-in", "API owner approval"]
+    },
+    {
+      "id": "ON_STACK_LEVEL_A",
+      "precedence": 60,
+      "sourceLevels": ["B", "C", "D"],
+      "targetLevel": "A",
+      "targetDomain": "developer_on_stack",
+      "action": "rewrite_on_stack_abap_cloud",
+      "conditions": [{ "fact": "selectedDomain", "equals": "developer_on_stack" }, { "fact": "releasedSuccessor", "equals": true }],
+      "trigger": "The requirement is tightly coupled to the S/4 process, requires transaction consistency or high-volume local data access, and released touchpoints exist.",
+      "evidenceRequired": ["AEM decision", "released successor", "ATC assessment"]
+    },
+    {
+      "id": "WRAPPER_CLASSIC",
+      "precedence": 70,
+      "sourceLevels": ["B", "C", "D"],
+      "targetLevel": "A+B",
+      "targetDomain": "developer_on_stack",
+      "action": "create_or_use_wrapper",
+      "conditions": [{ "fact": "selectedDomain", "equals": "developer_on_stack" }, { "fact": "landscape", "in": ["s4_private_cloud", "s4_on_premise"] }, { "fact": "releasedSuccessor", "equals": false }, { "fact": "classicApiAvailable", "equals": true }, { "fact": "wrapperApproved", "equals": true }],
+      "trigger": "No released successor exists, a classic documented API can be isolated, and the landscape permits managed Level B debt.",
+      "evidenceRequired": ["no released successor", "wrapper isolation", "exception governance"]
+    },
+    {
+      "id": "WRAPPER_INTERNAL",
+      "precedence": 71,
+      "sourceLevels": ["C", "D"],
+      "targetLevel": "A+C",
+      "targetDomain": "developer_on_stack",
+      "action": "create_or_use_wrapper",
+      "conditions": [{ "fact": "selectedDomain", "equals": "developer_on_stack" }, { "fact": "landscape", "in": ["s4_private_cloud", "s4_on_premise"] }, { "fact": "releasedSuccessor", "equals": false }, { "fact": "classicApiAvailable", "equals": false }, { "fact": "internalExceptionApproved", "equals": true }],
+      "trigger": "No released or classic successor exists, an internal dependency is unavoidable, and a time-bound Level C exception is approved.",
+      "evidenceRequired": ["no released or classic successor", "wrapper isolation", "exception approval", "retirement trigger"]
+    },
+    {
+      "id": "SIDE_BY_SIDE_CF",
+      "precedence": 80,
+      "sourceLevels": ["B", "C", "D", "Unknown"],
+      "targetLevel": "A",
+      "targetDomain": "side_by_side_cf",
+      "action": "extract_to_side_by_side_cf",
+      "conditions": [{ "fact": "selectedDomain", "equals": "side_by_side_cf" }, { "fact": "releasedIntegrationBoundary", "equals": true }],
+      "trigger": "The use case needs independent lifecycle, SaaS or multi-system reach, non-SAP users, mobile/freestyle UX, loose coupling or independent scale.",
+      "evidenceRequired": ["AEM decision", "released integration API", "parity plan"]
+    },
+    {
+      "id": "SIDE_BY_SIDE_KYMA_MANUAL",
+      "precedence": 81,
+      "sourceLevels": ["B", "C", "D", "Unknown"],
+      "targetLevel": "ArchitectureDependent",
+      "targetDomain": "side_by_side_kyma_manual",
+      "action": "plan_kyma_side_by_side",
+      "conditions": [{ "fact": "selectedDomain", "equals": "side_by_side_kyma" }],
+      "trigger": "Kyma is selected, but the current CAP execution skill supports Cloud Foundry only.",
+      "evidenceRequired": ["AEM decision", "Kyma architecture handoff"]
+    },
+    {
+      "id": "HYBRID",
+      "precedence": 90,
+      "sourceLevels": ["B", "C", "D", "Unknown"],
+      "targetLevel": "ArchitectureDependent",
+      "targetDomain": "hybrid",
+      "action": "hybrid_extension",
+      "conditions": [{ "fact": "selectedDomain", "equals": "hybrid" }, { "fact": "releasedIntegrationBoundary", "equals": true }],
+      "trigger": "The requirement has both tightly coupled on-stack and independently operated side-by-side responsibilities.",
+      "evidenceRequired": ["responsibility split", "released integration boundary", "joint parity plan"]
+    },
+    {
+      "id": "B_KEEP_PRIVATE",
+      "precedence": 100,
+      "sourceLevels": ["B"],
+      "targetLevel": "B",
+      "targetDomain": "classic_on_stack",
+      "action": "keep_at_level_b",
+      "conditions": [{ "fact": "landscape", "in": ["s4_private_cloud", "s4_on_premise"] }, { "fact": "selectedDomain", "equals": "classic_on_stack" }, { "fact": "documentedClassicTechnology", "equals": true }],
+      "trigger": "Private Edition or on-premise permits Level B, no justified Level A business case exists, and the classic API or extension technology is documented.",
+      "evidenceRequired": ["landscape", "AEM rationale", "owner approval"]
+    },
+    {
+      "id": "MECHANICAL_REMEDIATION",
+      "precedence": 110,
+      "sourceLevels": ["B", "C", "D"],
+      "targetLevel": "ArchitectureDependent",
+      "targetDomain": "current_allowed_domain",
+      "action": "migrate_custom_code",
+      "conditions": [{ "fact": "deterministicFindingsOnly", "equals": true }],
+      "trigger": "All selected findings have deterministic SAP quick fixes or bounded mechanical corrections.",
+      "evidenceRequired": ["ATC findings", "quickfix proposals", "transport approval"]
+    },
+    {
+      "id": "ANY_TO_RESEARCH",
+      "precedence": 999,
+      "sourceLevels": ["A", "B", "C", "D", "Unknown"],
+      "targetLevel": "ResearchRequired",
+      "targetDomain": "research",
       "action": "research_required",
-      "default": true,
-      "trigger": "Successor, ownership, fan-in, compliance target or parity is uncertain."
+      "conditions": [{ "always": true }],
+      "trigger": "Required evidence, successor, ownership, target architecture, capability or parity is uncertain.",
+      "evidenceRequired": ["open questions", "owner", "next evidence action"]
     }
   ],
   "specializedDispatches": [
-    {
-      "condition": "only mechanical or quickfixable ATC findings",
-      "parentActions": ["rewrite_in_place"],
-      "action": "migrate_custom_code"
-    },
-    {
-      "condition": "SEGW OData V2 service",
-      "parentActions": ["rewrite_in_place", "extract_to_side_by_side"],
-      "action": "migrate_segw_to_rap"
-    },
-    {
-      "condition": "analytical ALV or read-only aggregate report",
-      "parentActions": ["rewrite_in_place"],
-      "action": "analytical_embedded"
-    },
-    {
-      "condition": "RAP behavior implementation gap",
-      "parentActions": ["rewrite_in_place"],
-      "action": "rap_logic"
-    },
-    {
-      "condition": "full production RAP stack, rare",
-      "parentActions": ["rewrite_in_place"],
-      "action": "rap_full_stack_researched"
-    },
-    {
-      "condition": "small greenfield CRUD prototype, not refactor default",
-      "mode": "mayOnly",
-      "parentActions": [],
-      "action": "greenfield_rap_may"
-    }
-  ]
+    { "condition": "SEGW OData V2 service", "parentActions": ["rewrite_on_stack_abap_cloud", "extract_to_side_by_side_cf"], "action": "migrate_segw_to_rap" },
+    { "condition": "analytical ALV or read-only aggregate report", "parentActions": ["rewrite_on_stack_abap_cloud"], "action": "analytical_embedded" },
+    { "condition": "RAP behavior implementation gap", "parentActions": ["rewrite_on_stack_abap_cloud"], "action": "rap_logic" },
+    { "condition": "full production RAP stack", "parentActions": ["rewrite_on_stack_abap_cloud"], "action": "rap_full_stack_researched" },
+    { "condition": "small greenfield CRUD prototype, never a production refactor default", "mode": "mayOnly", "parentActions": [], "action": "greenfield_rap_may" }
+  ],
+  "governance": {
+    "mandatoryBaseline": ["clean_core_share", "technical_debt_score", "unused_code_share", "business_modifications"],
+    "continuousControls": ["atc_regression", "wrapper_successor_watch", "exception_expiry", "unused_code_refresh", "sap_api_changelog_review"]
+  }
 }
