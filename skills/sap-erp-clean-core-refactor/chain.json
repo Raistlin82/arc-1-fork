@@ -1,0 +1,245 @@
+{
+  "version": 1,
+  "orchestrator": "sap-erp-clean-core-refactor",
+  "modes": ["estimate", "plan", "execute"],
+  "skillCoverage": {
+    "self": ["sap-erp-clean-core-refactor"],
+    "planCore": [
+      "bootstrap-system-context",
+      "sap-transport-overview",
+      "sap-unused-code",
+      "sap-clean-core-atc",
+      "explain-abap-code",
+      "sap-migration-dossier"
+    ],
+    "executeBaseline": ["setup-abap-mirror", "sap-object-documenter"],
+    "rewriteCore": [
+      "generate-abap-unit-test",
+      "generate-cds-unit-test",
+      "generate-rap-logic",
+      "generate-rap-service-researched",
+      "migrate-custom-code",
+      "migrate-segw-to-rap",
+      "generate-analytics-star-schema",
+      "generate-cds-analytical-query",
+      "debug-slow-sql"
+    ],
+    "sideBySide": [
+      "modernize-abap-to-btp-cap",
+      "modernize-abap-cap-schema",
+      "modernize-abap-cap-service",
+      "convert-ui5-to-fiori-elements",
+      "modernize-ui5-app"
+    ],
+    "releaseAndTransport": ["sap-transport-review"],
+    "learning": ["analyze-chat-session"],
+    "mayOnly": ["generate-rap-service"]
+  },
+  "actions": {
+    "no_action": {
+      "localSkills": [],
+      "gates": ["classification evidence retained"]
+    },
+    "keep_at_level_b": {
+      "localSkills": ["sap-object-documenter"],
+      "gates": ["on-prem-or-pce-only", "SKTD rationale", "ATC exemption evidence"]
+    },
+    "release_api": {
+      "localSkills": [],
+      "gates": ["API_STATE read", "type-aware fan-in", "owner sign-off", "sap-api-style when exposed", "set_api_state", "ATC reclassification"]
+    },
+    "rewrite_in_place": {
+      "localSkills": ["setup-abap-mirror", "sap-object-documenter", "generate-abap-unit-test", "generate-cds-unit-test"],
+      "gates": ["quickfix first", "lint_and_fix", "format", "syntax", "write", "activate", "ATC", "unittest", "human diff"]
+    },
+    "extract_to_side_by_side": {
+      "localSkills": [
+        "modernize-abap-to-btp-cap",
+        "modernize-abap-cap-schema",
+        "modernize-abap-cap-service",
+        "convert-ui5-to-fiori-elements",
+        "modernize-ui5-app"
+      ],
+      "gates": ["CAP compile/build", "BTP readiness", "Fiori/UI5 gates when UI exists", "QA parity", "ERP object retired or deprecated"]
+    },
+    "remove_unused": {
+      "localSkills": ["sap-unused-code"],
+      "gates": ["runtime/static unused evidence", "stakeholder sign-off", "final references check", "delete via ARC-1"]
+    },
+    "research_required": {
+      "localSkills": ["explain-abap-code", "sap-migration-dossier"],
+      "gates": ["no write", "research backlog entry", "owner decision"]
+    },
+    "migrate_custom_code": {
+      "localSkills": ["migrate-custom-code"],
+      "gates": ["ATC finding grouping", "quickfix first", "syntax", "ATC re-run"]
+    },
+    "migrate_segw_to_rap": {
+      "localSkills": ["migrate-segw-to-rap"],
+      "gates": ["generated MPC/DPC not hand-rewritten", "RAP V4 active", "service binding published"]
+    },
+    "analytical_embedded": {
+      "localSkills": ["generate-analytics-star-schema", "generate-cds-analytical-query"],
+      "gates": ["cube generated", "analytical query generated", "ATC", "performance check when hot"]
+    },
+    "rap_logic": {
+      "localSkills": ["generate-rap-logic"],
+      "gates": ["behavior pool syntax", "ATC", "unittest"]
+    },
+    "rap_full_stack_researched": {
+      "localSkills": ["generate-rap-service-researched"],
+      "gates": ["research summary", "plan approval", "syntax", "ATC", "activation"]
+    },
+    "greenfield_rap_may": {
+      "localSkills": ["generate-rap-service"],
+      "gates": ["MAY only", "not default for production refactor"]
+    }
+  },
+  "decisions": [
+    {
+      "id": "A_TO_A_NO_ACTION",
+      "source": ["A"],
+      "target": "A",
+      "action": "no_action",
+      "default": true,
+      "trigger": "Unit already uses released APIs or an allowed extension model."
+    },
+    {
+      "id": "B_TO_B_KEEP_B",
+      "source": ["B"],
+      "target": "B",
+      "action": "keep_at_level_b",
+      "default": true,
+      "trigger": "On-prem/PCE unit is compliant enough and A is not worth the cost."
+    },
+    {
+      "id": "B_TO_A_RELEASE_API",
+      "source": ["B"],
+      "target": "A",
+      "action": "release_api",
+      "default": true,
+      "trigger": "Stable Z/Y API can be released to make consumers A."
+    },
+    {
+      "id": "B_TO_A_REWRITE_IN_PLACE",
+      "source": ["B"],
+      "target": "A",
+      "action": "rewrite_in_place",
+      "default": false,
+      "trigger": "B dependency has a verified released successor."
+    },
+    {
+      "id": "B_TO_A_EXTRACT_SIDE_BY_SIDE",
+      "source": ["B"],
+      "target": "A",
+      "action": "extract_to_side_by_side",
+      "default": false,
+      "trigger": "A cannot be reached safely inside ERP."
+    },
+    {
+      "id": "C_TO_B_REWRITE_IN_PLACE",
+      "source": ["C"],
+      "target": "B",
+      "action": "rewrite_in_place",
+      "default": true,
+      "trigger": "Internal API can land on a documented on-prem construct."
+    },
+    {
+      "id": "C_TO_A_REWRITE_IN_PLACE",
+      "source": ["C"],
+      "target": "A",
+      "action": "rewrite_in_place",
+      "default": true,
+      "trigger": "Internal/unreleased construct has a verified released successor."
+    },
+    {
+      "id": "C_TO_A_RELEASE_API",
+      "source": ["C"],
+      "target": "A",
+      "action": "release_api",
+      "default": true,
+      "trigger": "C is caused only by consuming unreleased Z/Y dependency."
+    },
+    {
+      "id": "C_TO_A_EXTRACT_SIDE_BY_SIDE",
+      "source": ["C"],
+      "target": "A",
+      "action": "extract_to_side_by_side",
+      "default": true,
+      "trigger": "GUI-bound or side-by-side replacement is cleaner."
+    },
+    {
+      "id": "D_TO_B_REWRITE_IN_PLACE",
+      "source": ["D"],
+      "target": "B",
+      "action": "rewrite_in_place",
+      "default": true,
+      "trigger": "No-API-zone finding can land on documented on-prem construct."
+    },
+    {
+      "id": "D_TO_A_EXTRACT_SIDE_BY_SIDE",
+      "source": ["D"],
+      "target": "A",
+      "action": "extract_to_side_by_side",
+      "default": true,
+      "trigger": "D finding cannot be made cloud-clean inside ERP or Public Cloud forbids B."
+    },
+    {
+      "id": "D_TO_A_REWRITE_IN_PLACE_RARE",
+      "source": ["D"],
+      "target": "A",
+      "action": "rewrite_in_place",
+      "default": false,
+      "trigger": "D finding has a verified released direct successor."
+    },
+    {
+      "id": "ANY_TO_REMOVED",
+      "source": ["Any"],
+      "target": "Removed",
+      "action": "remove_unused",
+      "default": true,
+      "trigger": "Runtime/static evidence says no real consumers."
+    },
+    {
+      "id": "ANY_TO_RESEARCH_REQUIRED",
+      "source": ["Any"],
+      "target": "ResearchRequired",
+      "action": "research_required",
+      "default": true,
+      "trigger": "Successor, ownership, fan-in, compliance target or parity is uncertain."
+    }
+  ],
+  "specializedDispatches": [
+    {
+      "condition": "only mechanical or quickfixable ATC findings",
+      "parentActions": ["rewrite_in_place"],
+      "action": "migrate_custom_code"
+    },
+    {
+      "condition": "SEGW OData V2 service",
+      "parentActions": ["rewrite_in_place", "extract_to_side_by_side"],
+      "action": "migrate_segw_to_rap"
+    },
+    {
+      "condition": "analytical ALV or read-only aggregate report",
+      "parentActions": ["rewrite_in_place"],
+      "action": "analytical_embedded"
+    },
+    {
+      "condition": "RAP behavior implementation gap",
+      "parentActions": ["rewrite_in_place"],
+      "action": "rap_logic"
+    },
+    {
+      "condition": "full production RAP stack, rare",
+      "parentActions": ["rewrite_in_place"],
+      "action": "rap_full_stack_researched"
+    },
+    {
+      "condition": "small greenfield CRUD prototype, not refactor default",
+      "mode": "mayOnly",
+      "parentActions": [],
+      "action": "greenfield_rap_may"
+    }
+  ]
+}

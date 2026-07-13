@@ -286,7 +286,7 @@ Use this reference to assess whether the LLM used the right tools. This is a con
 1. Read first (understand current state)
 2. `SAPWrite action=create` or `action=update` or `action=edit_method`
 3. `SAPActivate` (single or batch with `objects[]`)
-4. `SAPDiagnose(action="syntax", type="<type>", name="<name>", version="inactive")` or `SAPDiagnose(action="unittest", type="<type>", name="<name>")` to verify
+4. `SAPRead(type="<type>", name="<name>")` then `SAPDiagnose(action="syntax", type="<type>", name="<name>", source="<saved_source>")`, or `SAPDiagnose(action="unittest", type="<type>", name="<name>")` to verify
 
 ### Context & Navigation
 - `SAPContext action=deps` — dependency graph (preferred over manual reads)

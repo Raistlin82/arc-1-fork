@@ -68,6 +68,7 @@
     "validate:policy": "tsx scripts/validate-action-policy.ts",
     "check:sizes": "node scripts/ci/check-file-sizes.mjs && tsx scripts/ci/check-tool-schema-budget.ts",
     "check:skill-refs": "node scripts/ci/check-skill-tool-refs.mjs",
+    "check:clean-core-skills": "node scripts/ci/check-clean-core-skills.mjs",
     "cli": "tsx src/cli.ts",
     "extract-sap-cookies": "tsx src/extract-sap-cookies.ts",
     "probe": "tsx scripts/probe-adt-types.ts",

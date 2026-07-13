@@ -106,7 +106,7 @@ an inactive draft) — there is no "before" revision to diff against. Handle it 
 
 - **Impact** (a changed `DDLS`/`BDEF`/`SRVD` can break consumers): resolve the bound/root CDS view first, then run `SAPContext(action="impact", type="DDLS", name="<view>")` → projection views, BDEFs, service defs/bindings, ABAP consumers that depend on it.
 - **Quality**: `SAPDiagnose(action="atc", type="<type>", name="<name>")` per changed object → new ATC findings the change introduces; or `SAPLint(action="lint", source="<source>", name="<name>")` for a fast local pass after reading the changed source.
-- **Pre-release validity**: for unactivated work, `SAPDiagnose(action="syntax", type="<type>", name="<name>", version="inactive")` confirms the draft compiles before you stake a release on it; then activate with `SAPActivate(type="<type>", name="<name>")` or a batch `SAPActivate(objects=[{type:"<type>", name:"<name>"}])`.
+- **Pre-release validity**: for unactivated work, read the saved source and run `SAPDiagnose(action="syntax", type="<type>", name="<name>", source="<saved_source>")` before you stake a release on it; then activate with `SAPActivate(type="<type>", name="<name>")` or a batch `SAPActivate(objects=[{type:"<type>", name:"<name>"}])`.
 
 ## Step 5: Write the report
 

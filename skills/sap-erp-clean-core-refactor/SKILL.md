@@ -218,6 +218,8 @@ No centralized infra. No pre-built KB. Manual mode (no Apify) works at zero cost
 | File | What |
 |---|---|
 | [`./WORKFLOW.md`](./WORKFLOW.md) | **Operator's guide** — the 5 things you type, plus the full delegation map (which skill runs where, whether it is chain / stock arc-1 / external plugin / MCP) |
+| [`./DECISION_MATRIX.md`](./DECISION_MATRIX.md) | Canonical source-level → target-level matrix: action, trigger, skill sequence and gates per Clean Core path |
+| [`./chain.json`](./chain.json) | Machine-readable chain manifest used by `npm run check:clean-core-skills` to keep decisions, skills and gates synchronized |
 | [`./SOURCES.md`](./SOURCES.md) | 26 authoritative SAP sources + optional MCP connectors across 4 tiers (Tier-1 git / Tier-2 Apify / Tier-3 manual / Tier-4 MCP) |
 | [`./PATTERNS.md`](./PATTERNS.md) | ~90 battle-tested patterns in 9 categories (UI5/FE V4, CAP/TS, BTP/Kyma deployment target matrix, security, customizing, lifecycle, events, ecosystem plugins, **ABAP level-escalation recipes D→B / C→A / B→A**). Consulted during Step 1 target resolution, Step 4 decision, Step 6a in-place rewrite + Step 6b side-by-side scaffold |
 | [`./INTEGRATIONS.md`](./INTEGRATIONS.md) | Step-by-step mapping: refactor phase × ARC-1 MCP tool × arc-1 native skill × secondsky/sap-skills plugin |

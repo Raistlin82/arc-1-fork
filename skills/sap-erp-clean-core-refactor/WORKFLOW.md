@@ -184,6 +184,8 @@ flowchart TD
 ## See also
 
 - [`SKILL.md`](./SKILL.md) — the protocol this guide is the operator view of
+- [`DECISION_MATRIX.md`](./DECISION_MATRIX.md) — canonical source-level → target-level action matrix
+- [`chain.json`](./chain.json) — machine-readable chain manifest validated by `npm run check:clean-core-skills`
 - [`INTEGRATIONS.md`](./INTEGRATIONS.md) — the same mapping at sub-step granularity (tool × skill × plugin per step)
 - [`PATTERNS.md`](./PATTERNS.md) — Category 9: the per-finding escalation recipes used during rewrites
 - [`SOURCES.md`](./SOURCES.md) — where the evidence for every decision comes from
