@@ -17,6 +17,7 @@ const SKILLS_DIR = 'skills';
 const CLEAN_CORE_DIR = join(SKILLS_DIR, 'sap-erp-clean-core-refactor');
 const CHAIN_JSON = join(CLEAN_CORE_DIR, 'chain.json');
 const DECISION_MATRIX = join(CLEAN_CORE_DIR, 'DECISION_MATRIX.md');
+const README = join(CLEAN_CORE_DIR, 'README.md');
 const WORKFLOW = join(CLEAN_CORE_DIR, 'WORKFLOW.md');
 const SKILL_MD = join(CLEAN_CORE_DIR, 'SKILL.md');
 
@@ -63,6 +64,7 @@ function lineOf(text, index) {
 
 if (!existsSync(CHAIN_JSON)) fail(`${CHAIN_JSON} is missing`);
 if (!existsSync(DECISION_MATRIX)) fail(`${DECISION_MATRIX} is missing`);
+if (!existsSync(README)) fail(`${README} is missing`);
 
 let chain;
 if (existsSync(CHAIN_JSON)) {
@@ -136,9 +138,15 @@ if (chain) {
     if (!matrix.includes(`\`${action}\``)) fail(`${DECISION_MATRIX} does not mention action ${action}`);
   }
 
+  const readme = existsSync(README) ? readText(README) : '';
+  for (const required of ['SKILL.md', 'WORKFLOW.md', 'DECISION_MATRIX.md', 'chain.json', 'INTEGRATIONS.md', 'PATTERNS.md', 'SOURCES.md']) {
+    if (readme && !readme.includes(required)) fail(`${README} should reference ${required}`);
+  }
+
   for (const file of [WORKFLOW, SKILL_MD]) {
     if (existsSync(file)) {
       const text = readText(file);
+      if (!text.includes('README.md')) fail(`${file} should reference README.md`);
       if (!text.includes('DECISION_MATRIX.md')) fail(`${file} should reference DECISION_MATRIX.md`);
       if (!text.includes('chain.json')) fail(`${file} should reference chain.json`);
     }

@@ -183,6 +183,7 @@ flowchart TD
 
 ## See also
 
+- [`README.md`](./README.md) — readable overview and recommended first stop
 - [`SKILL.md`](./SKILL.md) — the protocol this guide is the operator view of
 - [`DECISION_MATRIX.md`](./DECISION_MATRIX.md) — canonical source-level → target-level action matrix
 - [`chain.json`](./chain.json) — machine-readable chain manifest validated by `npm run check:clean-core-skills`

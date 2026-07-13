@@ -217,6 +217,7 @@ No centralized infra. No pre-built KB. Manual mode (no Apify) works at zero cost
 
 | File | What |
 |---|---|
+| [`./README.md`](./README.md) | **Human entry point** — concise overview of what the orchestrator does, how it decides, what is safe, and which detailed file to read next |
 | [`./WORKFLOW.md`](./WORKFLOW.md) | **Operator's guide** — the 5 things you type, plus the full delegation map (which skill runs where, whether it is chain / stock arc-1 / external plugin / MCP) |
 | [`./DECISION_MATRIX.md`](./DECISION_MATRIX.md) | Canonical source-level → target-level matrix: action, trigger, skill sequence and gates per Clean Core path |
 | [`./chain.json`](./chain.json) | Machine-readable chain manifest used by `npm run check:clean-core-skills` to keep decisions, skills and gates synchronized |
