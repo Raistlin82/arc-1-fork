@@ -132,7 +132,8 @@ Release happens only after `sap-transport-review`; ARC-1 performs its inactive-o
 
 | Target/action | Current status | Runtime behavior |
 |---|---|---|
-| On-stack ABAP Cloud | Executable through ARC-1 for supported ADT object types | Generate, validate, write and activate under normal gates |
+| Embedded ABAP Cloud on-stack | Executable through ARC-1 for supported ADT object types | Generate, validate, write and activate under normal gates |
+| SAP BTP ABAP Environment side-by-side | Executable through a distinct target ARC-1 context | Prove the remote released boundary and target ABAP Cloud package/language before writes |
 | Cloud Foundry CAP | Executable through the common side-by-side contract and conditional CAP chain | ARC-1 manages ERP evidence/API boundary and later retirement |
 | Key User | Planning and handoff | Record SAP app/tool, extension point, owner and acceptance tests; no invented ARC-1 mutation |
 | Kyma CAP | Executable preparation through the same CAP chain plus official CAP Kyma/Helm tooling | Require a concrete Kubernetes need and actual cluster/registry approval; never claim an unexecuted deployment |
@@ -145,7 +146,7 @@ Every selected action returns:
 ```json
 {
   "sourceLevel": "C",
-  "targetDomain": "developer_on_stack",
+  "targetDomain": "embedded_abap_cloud_on_stack",
   "targetLevel": "A+C",
   "action": "create_or_use_wrapper",
   "evidenceRuleIds": ["CC-WRAPPER-OUTCOME", "CC-WRAPPER-PLACEMENT"],

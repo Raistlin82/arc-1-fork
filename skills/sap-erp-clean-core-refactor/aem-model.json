@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "methodology": "SAP Application Extension Methodology",
+  "sourcePages": [304, 333, 334, 335, 336, 337, 338, 339, 340],
+  "requiredFacts": {
+    "landscape": {
+      "type": "enum",
+      "values": ["s4_public_cloud", "s4_private_cloud", "s4_on_premise", "btp_abap_environment"]
+    },
+    "businessRequirement": { "type": "string" },
+    "touchpoints": { "type": "stringArray" },
+    "targetUsers": { "type": "enum", "values": ["sap_internal", "external_consumer", "mixed"] },
+    "keyUserFit": { "type": "boolean" },
+    "releasedExtensionPoint": { "type": "boolean" },
+    "transactionConsistencyRequired": { "type": "boolean" },
+    "mostDataInS4": { "type": "boolean" },
+    "extendExistingS4Application": { "type": "boolean" },
+    "highVolumeLocalDataRequired": { "type": "boolean" },
+    "saasOrPartnerProduct": { "type": "boolean" },
+    "independentOperationsRequired": { "type": "boolean" },
+    "independentLifecycleRequired": { "type": "boolean" },
+    "multiSystemOrchestrationRequired": { "type": "boolean" },
+    "mobileOrFreestyleUxRequired": { "type": "boolean" },
+    "responsibilitySplitDefined": { "type": "boolean" },
+    "classicRetentionApproved": { "type": "boolean" },
+    "implementationModel": { "type": "enum", "values": ["cap", "non_cap", "abap_cloud", "undecided"] },
+    "sideBySideRuntime": { "type": "enum", "values": ["cf", "kyma", "btp_abap", "undecided"] }
+  },
+  "keyUserSelector": {
+    "domain": "key_user_on_stack",
+    "conditions": [
+      { "fact": "keyUserFit", "equals": true },
+      { "fact": "releasedExtensionPoint", "equals": true }
+    ]
+  },
+  "signals": {
+    "onStack": [
+      {
+        "fact": "transactionConsistencyRequired",
+        "equals": true,
+        "reason": "The extension requires the S/4 transaction and strong consistency."
+      },
+      { "fact": "mostDataInS4", "equals": true, "reason": "Most authoritative data remains in S/4." },
+      {
+        "fact": "extendExistingS4Application",
+        "equals": true,
+        "reason": "The requirement extends an existing S/4 application."
+      },
+      {
+        "fact": "highVolumeLocalDataRequired",
+        "equals": true,
+        "reason": "The extension requires high-volume or latency-sensitive local data access."
+      }
+    ],
+    "sideBySide": [
+      {
+        "fact": "targetUsers",
+        "in": ["external_consumer", "mixed"],
+        "reason": "The target includes non-SAP or consumer users."
+      },
+      {
+        "fact": "saasOrPartnerProduct",
+        "equals": true,
+        "reason": "The solution is SaaS or a partner product."
+      },
+      {
+        "fact": "independentOperationsRequired",
+        "equals": true,
+        "reason": "Operations, scaling or downtime must be independent from S/4."
+      },
+      {
+        "fact": "independentLifecycleRequired",
+        "equals": true,
+        "reason": "The solution requires an independent release lifecycle."
+      },
+      {
+        "fact": "multiSystemOrchestrationRequired",
+        "equals": true,
+        "reason": "The use case orchestrates multiple systems or backends."
+      },
+      {
+        "fact": "mobileOrFreestyleUxRequired",
+        "equals": true,
+        "reason": "The use case requires native mobile, consumer-grade or freestyle UX."
+      }
+    ]
+  },
+  "sideBySideSelectors": [
+    {
+      "domain": "side_by_side_btp_abap",
+      "conditions": [
+        { "fact": "implementationModel", "equals": "abap_cloud" },
+        { "fact": "sideBySideRuntime", "equals": "btp_abap" }
+      ]
+    },
+    {
+      "domain": "side_by_side_kyma",
+      "conditions": [
+        { "fact": "implementationModel", "in": ["cap", "non_cap"] },
+        { "fact": "sideBySideRuntime", "equals": "kyma" }
+      ]
+    },
+    {
+      "domain": "side_by_side_cf",
+      "conditions": [
+        { "fact": "implementationModel", "in": ["cap", "non_cap"] },
+        { "fact": "sideBySideRuntime", "equals": "cf" }
+      ]
+    }
+  ],
+  "conditionalFacts": {
+    "side_by_side_btp_abap": {
+      "sourceArc1Context": { "type": "string" },
+      "targetArc1Context": { "type": "string" },
+      "targetLandscape": { "type": "enum", "values": ["btp_abap_environment"] }
+    }
+  }
+}

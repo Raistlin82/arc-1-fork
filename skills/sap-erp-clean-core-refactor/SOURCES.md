@@ -38,6 +38,11 @@ Path: `knowledge/clean-core-extensibility/`
 | `graphify-out/graph.html` | Interactive human exploration |
 | `raw/*.md` | Page-bounded source extraction used to audit a rule without loading the full document |
 
+Outside the knowledge directory, [`aem-model.json`](./aem-model.json) operationalizes the AEM
+selection criteria and `runtime/resolve-plan.mjs` combines them with `chain.json`. The knowledge
+graph explains and traces concepts; only the curated rules, structured AEM facts and live evidence
+authorize a runtime decision.
+
 The source PDF is not packaged. The curated index preserves its title/version and page references;
 raw chunks preserve enough local context to audit each rule. Graph generation caches and the local
 PDF symlink are build inputs, not runtime skill content.
@@ -48,6 +53,7 @@ During repository work, query the compact layer with:
 npm run clean-core:query -- wrapper on-stack
 npm run clean-core:query -- atc exemption --json
 npm run clean-core:graph
+npm run --silent clean-core:resolve -- --facts docs/refactor/unit-facts.json
 ```
 
 No result means the orchestrator must use the lookup ladder or return `ResearchRequired`; it must

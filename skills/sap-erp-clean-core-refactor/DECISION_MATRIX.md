@@ -17,11 +17,12 @@ domain, current Clean Core level, executable capability, proof.
 | KEY_USER_LEVEL_A | 30 | B/C/D/Unknown | A | Key User on-stack | `replace_with_key_user_extensibility` | A released key-user extension point, field, UI adaptation, form or CBO fits |
 | A_RETAIN | 40 | A | A | Current allowed domain | `no_action` | Allowed technology and every relevant touchpoint are proven released |
 | CUSTOM_API_RELEASE | 50 | B/C | Architecture-dependent | Current allowed domain | `release_api` | A stable customer API is the only unreleased dependency |
-| ON_STACK_LEVEL_A | 60 | B/C/D | A | Developer on-stack | `rewrite_on_stack_abap_cloud` | Tight S/4 coupling, LUW consistency or high-volume local access favors embedded ABAP Cloud; a released successor, approved ABAP Cloud target package and object language-version proof exist |
-| WRAPPER_CLASSIC | 70 | B/C/D | A consumer + B wrapper | Developer on-stack | `create_or_use_wrapper` | No released successor exists; a documented classic API can be isolated in Private Edition/on-premise |
-| WRAPPER_INTERNAL | 71 | C/D | A consumer + C wrapper | Developer on-stack | `create_or_use_wrapper` | No released/classic successor exists and a time-bound internal-access exception is approved |
-| SIDE_BY_SIDE_CF | 80 | B/C/D/Unknown | A | Side-by-side CF | `extract_to_side_by_side_cf` | CAP and CF fit; every released-touchpoint, ownership, consistency, transaction, identity, lifecycle, runtime and retirement/boundary fact is proven |
-| SIDE_BY_SIDE_KYMA | 81 | B/C/D/Unknown | A | Side-by-side Kyma | `extract_to_side_by_side_kyma` | CAP and a concrete Kubernetes requirement fit; the same complete Level A evidence is proven |
+| ON_STACK_LEVEL_A | 60 | B/C/D | A | Embedded ABAP Cloud on-stack | `rewrite_on_stack_abap_cloud` | Tight S/4 coupling, LUW consistency or high-volume local access favors embedded ABAP Cloud; a released successor, approved ABAP Cloud target package and object language-version proof exist |
+| WRAPPER_CLASSIC | 70 | B/C/D | A consumer + B wrapper | Embedded ABAP Cloud on-stack | `create_or_use_wrapper` | No released successor exists; a documented classic API can be isolated in Private Edition/on-premise |
+| WRAPPER_INTERNAL | 71 | C/D | A consumer + C wrapper | Embedded ABAP Cloud on-stack | `create_or_use_wrapper` | No released/classic successor exists and a time-bound internal-access exception is approved |
+| SIDE_BY_SIDE_BTP_ABAP | 80 | B/C/D/Unknown | A | BTP ABAP Environment side-by-side | `rewrite_side_by_side_btp_abap` | AEM selects ABAP Cloud on BTP; target connection, released remote boundary, package/language version and complete side-by-side Level A evidence are proven |
+| SIDE_BY_SIDE_CF | 81 | B/C/D/Unknown | A | Side-by-side CF | `extract_to_side_by_side_cf` | CAP and CF fit; every released-touchpoint, ownership, consistency, transaction, identity, lifecycle, runtime and retirement/boundary fact is proven |
+| SIDE_BY_SIDE_KYMA | 82 | B/C/D/Unknown | A | Side-by-side Kyma | `extract_to_side_by_side_kyma` | CAP and a concrete Kubernetes requirement fit; the same complete Level A evidence is proven |
 | HYBRID | 90 | B/C/D/Unknown | Architecture-dependent | Hybrid | `hybrid_extension` | On-stack transactional responsibilities and side-by-side responsibilities both exist |
 | B_KEEP_PRIVATE | 100 | B | B | Classic on-stack | `keep_at_level_b` | Private Edition/on-premise permits B and no justified A business case exists |
 | MECHANICAL_REMEDIATION | 110 | B/C/D | Architecture-dependent | Current allowed domain | `migrate_custom_code` | Selected findings are deterministic quick fixes or bounded mechanical corrections |
@@ -51,12 +52,17 @@ zone. Missing evidence always lands on `ANY_TO_RESEARCH`.
 | Independent operations, scaling, downtime or release cadence | No | Yes |
 | Responsibilities split across both groups | Hybrid | Hybrid |
 
+The executable selector is [`aem-model.json`](./aem-model.json). It requires the complete AEM fact
+set, returns the matched signals and rejects missing, conflicting or landscape-incompatible targets.
+An explicit `selectedDomain` that conflicts with the derived result is not an override.
+
 ## Action inventory
 
 Primary actions are shown in the decision rows. Specialized dispatches remain explicit:
 
 | Action | Role |
 |---|---|
+| `rewrite_side_by_side_btp_abap` | Builds in a separately connected SAP BTP ABAP Environment; it never reuses the embedded on-stack classification |
 | `migrate_segw_to_rap` | SEGW OData V2 replacement inside an on-stack or side-by-side decision |
 | `analytical_embedded` | Embedded analytics replacement for aggregate/read-only reporting |
 | `rap_logic` | RAP behavior implementation inside an approved on-stack design |
@@ -71,6 +77,8 @@ Primary actions are shown in the decision rows. Specialized dispatches remain ex
 ## Non-negotiable evidence
 
 - Standard-first and AEM reasoning precede a target decision.
+- Embedded ABAP Cloud in S/4 and SAP BTP ABAP Environment are separate domains. The former is
+  on-stack; the latter is side-by-side.
 - BTP Level A requires all relevant touchpoints to be released plus explicit data ownership,
   consistency, transaction, identity, lifecycle, runtime-fit and ERP retirement/boundary evidence.
 - CF or Kyma deployment never proves Level A by itself. The runtime changes packaging, not the

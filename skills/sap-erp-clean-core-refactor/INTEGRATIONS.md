@@ -1,15 +1,17 @@
 # Clean Core Integration Map
 
 This document defines which capability is used, when it becomes mandatory and what happens when it
-is unavailable. The decision protocol is in [`SKILL.md`](./SKILL.md), routing in
-[`chain.json`](./chain.json), valid tool shapes in [`action-catalog.json`](./action-catalog.json),
-and the architecture rules in [`PATTERNS.md`](./PATTERNS.md).
+is unavailable. The decision protocol is in [`SKILL.md`](./SKILL.md), the executable AEM
+questionnaire in [`aem-model.json`](./aem-model.json), routing in [`chain.json`](./chain.json), valid
+tool shapes in [`action-catalog.json`](./action-catalog.json), and the architecture rules in
+[`PATTERNS.md`](./PATTERNS.md).
 
 ## Responsibility boundary
 
 | Layer | Responsibility | May write to SAP? |
 |---|---|---:|
 | Orchestrator | Standard-first, AEM, target domain, level, action, confidence and gates | No directly |
+| Installed runtime resolver | Validate AEM facts, derive domain, resolve recursive actions/skills/operations and pending gates | No |
 | ARC-1 MCP | Live evidence, source mutation, activation, API release, packages and transports | Yes, under server safety policy |
 | Local ARC-1 skills | Specialized planning/generation around ARC-1 tools | Only through ARC-1 |
 | SAP documentation MCPs | Released-object, successor, feature and official documentation evidence | No |
@@ -18,6 +20,11 @@ and the architecture rules in [`PATTERNS.md`](./PATTERNS.md).
 
 Capability discovery happens before planning. Record the exact exposed namespace or skill name;
 never assume a plugin command exists because it appears in this document.
+
+For SAP BTP ABAP Environment, record two explicit ARC-1 contexts when the source is S/4: the source
+context supplies inventory and boundary evidence; the target context performs approved ABAP Cloud
+writes. Passing `btp_abap_target_connected` is forbidden when both roles resolve to the source S/4
+connection.
 
 ## ARC-1 capability map
 
@@ -63,7 +70,7 @@ the KTD `name` must equal `refObjectName`.
 | `generate-analytics-star-schema` | Branch-MUST | Embedded analytical model | Cube/star model generation |
 | `generate-cds-analytical-query` | Branch-MUST | Analytical query target | Query generation |
 | `debug-slow-sql` | Branch-MUST | Hot data access or performance regression | SQL/runtime evidence |
-| `modernize-abap-side-by-side-core` | Branch-MUST | Every proposed BTP Level A or hybrid target | Released boundary, ownership, consistency, identity, UI and runtime contract |
+| `modernize-abap-side-by-side-core` | Branch-MUST | Every proposed CF/Kyma CAP or CAP-hybrid target | Released boundary, ownership, consistency, identity, UI and runtime contract |
 | `modernize-abap-to-btp-cap` | Branch-MUST for CAP | Approved CF or Kyma CAP implementation | Runtime-neutral staged CAP build plus conditional dispatch |
 | `modernize-abap-cap-schema` | Conditional MUST | `dataOwnership=cap|replicated` | CAP CDS persistence for approved entities only |
 | `modernize-abap-cap-service` | Conditional MUST | `capServiceRequired=true` | Remote, CAP-owned or event-driven service target |
@@ -80,10 +87,12 @@ the KTD `name` must equal `refObjectName`.
 | Capability | Current implementation | Required plan output |
 |---|---|---|
 | Key User extensibility | Decision and manual handoff only | SAP app/tool, released extension point, custom field/object, business owner, lifecycle, acceptance tests |
+| SAP BTP ABAP Environment | Executable through a distinct target ARC-1 context | AEM record, remote released boundary, target connection, ABAP Cloud package/language proof, ownership, identity, tests and source retirement/boundary evidence |
 | Cloud Foundry CAP | Conditional executable chain | side-by-side contract, CAP build/test, services, MTA/delivery owner and acceptance evidence |
 | Kyma CAP | Conditional executable chain | same contract/build/test plus Kubernetes need, cluster, registry, namespace, Helm, operations and deployment approval |
 
-Do not route Key User work through generic `SAPWrite`. Do not emit CF and Kyma packaging together.
+Do not route Key User work through generic `SAPWrite`. Do not route BTP ABAP writes through the
+source S/4 ARC-1 context. Do not emit CF and Kyma packaging together.
 Kyma preparation uses `deploy-cap-to-kyma`; an unavailable cluster/registry remains an explicit
 handoff and is never reported as deployed.
 

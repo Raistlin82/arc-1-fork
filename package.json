@@ -72,6 +72,7 @@
     "check:clean-core-skills": "node scripts/ci/check-clean-core-skills.mjs",
     "clean-core:query": "node scripts/query-clean-core-knowledge.mjs",
     "clean-core:graph": "node scripts/refine-clean-core-graph.mjs",
+    "clean-core:resolve": "node skills/sap-erp-clean-core-refactor/runtime/resolve-plan.mjs",
     "cli": "tsx src/cli.ts",
     "extract-sap-cookies": "tsx src/extract-sap-cookies.ts",
     "probe": "tsx scripts/probe-adt-types.ts",

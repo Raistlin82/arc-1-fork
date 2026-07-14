@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -96,5 +97,33 @@ describe('skills installer', () => {
     expect(resolveSkillsDestination({ agent: 'codex', global: false, projectDir: root })).toBe(
       join(root, '.agents/skills'),
     );
+  });
+
+  it('installs an executable Clean Core runtime with its model and chain', () => {
+    const destination = join(root, 'clean-core');
+    installBundledSkills({
+      agent: 'codex',
+      global: false,
+      destination,
+      sourceDir: 'skills',
+      skill: 'sap-erp-clean-core-refactor',
+    });
+    const installed = join(destination, 'sap-erp-clean-core-refactor');
+    const scenarios = JSON.parse(readFileSync(join(installed, 'decision-scenarios.json'), 'utf8'));
+    const facts = scenarios.runtimeScenarios.find(
+      (scenario: { id: string }) => scenario.id === 'aem_side_by_side_btp_abap',
+    ).facts;
+    const result = spawnSync(
+      process.execPath,
+      [join(installed, 'runtime/resolve-plan.mjs'), '--facts', '-', '--compact'],
+      {
+        input: JSON.stringify(facts),
+        encoding: 'utf8',
+      },
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout).decision.id).toBe('SIDE_BY_SIDE_BTP_ABAP');
   });
 });

@@ -1,6 +1,6 @@
 ---
 name: sap-erp-clean-core-refactor
-description: Plans, estimates, executes and governs SAP Clean Core extensibility for Z/Y custom code across S/4HANA Public Cloud, Private Cloud, on-premise, embedded ABAP Cloud and BTP. Uses a curated SAP Clean Core knowledge base plus live ARC-1 evidence to choose SAP standard, Key User on-stack, Developer Extensibility on-stack, Cloud Foundry side-by-side, hybrid, wrapper, Level B retention or retirement paths. Use for Clean Core refactoring, AEM extension decisions, wrapper strategy, custom API release, package migration planning and governed remediation.
+description: Plans, estimates, executes and governs SAP Clean Core extensibility for Z/Y custom code across S/4HANA Public Cloud, Private Cloud, on-premise, embedded ABAP Cloud and BTP. Uses a curated SAP Clean Core knowledge base plus live ARC-1 evidence to choose SAP standard, Key User on-stack, embedded ABAP Cloud on-stack, BTP ABAP Environment side-by-side, Cloud Foundry, Kyma, hybrid, wrapper, Level B retention or retirement paths. Use for Clean Core refactoring, AEM extension decisions, wrapper strategy, custom API release, package migration planning and governed remediation.
 ---
 
 # SAP ERP Clean Core Refactor
@@ -11,9 +11,11 @@ side-by-side extension using released ERP touchpoints.
 
 Read [`README.md`](./README.md) for orientation, the
 [`WORKFLOW.md` operator quickstart](./WORKFLOW.md#operator-quickstart) before a live run,
-[`DECISION_MATRIX.md`](./DECISION_MATRIX.md) for human-readable decisions, [`chain.json`](./chain.json)
+[`DECISION_MATRIX.md`](./DECISION_MATRIX.md) for human-readable decisions,
+[`aem-model.json`](./aem-model.json) for the architecture questionnaire, [`chain.json`](./chain.json)
 for the executable contract and [`action-catalog.json`](./action-catalog.json) for validated ARC-1
-payload shapes.
+payload shapes. Use [`runtime/resolve-plan.mjs`](./runtime/resolve-plan.mjs) for deterministic runtime
+resolution.
 
 ## Modes
 
@@ -34,7 +36,7 @@ payload shapes.
 | Flag | Values | Rule |
 |---|---|---|
 | `--landscape` | `auto`, `s4-public-cloud`, `s4-private-cloud`, `s4-on-premise`, `btp-abap-environment` | Probe when `auto`; never silently assume Public Cloud or BTP |
-| `--domain` | `auto`, `standard`, `key-user`, `developer-on-stack`, `side-by-side-cf`, `side-by-side-kyma`, `hybrid` | `auto` runs AEM; Kyma requires a proven Kubernetes need and delivery capability |
+| `--domain` | `auto`, `standard`, `key-user`, `embedded-abap-cloud`, `side-by-side-btp-abap`, `side-by-side-cf`, `side-by-side-kyma`, `hybrid` | `auto` runs AEM; an explicit value is checked against AEM and never overrides a conflict |
 | `--target-level` | `A`, `B` | Optional constraint, not a deployment selector |
 | `--push-to-a` | comma-separated logical units | Selective escalation after architecture review |
 | `--force-refresh` | boolean | Ignore cached external evidence |
@@ -50,17 +52,18 @@ target-domain decision. Do not default to BTP Cloud Foundry.
 3. Treat missing classification evidence as `Unknown`, never automatically as D.
 4. Classify logical units, not isolated includes.
 5. Level A requires allowed technology and released status for every relevant touchpoint.
-6. Developer on-stack Level A also requires an approved ABAP Cloud target package and proven object
+6. Embedded ABAP Cloud on-stack Level A also requires an approved ABAP Cloud target package and proven object
    language version; ATC success alone is insufficient.
 7. Report wrappers as `A consumer + B wrapper` or `A consumer + C wrapper`.
 8. BTP Level A requires a released boundary plus proven ownership, consistency, transaction,
    identity, lifecycle, runtime and ERP retirement/boundary facts; CF/Kyma alone prove nothing.
-9. ABAP CDS/RAP and CAP CDS are separate branches. Invoke each only for its selected target.
-10. Key User is a manual handoff until an exposed implementation capability validates.
-11. ARC-1 is the only SAP writer. Optional skills and MCP servers advise or research.
-12. Deterministic quick fixes require one explicit package/transport approval. Generative changes
+9. SAP BTP ABAP Environment is side-by-side. Never classify it as embedded on-stack ABAP Cloud.
+10. ABAP CDS/RAP and CAP CDS are separate branches. Invoke each only for its selected target.
+11. Key User is a manual handoff until an exposed implementation capability validates.
+12. ARC-1 is the only SAP writer. Optional skills and MCP servers advise or research.
+13. Deterministic quick fixes require one explicit package/transport approval. Generative changes
    always require approval of the concrete diff.
-13. A plan is not complete without evidence, confidence, owner, gates and rollback/retirement path.
+14. A plan is not complete without evidence, confidence, owner, gates and rollback/retirement path.
 
 ## Protocol
 
@@ -94,16 +97,20 @@ For every logical unit, in this order:
 2. Is the unit unused?
 3. Which extension use case and touchpoints remain?
 4. Does Key User extensibility fit?
-5. If development is required, do on-stack or side-by-side signals dominate?
+5. Run every required fact in `aem-model.json`: do on-stack or side-by-side signals dominate, or is
+   an explicit responsibility split required?
 6. What are the current level and all relevant API/extension-point release states?
 7. Can a released successor or released custom API reach A?
 8. If not, is an isolated wrapper allowed and governable?
 9. For side-by-side, what owns the data and which released API/event crosses the ERP boundary?
-10. Which implementation model, UI and CF/Kyma runtime are justified?
+10. Which implementation model, UI and BTP ABAP/CF/Kyma runtime are justified?
 11. Which implementation capability is actually available?
 
-Resolve the first fully evidenced row in [`DECISION_MATRIX.md`](./DECISION_MATRIX.md). Otherwise
-select `research_required`.
+Persist the facts for the logical unit and run `node runtime/resolve-plan.mjs --facts <file>` from
+the installed skill directory, or `npm run --silent clean-core:resolve -- --facts <file>` in the ARC-1
+repository. Accept `aem_recorded` only when the result is `resolved` or `not_required`. The resolver
+derives the domain, applies [`DECISION_MATRIX.md`](./DECISION_MATRIX.md), expands nested dispatches
+and reports pending gates. Otherwise select `research_required`.
 
 ### 4. Emit the plan
 
@@ -113,8 +120,10 @@ Write `docs/refactor/<date>-clean-core-plan.md` with:
 - business requirement, touchpoints and standard-first result;
 - one AEM record per logical unit;
 - source level, target domain, target level and action;
-- for developer on-stack Level A, target package/software component and live or manually verified
+- for embedded ABAP Cloud on-stack Level A, target package/software component and live or manually verified
   `abapLanguageVersion="cloudDevelopment"` evidence;
+- for BTP ABAP Environment, a distinct target ARC-1 connection, target package/language proof and
+  released remote ERP boundary;
 - for side-by-side Level A, the `modernize-abap-side-by-side-core` contract: service boundary,
   all released touchpoints, ownership, consistency, transactions, identity, lifecycle, runtime fit,
   UI target and ERP retirement/boundary plan;
@@ -134,6 +143,9 @@ the plan before execution.
 - Execute one approved logical unit at a time using the action's `operationIds` from `chain.json`.
 - Block `rewrite_on_stack_abap_cloud` unless the approved ABAP Cloud target package, object language
   version and all released touchpoints satisfy the `abap_cloud_target_proven` gate.
+- Block `rewrite_side_by_side_btp_abap` unless source and target ARC-1 contexts are explicit, the
+  target is SAP BTP ABAP Environment and `btp_abap_target_connected` is proven. Never send target
+  writes through the source S/4 connection.
 - Run `modernize-abap-side-by-side-core` before any CAP generation. Use
   `modernize-abap-to-btp-cap` for the runtime-neutral CAP build, then CF packaging or
   `deploy-cap-to-kyma` according to the approved contract.

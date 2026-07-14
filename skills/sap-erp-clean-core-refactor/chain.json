@@ -1,6 +1,7 @@
 {
   "version": 2,
   "orchestrator": "sap-erp-clean-core-refactor",
+  "aemModel": "aem-model.json",
   "modes": ["discover", "estimate", "plan", "execute", "govern"],
   "decisionStages": [
     "standard_first",
@@ -13,26 +14,27 @@
   "landscapes": {
     "s4_public_cloud": {
       "allowedLevels": ["A"],
-      "allowedDomains": ["standard", "key_user_on_stack", "developer_on_stack", "side_by_side_cf", "side_by_side_kyma", "hybrid", "retired"]
+      "allowedDomains": ["standard", "key_user_on_stack", "embedded_abap_cloud_on_stack", "side_by_side_btp_abap", "side_by_side_cf", "side_by_side_kyma", "hybrid", "retired"]
     },
     "btp_abap_environment": {
       "allowedLevels": ["A"],
-      "allowedDomains": ["developer_on_stack", "side_by_side_cf", "side_by_side_kyma", "hybrid", "retired"]
+      "allowedDomains": ["side_by_side_btp_abap", "side_by_side_cf", "side_by_side_kyma", "hybrid", "retired"]
     },
     "s4_private_cloud": {
       "allowedLevels": ["A", "B", "C_exception"],
-      "allowedDomains": ["standard", "key_user_on_stack", "developer_on_stack", "classic_on_stack", "side_by_side_cf", "side_by_side_kyma", "hybrid", "retired"]
+      "allowedDomains": ["standard", "key_user_on_stack", "embedded_abap_cloud_on_stack", "classic_on_stack", "side_by_side_btp_abap", "side_by_side_cf", "side_by_side_kyma", "hybrid", "retired"]
     },
     "s4_on_premise": {
       "allowedLevels": ["A", "B", "C_exception"],
-      "allowedDomains": ["standard", "key_user_on_stack", "developer_on_stack", "classic_on_stack", "side_by_side_cf", "side_by_side_kyma", "hybrid", "retired"]
+      "allowedDomains": ["standard", "key_user_on_stack", "embedded_abap_cloud_on_stack", "classic_on_stack", "side_by_side_btp_abap", "side_by_side_cf", "side_by_side_kyma", "hybrid", "retired"]
     }
   },
   "targetDomains": [
     "standard",
     "key_user_on_stack",
-    "developer_on_stack",
+    "embedded_abap_cloud_on_stack",
     "classic_on_stack",
+    "side_by_side_btp_abap",
     "side_by_side_cf",
     "side_by_side_kyma",
     "hybrid",
@@ -58,9 +60,9 @@
       "runtimeFitProven",
       "erpRetirementOrBoundaryPlanDefined"
     ],
-    "implementationModels": ["cap", "non_cap", "undecided"],
-    "dataOwnershipValues": ["s4", "cap", "replicated", "none"],
-    "cdsTargetValues": ["none", "abap_cds", "cap_cds", "dual_boundary"],
+    "implementationModels": ["cap", "non_cap", "abap_cloud", "undecided"],
+    "dataOwnershipValues": ["s4", "cap", "btp_abap", "replicated", "none"],
+    "cdsTargetValues": ["none", "abap_cds", "btp_abap_cds", "cap_cds", "dual_boundary"],
     "serviceBoundaryValues": ["existing_released_api", "custom_rap", "released_event", "unavailable"],
     "uiTargetValues": ["none", "cap_fiori_elements", "ui5_freestyle", "external"]
   },
@@ -123,6 +125,7 @@
     "integration_contract_proven": { "severity": "must", "executor": "agent", "fallback": "research" },
     "identity_model_proven": { "severity": "must", "executor": "agent", "fallback": "research" },
     "runtime_target_proven": { "severity": "must", "executor": "agent", "fallback": "research" },
+    "btp_abap_target_connected": { "severity": "must", "executor": "agent", "fallback": "block" },
     "btp_delivery_scoped": { "severity": "must", "executor": "human", "fallback": "block" },
     "cap_solution_verified": { "severity": "must", "executor": "agent", "fallback": "block" },
     "source_retirement_proven": { "severity": "must", "executor": "human", "fallback": "block" },
@@ -152,6 +155,19 @@
       "localSkills": ["setup-abap-mirror", "sap-object-documenter", "generate-abap-unit-test", "generate-cds-unit-test"],
       "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "abap_cloud_target_proven", "transport_scoped", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
       "operationIds": ["read_source", "read_dependencies", "write_update", "activate_object", "atc_assessment", "run_unit_tests", "read_diff"]
+    },
+    "rewrite_side_by_side_btp_abap": {
+      "execution": "arc1_target_guarded",
+      "localSkills": ["setup-abap-mirror", "sap-object-documenter", "generate-abap-unit-test", "generate-cds-unit-test"],
+      "externalSkills": ["sap-abap", "sap-abap-cds", "sap-btp-best-practices", "sap-btp-developer-guide"],
+      "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "abap_cloud_target_proven", "side_by_side_level_a_proven", "data_ownership_proven", "integration_contract_proven", "identity_model_proven", "runtime_target_proven", "btp_abap_target_connected", "owner_approved", "transport_scoped", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved", "parity_approved", "source_retirement_proven"],
+      "gatePhases": {
+        "plan": ["aem_recorded", "released_touchpoints", "abap_cloud_target_proven", "side_by_side_level_a_proven", "data_ownership_proven", "integration_contract_proven", "identity_model_proven", "runtime_target_proven", "btp_abap_target_connected", "owner_approved"],
+        "build": ["plan_approved", "transport_scoped", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
+        "accept": ["parity_approved"],
+        "retire": ["source_retirement_proven"]
+      },
+      "operationIds": ["read_source", "read_dependencies", "read_api_state", "write_update", "activate_object", "atc_assessment", "run_unit_tests", "read_diff"]
     },
     "keep_at_level_b": {
       "execution": "documented_exception",
@@ -361,9 +377,9 @@
       "precedence": 60,
       "sourceLevels": ["B", "C", "D"],
       "targetLevel": "A",
-      "targetDomain": "developer_on_stack",
+      "targetDomain": "embedded_abap_cloud_on_stack",
       "action": "rewrite_on_stack_abap_cloud",
-      "conditions": [{ "fact": "selectedDomain", "equals": "developer_on_stack" }, { "fact": "releasedSuccessor", "equals": true }, { "fact": "abapCloudTargetPackageApproved", "equals": true }, { "fact": "abapCloudLanguageVersionProven", "equals": true }],
+      "conditions": [{ "fact": "selectedDomain", "equals": "embedded_abap_cloud_on_stack" }, { "fact": "landscape", "in": ["s4_public_cloud", "s4_private_cloud", "s4_on_premise"] }, { "fact": "releasedSuccessor", "equals": true }, { "fact": "abapCloudTargetPackageApproved", "equals": true }, { "fact": "abapCloudLanguageVersionProven", "equals": true }],
       "trigger": "The requirement is tightly coupled to the S/4 process, requires transaction consistency or high-volume local data access, released touchpoints exist, and the target is proven to use ABAP for Cloud Development.",
       "evidenceRequired": ["AEM decision", "released successor", "approved ABAP Cloud target package", "ABAP Cloud object language version", "ATC assessment"]
     },
@@ -372,9 +388,9 @@
       "precedence": 70,
       "sourceLevels": ["B", "C", "D"],
       "targetLevel": "A+B",
-      "targetDomain": "developer_on_stack",
+      "targetDomain": "embedded_abap_cloud_on_stack",
       "action": "create_or_use_wrapper",
-      "conditions": [{ "fact": "selectedDomain", "equals": "developer_on_stack" }, { "fact": "landscape", "in": ["s4_private_cloud", "s4_on_premise"] }, { "fact": "releasedSuccessor", "equals": false }, { "fact": "classicApiAvailable", "equals": true }, { "fact": "wrapperApproved", "equals": true }],
+      "conditions": [{ "fact": "selectedDomain", "equals": "embedded_abap_cloud_on_stack" }, { "fact": "landscape", "in": ["s4_private_cloud", "s4_on_premise"] }, { "fact": "releasedSuccessor", "equals": false }, { "fact": "classicApiAvailable", "equals": true }, { "fact": "wrapperApproved", "equals": true }],
       "trigger": "No released successor exists, a classic documented API can be isolated, and the landscape permits managed Level B debt.",
       "evidenceRequired": ["no released successor", "wrapper isolation", "exception governance"]
     },
@@ -383,15 +399,47 @@
       "precedence": 71,
       "sourceLevels": ["C", "D"],
       "targetLevel": "A+C",
-      "targetDomain": "developer_on_stack",
+      "targetDomain": "embedded_abap_cloud_on_stack",
       "action": "create_or_use_wrapper",
-      "conditions": [{ "fact": "selectedDomain", "equals": "developer_on_stack" }, { "fact": "landscape", "in": ["s4_private_cloud", "s4_on_premise"] }, { "fact": "releasedSuccessor", "equals": false }, { "fact": "classicApiAvailable", "equals": false }, { "fact": "internalExceptionApproved", "equals": true }],
+      "conditions": [{ "fact": "selectedDomain", "equals": "embedded_abap_cloud_on_stack" }, { "fact": "landscape", "in": ["s4_private_cloud", "s4_on_premise"] }, { "fact": "releasedSuccessor", "equals": false }, { "fact": "classicApiAvailable", "equals": false }, { "fact": "internalExceptionApproved", "equals": true }],
       "trigger": "No released or classic successor exists, an internal dependency is unavoidable, and a time-bound Level C exception is approved.",
       "evidenceRequired": ["no released or classic successor", "wrapper isolation", "exception approval", "retirement trigger"]
     },
     {
-      "id": "SIDE_BY_SIDE_CF",
+      "id": "SIDE_BY_SIDE_BTP_ABAP",
       "precedence": 80,
+      "sourceLevels": ["B", "C", "D", "Unknown"],
+      "targetLevel": "A",
+      "targetDomain": "side_by_side_btp_abap",
+      "action": "rewrite_side_by_side_btp_abap",
+      "conditions": [
+        { "fact": "selectedDomain", "equals": "side_by_side_btp_abap" },
+        { "fact": "implementationModel", "equals": "abap_cloud" },
+        { "fact": "sideBySideRuntime", "equals": "btp_abap" },
+        { "fact": "serviceBoundary", "in": ["existing_released_api", "custom_rap", "released_event"] },
+        { "fact": "releasedIntegrationBoundary", "equals": true },
+        { "fact": "allTouchpointsReleased", "equals": true },
+        { "fact": "technologyAllowed", "equals": true },
+        { "fact": "unreleasedSapAccess", "equals": false },
+        { "fact": "directS4DatabaseAccess", "equals": false },
+        { "fact": "dataOwnership", "in": ["s4", "btp_abap", "replicated", "none"] },
+        { "fact": "dataConsistencyPlanDefined", "equals": true },
+        { "fact": "transactionBoundaryDefined", "equals": true },
+        { "fact": "identityModelDefined", "equals": true },
+        { "fact": "apiOrEventContractGoverned", "equals": true },
+        { "fact": "lifecycleIndependent", "equals": true },
+        { "fact": "runtimeFitProven", "equals": true },
+        { "fact": "erpRetirementOrBoundaryPlanDefined", "equals": true },
+        { "fact": "abapCloudTargetPackageApproved", "equals": true },
+        { "fact": "abapCloudLanguageVersionProven", "equals": true },
+        { "fact": "btpAbapTargetConnected", "equals": true }
+      ],
+      "trigger": "The AEM result requires an independently operated side-by-side ABAP Cloud solution in SAP BTP ABAP Environment and every Level A boundary fact is evidenced.",
+      "evidenceRequired": ["AEM decision", "target BTP ABAP Environment connection", "released ERP boundary", "approved ABAP Cloud target package", "ABAP Cloud object language version", "ownership, identity and lifecycle evidence", "ERP retirement/boundary plan"]
+    },
+    {
+      "id": "SIDE_BY_SIDE_CF",
+      "precedence": 81,
       "sourceLevels": ["B", "C", "D", "Unknown"],
       "targetLevel": "A",
       "targetDomain": "side_by_side_cf",
@@ -419,7 +467,7 @@
     },
     {
       "id": "SIDE_BY_SIDE_KYMA",
-      "precedence": 81,
+      "precedence": 82,
       "sourceLevels": ["B", "C", "D", "Unknown"],
       "targetLevel": "A",
       "targetDomain": "side_by_side_kyma",
@@ -452,7 +500,7 @@
       "targetLevel": "ArchitectureDependent",
       "targetDomain": "hybrid",
       "action": "hybrid_extension",
-      "conditions": [{ "fact": "selectedDomain", "equals": "hybrid" }, { "fact": "releasedIntegrationBoundary", "equals": true }, { "fact": "dataOwnership", "in": ["s4", "cap", "replicated", "none"] }, { "fact": "transactionBoundaryDefined", "equals": true }, { "fact": "identityModelDefined", "equals": true }, { "fact": "responsibilitySplitDefined", "equals": true }],
+      "conditions": [{ "fact": "selectedDomain", "equals": "hybrid" }, { "fact": "implementationModel", "equals": "cap" }, { "fact": "releasedIntegrationBoundary", "equals": true }, { "fact": "dataOwnership", "in": ["s4", "cap", "replicated", "none"] }, { "fact": "transactionBoundaryDefined", "equals": true }, { "fact": "identityModelDefined", "equals": true }, { "fact": "responsibilitySplitDefined", "equals": true }],
       "trigger": "The requirement has both tightly coupled on-stack and independently operated side-by-side responsibilities.",
       "evidenceRequired": ["responsibility split", "released integration boundary", "joint parity plan"]
     },

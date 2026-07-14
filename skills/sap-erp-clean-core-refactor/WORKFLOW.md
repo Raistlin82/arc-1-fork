@@ -62,11 +62,25 @@ Use $sap-erp-clean-core-refactor on ZSD_CUSTOM in plan mode.
 Landscape s4-private-cloud, domain auto, report dossier, no SAP writes.
 ```
 
-The plan must resolve standard-first and AEM before selecting a Clean Core action. For every logical
-unit, review the business owner, source level, target domain, target level, exact action, operation
-IDs, evidence, confidence, gates, effort, rollback or retirement path, target package and transport.
+The plan must resolve standard-first and AEM before selecting a Clean Core action. Populate every
+required fact in [`aem-model.json`](./aem-model.json); do not set `selectedDomain` as a substitute for
+the questionnaire. For every logical unit, review the business owner, source level, derived target
+domain, target level, exact action, operation IDs, evidence, confidence, gates, effort, rollback or
+retirement path, target package and transport.
 
-For `developer-on-stack` Level A, the plan must additionally prove all of the following:
+Run the deterministic resolver from the ARC-1 repository/package:
+
+```bash
+npm run --silent clean-core:resolve -- --facts docs/refactor/unit-facts.json
+```
+
+An independently installed skill contains the same entry point at `runtime/resolve-plan.mjs`. The
+resolver is read-only: it returns the AEM record, decision, recursively expanded action plan,
+skills, ARC-1 operation IDs, gate phases and pending MUST gates. Incomplete input, conflicting
+on-stack/side-by-side signals, an incompatible runtime or a supplied domain that disagrees with AEM
+returns `ResearchRequired`.
+
+For `embedded_abap_cloud_on_stack` Level A, the plan must additionally prove all of the following:
 
 - the target package/software component is approved for embedded ABAP Cloud development;
 - `abapLanguageVersion="cloudDevelopment"` is confirmed from live object metadata when ARC-1 exposes it;
@@ -77,19 +91,23 @@ ATC success alone is not proof of the object language version. If current ARC-1 
 cannot prove the language version for an object type, attach verified ADT/package evidence manually.
 Without that evidence, retain `research_required` and do not declare Level A.
 
-For side-by-side Level A on BTP, the plan must run `modernize-abap-side-by-side-core` and prove:
+For every side-by-side Level A target on BTP, the plan must prove:
 
 - the exact existing API, custom RAP API or event crossing the ERP boundary;
 - every relevant touchpoint is released and no direct S/4 database/unreleased access remains;
-- `dataOwnership` is `s4`, `cap`, `replicated` or `none`, with consistency controls;
+- `dataOwnership` is `s4`, `btp_abap`, `cap`, `replicated` or `none`, with consistency controls;
 - SAP and CAP transaction boundaries, retries, idempotency and compensation;
 - authentication, principal propagation/technical identity and authorization ownership;
 - independent lifecycle, support and ERP retirement or stable-boundary plan;
-- why CF or Kyma fits. CAP business applications prefer CF unless a concrete Kubernetes need is
-  evidenced.
+- why BTP ABAP Environment, CF or Kyma fits. CAP business applications prefer CF unless a concrete
+  Kubernetes need is evidenced.
 
-The plan also selects `cdsTarget`, `capServiceRequired` and exactly one `uiTarget`. Missing facts
-remain `research_required`; BTP deployment is not classification evidence.
+For `side_by_side_btp_abap`, the target ARC-1 connection must point to the BTP ABAP Environment and
+the plan must prove its ABAP Cloud package, object language version and remote released ERP
+boundary. Source-system operations and target-system writes remain explicitly separated. For CAP,
+run `modernize-abap-side-by-side-core`, then select `cdsTarget`, `capServiceRequired`, exactly one
+`uiTarget` and CF or Kyma. Missing facts remain `research_required`; BTP deployment is not
+classification evidence.
 
 ### 4. Approve logical units explicitly
 
@@ -171,19 +189,22 @@ flowchart TD
     AEM --> KU{"Key User fits?"}
     KU -->|Yes| KUH["Level A on-stack Key User handoff"]
     KU -->|No| DOM{"Target domain"}
-    DOM -->|Tight S/4 coupling| ONS["On-stack Developer Extensibility"]
-    DOM -->|Independent lifecycle| SBS["Side-by-side core decision"]
+    DOM -->|Tight S/4 coupling| ONS["Embedded ABAP Cloud on-stack"]
+    DOM -->|Independent ABAP Cloud| BAE["BTP ABAP Environment side-by-side"]
+    DOM -->|Independent CAP lifecycle| SBS["CF or Kyma core decision"]
     DOM -->|Both| HYB["Hybrid responsibility split"]
     SBS --> RUN{"Runtime fit"}
     RUN -->|Business CAP| CF["Cloud Foundry"]
     RUN -->|Kubernetes need| KYM["Kyma"]
     ONS --> CC["Classify all touchpoints A/B/C/D or Unknown"]
+    BAE --> CC
     CF --> CC
     KYM --> CC
     HYB --> CC
     CC --> ACT{"Resolve first evidenced chain.json decision"}
     ACT --> REL["Release custom API"]
     ACT --> RW["Rewrite on-stack ABAP Cloud"]
+    ACT --> BTPABAP["Rewrite in BTP ABAP Environment"]
     ACT --> WR["A consumer plus B/C wrapper"]
     ACT --> KEEP["Keep B on Private/on-prem"]
     ACT --> RES["ResearchRequired"]
@@ -192,6 +213,7 @@ flowchart TD
     KUH --> PLAN
     REL --> PLAN
     RW --> PLAN
+    BTPABAP --> PLAN
     WR --> PLAN
     KEEP --> PLAN
     SBS --> PLAN
@@ -235,9 +257,11 @@ prerequisites.
 6. `sap-clean-core-atc` classifies current evidence without treating unknown as D.
 7. `explain-abap-code` documents intent for every non-trivial non-A unit.
 8. The local curated knowledge index supplies bounded rules and page provenance.
-9. Live SAP release state and official documentation confirm the specific successor or extension
+9. `aem-model.json` derives the target domain and records matched signals or blocking conflicts.
+10. Live SAP release state and official documentation confirm the specific successor or extension
    point.
-10. The decision matrix selects a target domain and action. The output is editable and read-only.
+11. The decision matrix selects an action and the runtime resolver expands every nested dispatch.
+    The output is editable and read-only.
 
 ## Side-by-side Level A sequence
 
@@ -301,6 +325,7 @@ and every generated redesign, require concrete diff approval.
 | `replace_with_standard` | Human/SAP configuration plus ARC-1 retirement | Parity approval before deletion |
 | `replace_with_key_user_extensibility` | Key User owner, manual SAP app handoff | ARC-1 provides evidence; it does not automate key-user apps |
 | `rewrite_on_stack_abap_cloud` | ARC-1 plus ABAP/RAP skills | Level A can remain embedded in S/4HANA |
+| `rewrite_side_by_side_btp_abap` | Source ARC-1 evidence plus a distinct target ARC-1 connection | BTP ABAP Environment is side-by-side; target package/language and remote released boundary are mandatory |
 | `release_api` | ARC-1 | Use the live supported contract, then reclassify consumers |
 | `create_or_use_wrapper` | ARC-1 plus human exception governance | Wrapper package/component is separate; report composite level |
 | `extract_to_side_by_side_cf` | Common side-by-side contract, conditional CAP/CDS/UI/test chain, CF packaging | Old ERP code retires only after parity and operations proof |
@@ -348,8 +373,10 @@ uncontrolled commits/rollbacks or an API whose semantics cannot be stabilized.
 - Every write is inside ARC-1 package, transport and authorization gates.
 - Every generated diff has explicit approval.
 - Every changed unit has syntax, activation, ATC and applicable test evidence.
-- Every `developer-on-stack` Level A unit proves its ABAP Cloud target package, object language
+- Every `embedded_abap_cloud_on_stack` Level A unit proves its ABAP Cloud target package, object language
   version and released touchpoints; missing metadata blocks the A classification.
+- Every `side_by_side_btp_abap` unit proves a distinct target connection, ABAP Cloud target package,
+  object language version, released remote ERP boundary and side-by-side lifecycle evidence.
 - Every side-by-side Level A unit has the complete side-by-side decision contract. Schema, service,
   UI and runtime skills match its facts; no unresolved `501`/migration TODO remains.
 - `dataOwnership=s4|none` never dispatches `modernize-abap-cap-schema`; CAP Fiori Elements and

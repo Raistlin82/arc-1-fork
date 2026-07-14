@@ -4,8 +4,9 @@ This skill turns SAP Clean Core extensibility guidance into an evidence-backed a
 where ARC-1 has a validated capability, a guarded execution plan.
 
 It does not equate Level A with BTP. A target may be SAP standard, Key User on-stack, Developer
-Extensibility on-stack with embedded ABAP Cloud, Cloud Foundry side-by-side, hybrid, a governed
-wrapper outcome, retained Level B on Private Edition/on-premise, or retirement.
+Extensibility on-stack with embedded ABAP Cloud, SAP BTP ABAP Environment side-by-side, Cloud
+Foundry or Kyma side-by-side, hybrid, a governed wrapper outcome, retained Level B on Private
+Edition/on-premise, or retirement.
 
 ## What it decides
 
@@ -14,11 +15,15 @@ For each logical unit, the orchestrator answers:
 1. Can SAP standard replace the custom implementation?
 2. Is the code used and business-owned?
 3. Which extension use case and touchpoints remain?
-4. Should the target be Key User, developer on-stack, side-by-side or hybrid?
+4. Should the target be Key User, embedded ABAP Cloud on-stack, BTP ABAP Environment, CF, Kyma or hybrid?
 5. What A/B/C/D/Unknown evidence applies to every touchpoint?
 6. Which action is executable now, which is a manual handoff, and which needs research?
 7. Which proof and governance controls make the result acceptable?
-8. For BTP, who owns the data, which released boundary is used, and why CF or Kyma fits?
+8. For BTP, who owns the data, which released boundary is used, and why BTP ABAP Environment, CF or Kyma fits?
+
+The answer to question 4 is derived from the versioned questionnaire in [`aem-model.json`](./aem-model.json),
+not accepted as an unexplained domain preference. Incomplete or conflicting facts resolve to
+`ResearchRequired`.
 
 ## Start here
 
@@ -67,7 +72,8 @@ Level is a compliance dimension, not the architecture selector. Wrapper results 
 |---|---|
 | SAP standard replacement | Planned; retirement executable after parity approval |
 | Key User on-stack | Decision and owned manual handoff |
-| Developer Extensibility on-stack | Executable through ARC-1 only with approved ABAP Cloud target package, proven object language version and released touchpoints |
+| Embedded ABAP Cloud on-stack | Executable through ARC-1 only with approved ABAP Cloud target package, proven object language version and released touchpoints |
+| SAP BTP ABAP Environment side-by-side | Distinct Level A path; requires a target ARC-1 connection, released remote boundary and ABAP Cloud package/language proof |
 | Custom API release | Executable through ARC-1 with live contract evidence |
 | Wrapper | Executable on permitted landscapes with isolation and manual exception governance |
 | Cloud Foundry side-by-side | Executable through the evidence-gated common CAP chain and CF packaging |
@@ -80,8 +86,10 @@ Level is a compliance dimension, not the architecture selector. Wrapper results 
 - No write happens before plan approval.
 - Deterministic SAP quick fixes may share one explicit package/transport approval.
 - Mechanical agent changes and every generated redesign require concrete diff approval.
-- Developer on-stack Level A requires the `abap_cloud_target_proven` gate; missing language-version
+- Embedded ABAP Cloud on-stack Level A requires the `abap_cloud_target_proven` gate; missing language-version
   metadata blocks final A classification.
+- BTP ABAP Environment is never classified as on-stack. Embedded ABAP Cloud and side-by-side ABAP
+  Environment have distinct target domains and actions.
 - Side-by-side Level A requires `side_by_side_level_a_proven`; BTP runtime choice is never accepted
   as a substitute for released touchpoints, ownership, consistency, identity and lifecycle proof.
 - CAP schema, CAP service, Fiori Elements, freestyle UI5 and Kyma skills are conditionally
@@ -98,6 +106,7 @@ Level is a compliance dimension, not the architecture selector. Wrapper results 
 | [`WORKFLOW.md`](./WORKFLOW.md) | Operator flow and acceptance gates |
 | [`DECISION_MATRIX.md`](./DECISION_MATRIX.md) | Human-readable ordered decisions |
 | [`chain.json`](./chain.json) | Machine-readable decisions, gates, actions and skill dispatch |
+| [`aem-model.json`](./aem-model.json) | Machine-readable AEM questionnaire, architecture signals and domain selectors |
 | [`action-catalog.json`](./action-catalog.json) | ARC-1 payload examples validated against current tool schemas |
 | [`decision-scenarios.json`](./decision-scenarios.json) | Golden architecture scenarios resolved in CI |
 | [`INTEGRATIONS.md`](./INTEGRATIONS.md) | ARC-1, local skill, external SAP skill and MCP capabilities |
@@ -106,6 +115,7 @@ Level is a compliance dimension, not the architecture selector. Wrapper results 
 | [`knowledge/clean-core-extensibility/decision-rules.json`](./knowledge/clean-core-extensibility/decision-rules.json) | Compact runtime knowledge index |
 | [`knowledge/clean-core-extensibility/ARC1_RUNTIME_ACTION_MAP.md`](./knowledge/clean-core-extensibility/ARC1_RUNTIME_ACTION_MAP.md) | Knowledge-to-runtime bridge |
 | [`knowledge/clean-core-extensibility/graphify-out/graph.curated.json`](./knowledge/clean-core-extensibility/graphify-out/graph.curated.json) | Alias-merged graph with curated bridges and no zero-degree nodes |
+| [`runtime/resolve-plan.mjs`](./runtime/resolve-plan.mjs) | Installed runtime resolver for AEM, decisions, recursive actions, operations and gates |
 
 ## Validation
 
@@ -113,8 +123,11 @@ Level is a compliance dimension, not the architecture selector. Wrapper results 
 npm run check:clean-core-skills
 npm run check:skill-refs
 npm run clean-core:query -- wrapper on-stack
+npm run --silent clean-core:resolve -- --facts /path/to/facts.json
 ```
 
 The first check validates the chain contract, local skill coverage, knowledge rules, operation IDs
 and every canonical operation payload against the frozen ARC-1 schemas. The second rejects stale or
-invented tool names, actions and object types across all skill documentation.
+invented tool names, actions and object types across all skill documentation. The resolver derives
+the AEM domain, applies decision precedence, expands nested dispatches and reports every pending
+MUST gate; it never performs SAP writes.

@@ -4,11 +4,19 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import Ajv from 'ajv';
-import { resolveDecision, resolveDispatches } from '../resolve-clean-core-decision.mjs';
+import {
+  resolveCleanCorePlan,
+  resolveDecision,
+  resolveDispatches,
+  resolveExecutionPlan,
+} from '../resolve-clean-core-decision.mjs';
 
 const SKILLS_DIR = 'skills';
 const CLEAN_CORE_DIR = join(SKILLS_DIR, 'sap-erp-clean-core-refactor');
 const CHAIN_JSON = join(CLEAN_CORE_DIR, 'chain.json');
+const AEM_MODEL = join(CLEAN_CORE_DIR, 'aem-model.json');
+const RUNTIME_RESOLVER = join(CLEAN_CORE_DIR, 'runtime', 'resolve-clean-core.mjs');
+const RUNTIME_CLI = join(CLEAN_CORE_DIR, 'runtime', 'resolve-plan.mjs');
 const ACTION_CATALOG = join(CLEAN_CORE_DIR, 'action-catalog.json');
 const DECISION_SCENARIOS = join(CLEAN_CORE_DIR, 'decision-scenarios.json');
 const KNOWLEDGE_RULES = join(CLEAN_CORE_DIR, 'knowledge', 'clean-core-extensibility', 'decision-rules.json');
@@ -70,11 +78,25 @@ function lineOf(text, index) {
   return text.slice(0, index).split('\n').length;
 }
 
-for (const required of [CHAIN_JSON, ACTION_CATALOG, DECISION_SCENARIOS, KNOWLEDGE_RULES, CURATED_GRAPH, DECISION_MATRIX, README, WORKFLOW, SKILL_MD]) {
+for (const required of [
+  CHAIN_JSON,
+  AEM_MODEL,
+  RUNTIME_RESOLVER,
+  RUNTIME_CLI,
+  ACTION_CATALOG,
+  DECISION_SCENARIOS,
+  KNOWLEDGE_RULES,
+  CURATED_GRAPH,
+  DECISION_MATRIX,
+  README,
+  WORKFLOW,
+  SKILL_MD,
+]) {
   if (!existsSync(required)) fail(`${required} is missing`);
 }
 
 const chain = existsSync(CHAIN_JSON) ? readJson(CHAIN_JSON) : undefined;
+const aemModel = existsSync(AEM_MODEL) ? readJson(AEM_MODEL) : undefined;
 const catalog = existsSync(ACTION_CATALOG) ? readJson(ACTION_CATALOG) : undefined;
 const scenarios = existsSync(DECISION_SCENARIOS) ? readJson(DECISION_SCENARIOS) : undefined;
 const knowledge = existsSync(KNOWLEDGE_RULES) ? readJson(KNOWLEDGE_RULES) : undefined;
@@ -83,6 +105,7 @@ const curatedGraph = existsSync(CURATED_GRAPH) ? readJson(CURATED_GRAPH) : undef
 if (chain) {
   if (chain.version !== 2) fail(`chain.json version must be 2, got ${JSON.stringify(chain.version)}`);
   if (chain.orchestrator !== 'sap-erp-clean-core-refactor') fail('chain.json has the wrong orchestrator');
+  if (chain.aemModel !== basename(AEM_MODEL)) fail(`chain.json must reference ${basename(AEM_MODEL)}`);
   for (const mode of ['discover', 'estimate', 'plan', 'execute', 'govern']) {
     if (!chain.modes?.includes(mode)) fail(`chain.json modes[] is missing ${mode}`);
   }
@@ -106,8 +129,14 @@ if (chain) {
   }
   const onStackDecision = decisions.find((decision) => decision.id === 'ON_STACK_LEVEL_A');
   const onStackFacts = new Set((onStackDecision?.conditions ?? []).map((condition) => condition.fact));
-  for (const fact of ['abapCloudTargetPackageApproved', 'abapCloudLanguageVersionProven']) {
+  for (const fact of ['landscape', 'abapCloudTargetPackageApproved', 'abapCloudLanguageVersionProven']) {
     if (!onStackFacts.has(fact)) fail(`ON_STACK_LEVEL_A must require ${fact}`);
+  }
+  if (chain.landscapes?.btp_abap_environment?.allowedDomains?.includes('embedded_abap_cloud_on_stack')) {
+    fail('BTP ABAP Environment cannot be classified as embedded on-stack ABAP Cloud');
+  }
+  if (!decisions.some((decision) => decision.id === 'SIDE_BY_SIDE_BTP_ABAP')) {
+    fail('chain.json is missing SIDE_BY_SIDE_BTP_ABAP');
   }
 
   if (new Set(decisionIds).size !== decisionIds.length) fail('chain.json has duplicate decision ids');
@@ -123,6 +152,9 @@ if (chain) {
     if (!Array.isArray(action.localSkills)) fail(`action ${name} needs localSkills[]`);
     if (!Array.isArray(action.gates) || action.gates.length === 0) fail(`action ${name} needs non-empty gates[]`);
     if (!Array.isArray(action.operationIds)) fail(`action ${name} needs operationIds[]`);
+    if (action.externalSkills !== undefined && !Array.isArray(action.externalSkills)) {
+      fail(`action ${name} externalSkills must be an array`);
+    }
     for (const gate of action.gates ?? []) if (!gateNames.has(gate)) fail(`action ${name} references unknown gate ${gate}`);
     for (const operation of action.operationIds ?? []) {
       if (!operationNames.has(operation)) fail(`action ${name} references unknown operation ${operation}`);
@@ -179,7 +211,7 @@ if (chain) {
   }
 
   const sideBySideFacts = new Set(chain.sideBySideContract?.requiredDecisionFacts ?? []);
-  for (const id of ['SIDE_BY_SIDE_CF', 'SIDE_BY_SIDE_KYMA']) {
+  for (const id of ['SIDE_BY_SIDE_BTP_ABAP', 'SIDE_BY_SIDE_CF', 'SIDE_BY_SIDE_KYMA']) {
     const decision = decisions.find((candidate) => candidate.id === id);
     if (!decision) {
       fail(`chain.json is missing ${id}`);
@@ -219,6 +251,50 @@ if (chain) {
   }
 }
 
+if (aemModel && chain) {
+  if (aemModel.version !== 1) fail('aem-model.json version must be 1');
+  if (!Array.isArray(aemModel.sourcePages) || !aemModel.sourcePages.every(Number.isInteger)) {
+    fail('aem-model.json needs integer sourcePages[]');
+  }
+  const allowedFactTypes = new Set(['boolean', 'string', 'stringArray', 'enum']);
+  for (const [name, definition] of Object.entries(aemModel.requiredFacts ?? {})) {
+    if (!allowedFactTypes.has(definition.type)) fail(`AEM fact ${name} has invalid type ${definition.type}`);
+    if (definition.type === 'enum' && (!Array.isArray(definition.values) || !definition.values.length)) {
+      fail(`AEM enum fact ${name} needs values[]`);
+    }
+  }
+  for (const [domain, definitions] of Object.entries(aemModel.conditionalFacts ?? {})) {
+    if (!chain.targetDomains.includes(domain)) fail(`AEM conditional facts reference unknown domain ${domain}`);
+    for (const [name, definition] of Object.entries(definitions)) {
+      if (!allowedFactTypes.has(definition.type)) {
+        fail(`AEM conditional fact ${name} has invalid type ${definition.type}`);
+      }
+      if (definition.type === 'enum' && (!Array.isArray(definition.values) || !definition.values.length)) {
+        fail(`AEM conditional enum fact ${name} needs values[]`);
+      }
+    }
+  }
+  const conditionGroups = [
+    aemModel.keyUserSelector?.conditions,
+    ...Object.values(aemModel.signals ?? {}).map((signals) =>
+      signals.map(({ reason: _reason, ...condition }) => condition),
+    ),
+    ...(aemModel.sideBySideSelectors ?? []).map((selector) => selector.conditions),
+  ];
+  for (const conditions of conditionGroups) {
+    for (const condition of conditions ?? []) {
+      if (!aemModel.requiredFacts?.[condition.fact]) fail(`AEM condition references unknown fact ${condition.fact}`);
+      const supported = Object.hasOwn(condition, 'equals') || Array.isArray(condition.in);
+      if (!supported) fail(`AEM condition is unsupported: ${JSON.stringify(condition)}`);
+    }
+  }
+  for (const selector of [aemModel.keyUserSelector, ...(aemModel.sideBySideSelectors ?? [])]) {
+    if (!chain.targetDomains.includes(selector.domain)) {
+      fail(`AEM selector references unknown domain ${selector.domain}`);
+    }
+  }
+}
+
 if (chain && scenarios) {
   if (scenarios.version !== 1) fail('decision-scenarios.json version must be 1');
   const ids = scenarios.scenarios?.map((scenario) => scenario.id) ?? [];
@@ -240,8 +316,46 @@ if (chain && scenarios) {
           );
         }
       }
+      if (Array.isArray(scenario.expectedActionPlan) && actual) {
+        const resolved = resolveExecutionPlan(chain, actual.action, scenario.facts).map((action) => action.action);
+        if (JSON.stringify(resolved) !== JSON.stringify(scenario.expectedActionPlan)) {
+          fail(
+            `decision scenario ${scenario.id} expected action plan ${JSON.stringify(scenario.expectedActionPlan)}, got ${JSON.stringify(resolved)}`,
+          );
+        }
+      }
     } catch (error) {
       fail(`decision scenario ${scenario.id} failed: ${error.message}`);
+    }
+  }
+  for (const scenario of scenarios.runtimeScenarios ?? []) {
+    if (!aemModel || !scenario.facts || !scenario.expectedDecision || !scenario.expectedAemStatus) {
+      fail(`runtime decision scenario ${scenario.id} is incomplete`);
+      continue;
+    }
+    try {
+      const result = resolveCleanCorePlan(chain, aemModel, scenario.facts);
+      if (result.aem.status !== scenario.expectedAemStatus) {
+        fail(`runtime scenario ${scenario.id} expected AEM ${scenario.expectedAemStatus}, got ${result.aem.status}`);
+      }
+      if (scenario.expectedDomain && result.aem.selectedDomain !== scenario.expectedDomain) {
+        fail(
+          `runtime scenario ${scenario.id} expected domain ${scenario.expectedDomain}, got ${result.aem.selectedDomain}`,
+        );
+      }
+      if (result.decision.id !== scenario.expectedDecision) {
+        fail(`runtime scenario ${scenario.id} expected ${scenario.expectedDecision}, got ${result.decision.id}`);
+      }
+      if (Array.isArray(scenario.expectedActionPlan)) {
+        const actions = result.actions.map((action) => action.action);
+        if (JSON.stringify(actions) !== JSON.stringify(scenario.expectedActionPlan)) {
+          fail(
+            `runtime scenario ${scenario.id} expected action plan ${JSON.stringify(scenario.expectedActionPlan)}, got ${JSON.stringify(actions)}`,
+          );
+        }
+      }
+    } catch (error) {
+      fail(`runtime decision scenario ${scenario.id} failed: ${error.message}`);
     }
   }
 }
@@ -357,7 +471,7 @@ if (curatedGraph) {
 }
 
 const readme = existsSync(README) ? readText(README) : '';
-for (const required of ['SKILL.md', 'WORKFLOW.md', 'DECISION_MATRIX.md', 'chain.json', 'action-catalog.json', 'decision-scenarios.json', 'INTEGRATIONS.md', 'PATTERNS.md', 'SOURCES.md']) {
+for (const required of ['SKILL.md', 'WORKFLOW.md', 'DECISION_MATRIX.md', 'chain.json', 'aem-model.json', 'action-catalog.json', 'decision-scenarios.json', 'INTEGRATIONS.md', 'PATTERNS.md', 'SOURCES.md']) {
   if (readme && !readme.includes(required)) fail(`${README} should reference ${required}`);
 }
 for (const file of [WORKFLOW, SKILL_MD]) {

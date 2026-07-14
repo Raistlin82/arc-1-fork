@@ -1,7 +1,7 @@
 # Clean Core Architecture and Execution Patterns
 
 This reference contains the reusable patterns used by [`SKILL.md`](./SKILL.md). It does not repeat
-the exact routing contract in [`chain.json`](./chain.json) or tool payloads in
+the exact AEM contract in [`aem-model.json`](./aem-model.json), routing in [`chain.json`](./chain.json) or tool payloads in
 [`action-catalog.json`](./action-catalog.json).
 
 ## 1. Decision record
@@ -52,6 +52,11 @@ dependency.
 
 ## 4. Target-domain selection
 
+The runtime resolver requires the complete AEM questionnaire. It records which authoritative
+on-stack and side-by-side signals matched. Both groups without an approved responsibility split,
+no matched group, missing facts, an incompatible implementation/runtime pair or a domain hint that
+disagrees with the derived result all produce `ResearchRequired`.
+
 ### Key User on-stack
 
 Prefer when the requirement is bounded to supported custom fields, UI adaptation, forms, analytics,
@@ -68,7 +73,7 @@ Required handoff:
 
 ARC-1 may inventory and document the replaced code but does not automate Key User apps.
 
-### Developer Extensibility on-stack
+### Embedded ABAP Cloud on-stack
 
 Prefer when:
 
@@ -80,6 +85,17 @@ Prefer when:
 
 Use embedded ABAP Cloud language/version rules, released SAP/custom APIs, RAP/CDS where appropriate,
 and strict package/software-component boundaries.
+
+### SAP BTP ABAP Environment side-by-side
+
+This is ABAP Cloud, but it is not on-stack. Select it for an independently operated side-by-side
+ABAP solution when AEM favors side-by-side and `implementationModel=abap_cloud` with
+`sideBySideRuntime=btp_abap`.
+
+Level A additionally requires a released remote ERP API/event boundary, explicit data and
+transaction ownership, identity, independent lifecycle and a connected target ARC-1 context. The
+target package and object language version must prove ABAP Cloud. Never route BTP target writes
+through the source S/4 connection.
 
 ### Side-by-side on Cloud Foundry
 
@@ -220,14 +236,16 @@ The side-by-side plan must define:
 - availability, observability, transport and operations;
 - business parity and ERP retirement sequence.
 
-Run `modernize-abap-side-by-side-core` first and persist these facts in
-`side-by-side-decision.json`. Then dispatch only the selected implementation branches.
+The AEM resolver first distinguishes BTP ABAP Environment from CF/Kyma. For CAP, run
+`modernize-abap-side-by-side-core` and persist `side-by-side-decision.json`; then dispatch only the
+selected implementation branches.
 
 ### Data ownership
 
 | Ownership | CAP modeling rule |
 |---|---|
 | `s4` | Consume a released remote API/event; no generated CAP persistence for S/4 tables |
+| `btp_abap` | Persist only the bounded context approved for BTP ABAP Environment; do not dispatch CAP CDS |
 | `cap` | Generate CAP CDS only for the approved bounded context |
 | `replicated` | Generate CAP CDS plus source contract, key, ordering, idempotency, reconciliation, retention and deletion controls |
 | `none` | Keep the service stateless |
@@ -237,6 +255,7 @@ Run `modernize-abap-side-by-side-core` first and persist these facts in
 | Target | Skill family | Responsibility |
 |---|---|---|
 | S/4 boundary | `sap-abap-cds`, RAP skills, `generate-cds-unit-test` | ABAP CDS/RAP and released ERP contract |
+| BTP ABAP Environment | `sap-abap`, `sap-abap-cds`, ABAP unit/CDS tests | Side-by-side ABAP Cloud implementation and released remote boundary |
 | CAP model/service | `sap-cap-capire`, `modernize-abap-cap-schema`, `modernize-abap-cap-service`, `generate-cap-cds-test` | CAP CDS persistence, service and tests |
 
 Use both only for `cdsTarget=dual_boundary`. A custom RAP boundary built entirely on released
@@ -336,15 +355,16 @@ The decision engine must correctly handle at least:
 1. Existing A on-stack implementation remains on-stack.
 2. Custom field/UI requirement selects Key User A with manual handoff.
 3. Tight transaction/high-volume requirement selects embedded ABAP Cloud A.
-4. SaaS/mobile/multi-system CAP requirement selects CF only after the complete Level A BTP contract.
-5. Classic BAPI wrapper reports A+B.
-6. Internal-table wrapper reports A+C and a time-bound exception.
-7. Stable custom dependency selects API release and then reclassification.
-8. Level D modification selects released BAdI A, classic B or side-by-side based on live evidence.
-9. Unused unit retires after final references and owner approval.
-10. Mixed custom field plus mobile use case selects hybrid.
-11. Public Cloud refuses B and wrapper debt.
-12. Missing evidence selects `ResearchRequired`, never D by assumption.
-13. CAP-owned data dispatches CAP schema; S/4-owned data does not.
-14. A justified Kubernetes requirement selects Kyma; runtime preference alone does not.
-15. CAP Fiori Elements and freestyle UI5 are mutually exclusive dispatches.
+4. Independently operated ABAP Cloud selects BTP ABAP Environment side-by-side, never on-stack.
+5. SaaS/mobile/multi-system CAP requirement selects CF only after the complete Level A BTP contract.
+6. Classic BAPI wrapper reports A+B.
+7. Internal-table wrapper reports A+C and a time-bound exception.
+8. Stable custom dependency selects API release and then reclassification.
+9. Level D modification selects released BAdI A, classic B or side-by-side based on live evidence.
+10. Unused unit retires after final references and owner approval.
+11. Mixed custom field plus mobile use case selects hybrid and expands its nested runtime actions.
+12. Public Cloud refuses B and wrapper debt.
+13. Missing or conflicting AEM evidence selects `ResearchRequired`, never D by assumption.
+14. CAP-owned data dispatches CAP schema; S/4-owned data does not.
+15. A justified Kubernetes requirement selects Kyma; runtime preference alone does not.
+16. CAP Fiori Elements and freestyle UI5 are mutually exclusive dispatches.
