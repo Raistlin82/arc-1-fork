@@ -1,6 +1,8 @@
 ---
 name: arc1-cursor-regression
-description: Use when user asks to generate Cursor MCP config + regression prompts for ARC-1. Adaptive: derive tests from PR diff or chat findings and build targeted setup/prompts for changed features/fixes.
+description: >-
+  Use when user asks to generate Cursor MCP config + regression prompts for ARC-1. Adaptive: derive
+  tests from PR diff or chat findings and build targeted setup/prompts for changed features/fixes.
 ---
 
 # ARC-1 Cursor Regression Skill (Generic + Adaptive)
@@ -335,8 +337,9 @@ For DDLS runtime checks in generated prompts:
 - Keep evidence snippets tied to the exact tool call under test; do not paste
   static source excerpts unless static behavior failed.
 - For multi-phase prompts, specify which tool response owns each evidence block
-  (for example update guidance from `SAPWrite(update)`, activation guidance from
-  `SAPActivate(ROOT)`, delete guidance from the first pre-cleanup root delete).
+  (for example update guidance from `SAPWrite(action="update", type="<type>", name="<name>", source="<source>")`,
+  activation guidance from `SAPActivate(type="<type>", name="<name>")`, and delete guidance from
+  `SAPWrite(action="delete", type="<type>", name="<name>")` in the first pre-cleanup root delete).
 - If live sections are skipped because write-smoke failed, keep skipped YAML
   sections compact with empty arrays and one-line raw snippets.
 

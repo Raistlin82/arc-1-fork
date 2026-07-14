@@ -28,7 +28,7 @@ If the scope is clear, start immediately:
    - Clean-core/API risk: reuse `sap-clean-core-atc` logic
    - SAP Docs MCP: enrich SAP API references with `sap_get_object_details`; use `search`/`fetch` for the top ATC themes or replacement guidance
    - Usage/retirement: reuse `sap-unused-code` only if SCMON/SUSG data is available
-   - Dependencies/where-used: `SAPContext` or `SAPNavigate(action="references")`
+   - Dependencies/where-used: `SAPContext(action="deps", type="<type>", name="<name>")` or `SAPNavigate(action="references", type="<type>", name="<name>")`
 4. Return a concise report with:
    - headline counts
    - highest-risk objects

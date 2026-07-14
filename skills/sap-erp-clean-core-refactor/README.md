@@ -18,6 +18,7 @@ For each logical unit, the orchestrator answers:
 5. What A/B/C/D/Unknown evidence applies to every touchpoint?
 6. Which action is executable now, which is a manual handoff, and which needs research?
 7. Which proof and governance controls make the result acceptable?
+8. For BTP, who owns the data, which released boundary is used, and why CF or Kyma fits?
 
 ## Start here
 
@@ -69,8 +70,8 @@ Level is a compliance dimension, not the architecture selector. Wrapper results 
 | Developer Extensibility on-stack | Executable through ARC-1 only with approved ABAP Cloud target package, proven object language version and released touchpoints |
 | Custom API release | Executable through ARC-1 with live contract evidence |
 | Wrapper | Executable on permitted landscapes with isolation and manual exception governance |
-| Cloud Foundry side-by-side | Executable through the CAP/Fiori skill chain |
-| Kyma side-by-side | Architecture/manual handoff; current CAP skill is CF-only |
+| Cloud Foundry side-by-side | Executable through the evidence-gated common CAP chain and CF packaging |
+| Kyma side-by-side | CAP build and official Kyma/Helm preparation are executable; deployment needs cluster/registry approval |
 | ATC exemption creation | Manual/external; ARC-1 has no such operation |
 
 ## Safety model
@@ -81,6 +82,10 @@ Level is a compliance dimension, not the architecture selector. Wrapper results 
 - Mechanical agent changes and every generated redesign require concrete diff approval.
 - Developer on-stack Level A requires the `abap_cloud_target_proven` gate; missing language-version
   metadata blocks final A classification.
+- Side-by-side Level A requires `side_by_side_level_a_proven`; BTP runtime choice is never accepted
+  as a substitute for released touchpoints, ownership, consistency, identity and lifecycle proof.
+- CAP schema, CAP service, Fiori Elements, freestyle UI5 and Kyma skills are conditionally
+  dispatched from the reviewed side-by-side contract, never called as an unconditional bundle.
 - Syntax, activation, ATC and applicable tests remain mandatory.
 - `sap-transport-review` is the final release gate.
 - C/D exceptions are visible, owned and time-bound.

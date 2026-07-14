@@ -77,7 +77,7 @@ For each MCP tool call in the session, record:
 | Field | What to capture |
 |---|---|
 | **Tool** | Which of the 11 tools was called (SAPRead, SAPSearch, etc.) |
-| **Operation** | The specific action/type/include (e.g., `SAPRead type=CLAS format=structured`) |
+| **Operation** | The specific action/type/include (e.g., `SAPRead(type="CLAS", name="<name>", format="structured")`) |
 | **Intent** | What information was the LLM trying to get? |
 | **Result** | `success`, `error`, `partial`, `empty`, `redundant` |
 | **Error type** | If failed: `not_found`, `auth`, `safety`, `network`, `validation`, `btp_unsupported`, `session`, `other` |
@@ -100,7 +100,7 @@ Look for these anti-patterns:
 | **Over-fetching** | Reading entire objects when only a method or section was needed | Wasted tokens (use `method` param or `edit_method`) |
 | **Missing method listing** | Modifying a class without first getting `method="*"` to understand the API | Blind modifications |
 | **Wrong action sequence** | e.g., trying to activate before saving, or writing without reading first | Procedural error |
-| **Ignored BTP constraints** | Attempting on-prem-only operations on BTP system | Known limitation, should check `SAPManage features` first |
+| **Ignored BTP constraints** | Attempting on-prem-only operations on BTP system | Known limitation, should check `SAPManage(action="features")` first |
 
 ---
 
@@ -284,15 +284,15 @@ Use this reference to assess whether the LLM used the right tools. This is a con
 
 ### Write Sequence
 1. Read first (understand current state)
-2. `SAPWrite action=create` or `action=update` or `action=edit_method`
+2. A complete `SAPWrite(action="create", type="<type>", name="<name>", source="<source>")`, `SAPWrite(action="update", type="<type>", name="<name>", source="<source>")`, or `SAPWrite(action="edit_method", type="CLAS", name="<name>", method="<method>", source="<source>")` call
 3. `SAPActivate` (single or batch with `objects[]`)
 4. `SAPRead(type="<type>", name="<name>")` then `SAPDiagnose(action="syntax", type="<type>", name="<name>", source="<saved_source>")`, or `SAPDiagnose(action="unittest", type="<type>", name="<name>")` to verify
 
 ### Context & Navigation
-- `SAPContext action=deps` — dependency graph (preferred over manual reads)
-- `SAPContext action=usages` — reverse dependencies (needs cache warmup)
-- `SAPNavigate action=definition` — go-to-definition (needs URI + line/col + source)
-- `SAPNavigate action=references` — where-used
+- `SAPContext(action="deps", type="<type>", name="<name>")` — dependency graph (preferred over manual reads)
+- `SAPContext(action="usages", name="<name>")` — reverse dependencies (needs cache warmup)
+- `SAPNavigate(action="definition", uri="<adt_uri>", line=<line>, column=<column>, source="<source>")` — go-to-definition
+- `SAPNavigate(action="references", type="<type>", name="<name>")` — where-used
 
 ### Common Error Recovery Paths
 | Error | Recovery |

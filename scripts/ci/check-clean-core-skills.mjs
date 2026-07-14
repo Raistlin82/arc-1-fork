@@ -4,7 +4,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import Ajv from 'ajv';
-import { resolveDecision } from '../resolve-clean-core-decision.mjs';
+import { resolveDecision, resolveDispatches } from '../resolve-clean-core-decision.mjs';
 
 const SKILLS_DIR = 'skills';
 const CLEAN_CORE_DIR = join(SKILLS_DIR, 'sap-erp-clean-core-refactor');
@@ -127,6 +127,13 @@ if (chain) {
     for (const operation of action.operationIds ?? []) {
       if (!operationNames.has(operation)) fail(`action ${name} references unknown operation ${operation}`);
     }
+    for (const [phase, phaseGates] of Object.entries(action.gatePhases ?? {})) {
+      if (!Array.isArray(phaseGates) || phaseGates.length === 0) fail(`action ${name} gate phase ${phase} needs gates[]`);
+      for (const gate of phaseGates ?? []) {
+        if (!gateNames.has(gate)) fail(`action ${name} gate phase ${phase} references unknown gate ${gate}`);
+        if (!action.gates.includes(gate)) fail(`action ${name} gate phase ${phase} omits ${gate} from action gates[]`);
+      }
+    }
   }
 
   for (const decision of decisions) {
@@ -160,6 +167,28 @@ if (chain) {
     if (dispatch.mode !== 'mayOnly' && !parents.length) fail(`dispatch ${dispatch.condition} needs parentActions[]`);
     for (const parent of parents) if (!actionNames.has(parent)) fail(`dispatch ${dispatch.condition} has unknown parent ${parent}`);
     if (!actionNames.has(dispatch.action)) fail(`dispatch ${dispatch.condition} has unknown action ${dispatch.action}`);
+    if (!Array.isArray(dispatch.conditions) || dispatch.conditions.length === 0) {
+      fail(`dispatch ${dispatch.condition} needs structured conditions[]`);
+    }
+    for (const condition of dispatch.conditions ?? []) {
+      const supported =
+        condition.always === true ||
+        (typeof condition.fact === 'string' && (Object.hasOwn(condition, 'equals') || Array.isArray(condition.in)));
+      if (!supported) fail(`dispatch ${dispatch.condition} has unsupported condition ${JSON.stringify(condition)}`);
+    }
+  }
+
+  const sideBySideFacts = new Set(chain.sideBySideContract?.requiredDecisionFacts ?? []);
+  for (const id of ['SIDE_BY_SIDE_CF', 'SIDE_BY_SIDE_KYMA']) {
+    const decision = decisions.find((candidate) => candidate.id === id);
+    if (!decision) {
+      fail(`chain.json is missing ${id}`);
+      continue;
+    }
+    const decisionFacts = new Set(decision.conditions.map((condition) => condition.fact));
+    for (const fact of sideBySideFacts) {
+      if (!decisionFacts.has(fact)) fail(`${id} must require side-by-side Level A fact ${fact}`);
+    }
   }
 
   const matrix = existsSync(DECISION_MATRIX) ? readText(DECISION_MATRIX) : '';
@@ -203,6 +232,14 @@ if (chain && scenarios) {
       if (actual?.id !== scenario.expectedDecision) {
         fail(`decision scenario ${scenario.id} expected ${scenario.expectedDecision}, got ${actual?.id ?? 'no match'}`);
       }
+      if (Array.isArray(scenario.expectedDispatches) && actual) {
+        const resolved = resolveDispatches(chain, actual.action, scenario.facts).map((dispatch) => dispatch.action);
+        if (JSON.stringify(resolved) !== JSON.stringify(scenario.expectedDispatches)) {
+          fail(
+            `decision scenario ${scenario.id} expected dispatches ${JSON.stringify(scenario.expectedDispatches)}, got ${JSON.stringify(resolved)}`,
+          );
+        }
+      }
     } catch (error) {
       fail(`decision scenario ${scenario.id} failed: ${error.message}`);
     }
@@ -223,6 +260,14 @@ if (catalog) {
   for (const [id, operation] of Object.entries(catalog.operations ?? {})) {
     if (!operation.tool || !operation.exampleArgs) fail(`operation ${id} needs tool and exampleArgs`);
     if (!Array.isArray(operation.requiredInputs)) fail(`operation ${id} needs requiredInputs[]`);
+    if (new Set(operation.requiredInputs ?? []).size !== (operation.requiredInputs ?? []).length) {
+      fail(`operation ${id} has duplicate requiredInputs`);
+    }
+    for (const input of operation.requiredInputs ?? []) {
+      if (!Object.hasOwn(operation.exampleArgs ?? {}, input)) {
+        fail(`operation ${id} requires input ${input}, but exampleArgs has no matching property`);
+      }
+    }
     const candidates = schemas.get(operation.tool) ?? [];
     if (!candidates.length) {
       fail(`operation ${id} references unknown tool ${operation.tool}`);
@@ -237,6 +282,32 @@ if (catalog) {
         })
         .join(' | ');
       fail(`operation ${id} example does not match any ${operation.tool} schema: ${details}`);
+    }
+    if (
+      operation.tool === 'SAPWrite' &&
+      operation.exampleArgs?.action === 'create' &&
+      ['SKTD', 'KTD'].includes(operation.exampleArgs?.type)
+    ) {
+      const supportedRefTypes = new Set([
+        'BDEF/BAC',
+        'BDEF/BAE',
+        'BDEF/BAF',
+        'BDEF/BAS',
+        'BDEF/BDE',
+        'BDEF/BDO',
+        'BDEF/BSO',
+        'BDEF/BVA',
+        'DDLS/DF',
+        'DEVC/K',
+        'SRVB/SVB',
+        'SRVD/SRV',
+      ]);
+      const refType = String(operation.exampleArgs.refObjectType ?? '').toUpperCase();
+      const refName = String(operation.exampleArgs.refObjectName ?? operation.exampleArgs.name);
+      if (!supportedRefTypes.has(refType)) fail(`operation ${id} has unsupported SKTD refObjectType ${refType || '(missing)'}`);
+      if (String(operation.exampleArgs.name).toUpperCase() !== refName.toUpperCase()) {
+        fail(`operation ${id} SKTD name must match refObjectName`);
+      }
     }
   }
 }

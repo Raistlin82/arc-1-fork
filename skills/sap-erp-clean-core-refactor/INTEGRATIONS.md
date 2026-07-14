@@ -30,12 +30,16 @@ never assume a plugin command exists because it appears in this document.
 | Mechanical fixes | quickfix, lint, syntax | `quickfix_preview`, `quickfix_apply`, `lint_candidate`, `format_candidate`, `syntax_check` | Keep as proposal/manual remediation |
 | ABAP execution | update/create, activation, unit tests, diff | `write_update`, `batch_create_objects`, `activate_object`, `run_unit_tests`, `read_diff` | Plan remains read-only |
 | API governance | read/set release contract | `read_api_state`, `release_api` | No release action; redesign or research |
-| Wrapper | package, class, API release, SKTD | `create_wrapper_package`, `create_wrapper_class`, `release_api`, `write_governance_document` | Wrapper path blocked |
+| Wrapper | package, class, API release, package-attached SKTD | `create_wrapper_package`, `create_wrapper_class`, `release_api`, `write_governance_document` | Wrapper path blocked |
 | Retirement | references, delete | `find_references`, `delete_object` | No deletion |
 | Transport | check, create, recursive release | `transport_check`, `transport_create`, `transport_release` | No write execution/release |
 
 Use the catalog rather than writing abbreviated examples in generated plans. Runtime values are
 substituted, but the property names and required inputs remain unchanged.
+
+For a wrapper decision, attach the KTD to the wrapper package with `refObjectType="DEVC/K"`; do not
+attempt to attach it to the wrapper class. ARC-1 supports only its verified KTD parent routes, and
+the KTD `name` must equal `refObjectName`.
 
 ## Local skill orchestration
 
@@ -51,7 +55,7 @@ substituted, but the property names and required inputs remain unchanged.
 | `sap-object-documenter` | MUST for decisions/exceptions | Standard replacement, Key User, wrapper, keep B | As-is/to-be and governance record |
 | `migrate-custom-code` | MUST for deterministic findings | Quickfixable/mechanical ATC set | Canonical quickfix executor |
 | `generate-abap-unit-test` | SHOULD; MUST for wrapper/high-risk logic | ABAP behavior needs regression protection | Test baseline and generated tests |
-| `generate-cds-unit-test` | SHOULD; MUST for semantic CDS change | CDS behavior/filter/aggregation changes | CDS regression tests |
+| `generate-cds-unit-test` | SHOULD; MUST for semantic ABAP CDS change | ABAP CDS behavior/filter/aggregation changes in S/4 | ABAP CDS Test Double regression tests |
 | `generate-rap-logic` | Branch-MUST | RAP behavior implementation gap | Behavior-pool implementation |
 | `generate-rap-service-researched` | Branch-MUST | Approved full production RAP target | Research-backed RAP stack |
 | `generate-rap-service` | MAY only | Small prototype explicitly requested | Never a production refactor default |
@@ -59,24 +63,29 @@ substituted, but the property names and required inputs remain unchanged.
 | `generate-analytics-star-schema` | Branch-MUST | Embedded analytical model | Cube/star model generation |
 | `generate-cds-analytical-query` | Branch-MUST | Analytical query target | Query generation |
 | `debug-slow-sql` | Branch-MUST | Hot data access or performance regression | SQL/runtime evidence |
-| `modernize-abap-to-btp-cap` | Branch-MUST for CF | Approved side-by-side Cloud Foundry | CF-only CAP orchestrator |
-| `modernize-abap-cap-schema` | Internal CF branch | CAP schema extraction | Data model target |
-| `modernize-abap-cap-service` | Internal CF branch | CAP service extraction | Service target |
-| `convert-ui5-to-fiori-elements` | Conditional | Annotation-driven UI target | Fiori Elements migration |
-| `modernize-ui5-app` | Conditional | Freestyle/custom-control UI target | UI5 modernization |
+| `modernize-abap-side-by-side-core` | Branch-MUST | Every proposed BTP Level A or hybrid target | Released boundary, ownership, consistency, identity, UI and runtime contract |
+| `modernize-abap-to-btp-cap` | Branch-MUST for CAP | Approved CF or Kyma CAP implementation | Runtime-neutral staged CAP build plus conditional dispatch |
+| `modernize-abap-cap-schema` | Conditional MUST | `dataOwnership=cap|replicated` | CAP CDS persistence for approved entities only |
+| `modernize-abap-cap-service` | Conditional MUST | `capServiceRequired=true` | Remote, CAP-owned or event-driven service target |
+| `generate-cap-cds-test` | Branch-MUST | Every CAP target | CAP model/service/auth/event/parity proof; blocks 501/TODO stubs |
+| `scaffold-cap-fiori-elements` | Conditional MUST | `uiTarget=cap_fiori_elements` | Fiori Elements V4 over CAP metadata/annotations |
+| `convert-ui5-to-fiori-elements` | Conditional on-stack only | Fiori Elements target over ABAP CDS/RAP | RAP-oriented Fiori Elements migration |
+| `modernize-ui5-app` | Conditional MUST | `uiTarget=ui5_freestyle` | Side-by-side freestyle UI5 modernization |
+| `deploy-cap-to-kyma` | Conditional MUST | `runtime=kyma` after CAP verification | Official CAP Kyma/Helm preparation and approved deployment |
 | `sap-transport-review` | MUST before release | Any changed transport | Diff/risk/release gate |
 | `analyze-chat-session` | Optional | After material execution | Lessons and pattern feedback |
 
-## Key User and Kyma capability status
+## Key User and BTP runtime capability status
 
 | Capability | Current implementation | Required plan output |
 |---|---|---|
 | Key User extensibility | Decision and manual handoff only | SAP app/tool, released extension point, custom field/object, business owner, lifecycle, acceptance tests |
-| Kyma side-by-side | Architecture and handoff only | workload split, APIs/events, security, operations, delivery owner, deployment and acceptance plan |
+| Cloud Foundry CAP | Conditional executable chain | side-by-side contract, CAP build/test, services, MTA/delivery owner and acceptance evidence |
+| Kyma CAP | Conditional executable chain | same contract/build/test plus Kubernetes need, cluster, registry, namespace, Helm, operations and deployment approval |
 
-Do not route Key User work through generic `SAPWrite`. Do not invoke the CF-only CAP skill for Kyma.
-When a future MCP or skill exposes a validated implementation API, add it to `action-catalog.json`
-and CI before changing either path to executable.
+Do not route Key User work through generic `SAPWrite`. Do not emit CF and Kyma packaging together.
+Kyma preparation uses `deploy-cap-to-kyma`; an unavailable cluster/registry remains an explicit
+handoff and is never reported as deployed.
 
 ## SAP documentation MCPs
 
@@ -105,11 +114,11 @@ These are capability references only. Do not copy their text into this repositor
 | Skill/capability | Severity | Trigger |
 |---|---|---|
 | `sap-abap` | SHOULD | Any generated ABAP rewrite |
-| `sap-abap-cds` | Branch-MUST | CDS/RAP target |
+| `sap-abap-cds` | Branch-MUST | ABAP CDS/RAP target in S/4 only; never CAP CDS |
 | `sap-api-style` | SHOULD; MUST for externally exposed custom API | Before API release/service contract approval |
 | `sap-btp-best-practices` | Branch-MUST | Every production BTP target |
 | `sap-btp-developer-guide` | Branch-MUST | BTP architecture/deployment handoff |
-| `sap-cap-capire` | Branch-MUST | CAP target |
+| `sap-cap-capire` | Branch-MUST | CAP CDS/model/service/test target on CF or Kyma |
 
 ### BTP and integration branches
 

@@ -936,7 +936,7 @@ Offer follow-up actions based on the plan:
   - `SAPManage(action="flp_add_tile_to_group", groupId="Z_<ENTITY>_G", catalogId="Z_<ENTITY>_C", tileInstanceId="Z_<ENTITY>_T")`
 8. **Create DOMA/DTEL** (if not done in Phase 4) for proper reusable typing
 9. **Release transport** (if transportable package) → use `SAPTransport(action="release_recursive", id="<TR>")` to release tasks and parent in one step
-10. **Attach generated documentation** (optional) → use `SAPWrite(action="create", type="SKTD", refObjectType="SRVD", name="<service_doc_name>", source="<architecture_summary_markdown>")`
+10. **Attach generated documentation** (optional) → use `SAPWrite(action="create", type="SKTD", name="<service_definition_name>", description="Service architecture", package="<package>", transport="<transport>", refObjectType="SRVD/SRV", refObjectName="<service_definition_name>", source="<architecture_summary_markdown>")`
 11. **Review transport + revision context on later iterations**:
     - `SAPTransport(action="history", type="SRVD", name="ZSD_<ENTITY>")`
     - `SAPRead(type="VERSIONS", name="ZSD_<ENTITY>", objectType="SRVD")`

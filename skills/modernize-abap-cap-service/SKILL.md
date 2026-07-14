@@ -1,19 +1,25 @@
 ---
 name: modernize-abap-cap-service
-description: Generate a CAP service definition (`srv/service.cds` + handler skeletons) from a Z* package's function modules, function groups, and reports. Maps ABAP signatures to CAP service actions, classifies bound vs unbound, generates TypeScript handler stubs with ABAP source context as TODOs. Use when asked to "convert this ABAP FM to a CAP service", "generate CAP service from Z report", "expose Z business logic as OData V4", or as sub-skill of `modernize-abap-to-btp-cap`.
+description: Designs and generates a CAP service from an approved side-by-side contract and selected ABAP behavior. Chooses released remote-service consumption, migrated CAP-owned logic, or governed event handling from data ownership and transaction boundaries. Generated TODO/501 handlers are explicitly incomplete and block acceptance.
 ---
 
 # Modernize ABAP → CAP Service
 
-Produces `<target>/srv/service.cds` + handler skeletons from a Z* package's function modules (`FUGR`), reports (`PROG`), and class methods. Greenfield CAP service exposing equivalent business logic as OData V4 actions.
+Produces `<target>/srv/service.cds` and implementations from approved function modules (`FUGR`),
+reports (`PROG`), class methods, released APIs, or events. It does not assume that every ABAP
+procedure should become an OData action.
 
 Sub-skill of [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-cap/SKILL.md). Usable standalone when only the service layer needs migration (existing CAP schema, new service on top).
 
 ## Input
 
 ```
-<Z-package> <target-dir> [--service-name=MyService] [--ts|--js]
+<Z-package> <target-dir> --decision=<path>/side-by-side-decision.json --objects=<O1,O2,...> [--service-name=MyService] [--ts|--js]
 ```
+
+Require `capServiceRequired=true`, a released integration boundary, explicit data ownership, and an
+approved object list. Package enumeration is discovery evidence, not permission to expose all
+public-looking methods.
 
 ## Defaults
 
@@ -26,6 +32,15 @@ Sub-skill of [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-
 | Auth | `@requires: 'authenticated-user'` (refine in `services-auth.cds` later) |
 | Logging | `cds.log('<service-name>')` per handler |
 | Error handling | central `rejectSafe` helper (created if absent) |
+
+## Service modes
+
+| Contract | Mode | Rule |
+|---|---|---|
+| `dataOwnership=s4` | Released remote service | Import/consume the released API; do not recreate S/4 persistence |
+| `dataOwnership=cap` | CAP-owned service | Port only approved business behavior and persistence |
+| `dataOwnership=replicated` | Event/API consumer plus CAP service | Implement idempotency, ordering, reconciliation and failure handling |
+| `dataOwnership=none` | Stateless orchestration | No generated database entity |
 
 ## ABAP → CAP signature mapping
 
@@ -50,9 +65,12 @@ Exception class → HTTP code defaults:
 
 ## Workflow
 
-### Step 1 — Enumerate
+### Step 1 — Validate the contract and enumerate evidence
 
-`SAPRead(type="DEVC", name="<pkg>")` recursively, then filter customer `FUGR`, `PROG`, and `CLAS` rows. Use `SAPSearch(searchType="tadir_lookup", names=["<object_name>"], objectTypes=["FUGR","PROG","CLAS"])` only to validate exact names across packages; `tadir_lookup` does not enumerate by `packageName`.
+Load `side-by-side-decision.json`. Confirm the boundary, ownership, transaction and identity model,
+then use `SAPRead(type="DEVC", name="<pkg>")` recursively to validate the approved `--objects`.
+Use `SAPSearch(searchType="tadir_lookup", names=["<object_name>"], objectTypes=["FUGR","PROG","CLAS"])`
+only to validate exact names across packages; `tadir_lookup` does not enumerate by `packageName`.
 
 Filter out:
 - Helper / utility classes already covered by `migrate-custom-code` (those rewrite in-place, not exposed).
@@ -65,7 +83,7 @@ Per FM / method / report:
 - `SAPRead(type="FUNC", name="<fm>", group="<fugr>", includeSignature=true)` — I/O parameters + raising classes (FUNC reads require the enclosing function group).
 - Whole-group sweep: `SAPRead(type="FUGR", name="<fugr>", expand_includes=true)` — FM bodies live in nested `LZ*U01` includes; without the flag you get only the group shell.
 - `SAPRead(type="CLAS", name="<cls>", format="structured")` — public methods + types.
-- Caller fan-in: for `DDLS` roots use `SAPContext(action="impact", type="DDLS", name="<obj>")`; for `FUGR`, `PROG`, `CLAS`, and `FUNC` use `SAPNavigate(action="references", type="<type>", name="<obj>")` (or cached `SAPContext(action="usages")` when ARC-1 cache warmup is enabled).
+- Caller fan-in: for `DDLS` roots use `SAPContext(action="impact", type="DDLS", name="<obj>")`; for `FUGR`, `PROG`, `CLAS`, and `FUNC` use `SAPNavigate(action="references", type="<type>", name="<obj>")` (or cached `SAPContext(action="usages", name="<obj>")` when ARC-1 cache warmup is enabled).
 
 ### Step 3 — Decide service shape
 
@@ -76,6 +94,10 @@ Per FM / method / report:
 | Heavy read, light return | OData function (read-only) instead of action |
 | Mutating + returns updated entity | Bound action |
 | Pure utility (no entity context) | Unbound action under service root |
+
+Before mapping signatures, classify each behavior as `consume_remote`, `port_to_cap`,
+`event_consumer`, `keep_on_stack`, or `retire`. An S/4-owned mutation normally remains behind a
+released S/4 API; CAP must not emulate it against copied tables.
 
 ### Step 4 — Generate `srv/service.cds`
 
@@ -129,19 +151,24 @@ export default class <ServiceName>Service extends cds.ApplicationService {
 }
 ```
 
-Every stub includes a TODO with the source ABAP object name so the developer doing the port has the audit trail.
+Every stub includes a TODO with the source ABAP object name so the developer doing the port has the
+audit trail. A stub is a planning artifact only: any unresolved `501` or migration TODO blocks
+`cap_solution_verified`, deployment approval, parity acceptance and ERP retirement.
 
 ### Step 6 — Migration notes
 
 Write `<target>/docs/service-notes.md` with:
 - FM / method → CAP action mapping table.
+- Chosen mode per behavior and its ownership/boundary rationale.
 - Exception class → HTTP code mapping applied.
 - Caller-pattern decisions (exposed vs inlined vs kept ABAP-side).
 - Manual-port items: complex business rules requiring re-implementation in TypeScript.
 
 ## Gotchas
 
-- **Modifying SAP standard tables in the FM**: CAP runtime cannot. Flag the FM as `extract_to_side_by_side_with_event_subscription` — the new CAP action subscribes to S/4 events and writes to CAP storage.
+- **Modifying SAP standard tables in the FM**: CAP runtime cannot. Use a released S/4 mutation API,
+  or an approved released event for replicated CAP-owned state. If neither exists, return
+  `ResearchRequired`; do not invent an event subscription.
 - **`SUBMIT … RETURN` reports**: refactor to action with explicit parameters. List-display reports → `function` returning `array of`.
 - **AMDP / native HANA SQL inside FM**: do NOT port as embedded SQL — model as CDS view + CAP query.
 - **Locks / SAP LUW**: `forUpdate()` only covers locking *inside one transaction/request*. ABAP ENQUEUE locks routinely span the whole SAP LUW including user think time across dialog steps — CAP has NO cross-request enqueue equivalent: redesign with optimistic concurrency (`@odata.etag`) or draft handling, and say so in the migration notes. A silent 1:1 `forUpdate()` port loses the protection the FM relied on.
@@ -151,6 +178,8 @@ Write `<target>/docs/service-notes.md` with:
 - Schema-only migration → [`../modernize-abap-cap-schema/SKILL.md`](../modernize-abap-cap-schema/SKILL.md).
 - Full ABAP rewrite in source system → [`../migrate-custom-code/SKILL.md`](../migrate-custom-code/SKILL.md).
 - New RAP service in the source ABAP system → [`../generate-rap-service/SKILL.md`](../generate-rap-service/SKILL.md).
+- Missing released boundary, ownership or transaction semantics -> return to
+  `modernize-abap-side-by-side-core`.
 
 ## References
 

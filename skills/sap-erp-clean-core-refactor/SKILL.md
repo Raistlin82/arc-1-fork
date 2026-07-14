@@ -34,7 +34,7 @@ payload shapes.
 | Flag | Values | Rule |
 |---|---|---|
 | `--landscape` | `auto`, `s4-public-cloud`, `s4-private-cloud`, `s4-on-premise`, `btp-abap-environment` | Probe when `auto`; never silently assume Public Cloud or BTP |
-| `--domain` | `auto`, `standard`, `key-user`, `developer-on-stack`, `side-by-side-cf`, `side-by-side-kyma`, `hybrid` | `auto` runs AEM; Kyma is plan-only |
+| `--domain` | `auto`, `standard`, `key-user`, `developer-on-stack`, `side-by-side-cf`, `side-by-side-kyma`, `hybrid` | `auto` runs AEM; Kyma requires a proven Kubernetes need and delivery capability |
 | `--target-level` | `A`, `B` | Optional constraint, not a deployment selector |
 | `--push-to-a` | comma-separated logical units | Selective escalation after architecture review |
 | `--force-refresh` | boolean | Ignore cached external evidence |
@@ -53,11 +53,14 @@ target-domain decision. Do not default to BTP Cloud Foundry.
 6. Developer on-stack Level A also requires an approved ABAP Cloud target package and proven object
    language version; ATC success alone is insufficient.
 7. Report wrappers as `A consumer + B wrapper` or `A consumer + C wrapper`.
-8. Key User and Kyma are manual handoffs until an exposed implementation capability validates.
-9. ARC-1 is the only SAP writer. Optional skills and MCP servers advise or research.
-10. Deterministic quick fixes require one explicit package/transport approval. Generative changes
+8. BTP Level A requires a released boundary plus proven ownership, consistency, transaction,
+   identity, lifecycle, runtime and ERP retirement/boundary facts; CF/Kyma alone prove nothing.
+9. ABAP CDS/RAP and CAP CDS are separate branches. Invoke each only for its selected target.
+10. Key User is a manual handoff until an exposed implementation capability validates.
+11. ARC-1 is the only SAP writer. Optional skills and MCP servers advise or research.
+12. Deterministic quick fixes require one explicit package/transport approval. Generative changes
    always require approval of the concrete diff.
-11. A plan is not complete without evidence, confidence, owner, gates and rollback/retirement path.
+13. A plan is not complete without evidence, confidence, owner, gates and rollback/retirement path.
 
 ## Protocol
 
@@ -95,7 +98,9 @@ For every logical unit, in this order:
 6. What are the current level and all relevant API/extension-point release states?
 7. Can a released successor or released custom API reach A?
 8. If not, is an isolated wrapper allowed and governable?
-9. Which implementation capability is actually available?
+9. For side-by-side, what owns the data and which released API/event crosses the ERP boundary?
+10. Which implementation model, UI and CF/Kyma runtime are justified?
+11. Which implementation capability is actually available?
 
 Resolve the first fully evidenced row in [`DECISION_MATRIX.md`](./DECISION_MATRIX.md). Otherwise
 select `research_required`.
@@ -110,10 +115,13 @@ Write `docs/refactor/<date>-clean-core-plan.md` with:
 - source level, target domain, target level and action;
 - for developer on-stack Level A, target package/software component and live or manually verified
   `abapLanguageVersion="cloudDevelopment"` evidence;
+- for side-by-side Level A, the `modernize-abap-side-by-side-core` contract: service boundary,
+  all released touchpoints, ownership, consistency, transactions, identity, lifecycle, runtime fit,
+  UI target and ERP retirement/boundary plan;
 - composite wrapper level where applicable;
 - exact operation IDs from [`action-catalog.json`](./action-catalog.json);
 - MUST/SHOULD gates, confidence, evidence, owner, effort and open questions;
-- Key User/Kyma manual handoff packages;
+- Key User manual handoff and any unavailable CF/Kyma delivery capabilities;
 - governance baseline and continuous controls.
 
 `estimate` stops before per-unit target approval. `plan` remains read-only. The operator may edit
@@ -126,7 +134,13 @@ the plan before execution.
 - Execute one approved logical unit at a time using the action's `operationIds` from `chain.json`.
 - Block `rewrite_on_stack_abap_cloud` unless the approved ABAP Cloud target package, object language
   version and all released touchpoints satisfy the `abap_cloud_target_proven` gate.
-- Use `modernize-abap-to-btp-cap` only for Cloud Foundry. For Kyma, produce the handoff and stop.
+- Run `modernize-abap-side-by-side-core` before any CAP generation. Use
+  `modernize-abap-to-btp-cap` for the runtime-neutral CAP build, then CF packaging or
+  `deploy-cap-to-kyma` according to the approved contract.
+- Invoke `modernize-abap-cap-schema` only for `dataOwnership=cap|replicated`; invoke
+  `scaffold-cap-fiori-elements` and `modernize-ui5-app` as mutually exclusive UI branches.
+- Block acceptance while CAP handlers contain unresolved `501`/migration TODOs or
+  `generate-cap-cds-test` has not proven the solution.
 - For Key User, produce implementation steps, required SAP app, fields/extension points, owner and
   acceptance tests; do not invent an ARC-1 write.
 - For wrappers, isolate the wrapper package/component, release only the wrapper API, rewrite the
@@ -165,6 +179,6 @@ the plan before execution.
 ## Refusal rules
 
 Stop or return `research_required` when the landscape is unknown, the business owner or parity
-decision is missing, a target capability is unavailable, a released successor is unproven, a
-wrapper cannot be isolated, a required gate is degraded without accepted fallback, or a change
-would bypass ARC-1 safety controls.
+decision is missing, a target capability is unavailable, a released successor is unproven, BTP
+ownership/boundary/runtime evidence is incomplete, a wrapper cannot be isolated, a required gate
+is degraded without accepted fallback, or a change would bypass ARC-1 safety controls.

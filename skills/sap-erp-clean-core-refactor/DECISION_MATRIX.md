@@ -20,8 +20,8 @@ domain, current Clean Core level, executable capability, proof.
 | ON_STACK_LEVEL_A | 60 | B/C/D | A | Developer on-stack | `rewrite_on_stack_abap_cloud` | Tight S/4 coupling, LUW consistency or high-volume local access favors embedded ABAP Cloud; a released successor, approved ABAP Cloud target package and object language-version proof exist |
 | WRAPPER_CLASSIC | 70 | B/C/D | A consumer + B wrapper | Developer on-stack | `create_or_use_wrapper` | No released successor exists; a documented classic API can be isolated in Private Edition/on-premise |
 | WRAPPER_INTERNAL | 71 | C/D | A consumer + C wrapper | Developer on-stack | `create_or_use_wrapper` | No released/classic successor exists and a time-bound internal-access exception is approved |
-| SIDE_BY_SIDE_CF | 80 | B/C/D/Unknown | A | Side-by-side CF | `extract_to_side_by_side_cf` | Independent lifecycle, SaaS, mobile, multi-system, loose coupling or independent scale dominates |
-| SIDE_BY_SIDE_KYMA_MANUAL | 81 | B/C/D/Unknown | Architecture-dependent | Side-by-side Kyma | `plan_kyma_side_by_side` | Kyma is selected; current ARC-1 CAP implementation is CF-only, so execution is a handoff |
+| SIDE_BY_SIDE_CF | 80 | B/C/D/Unknown | A | Side-by-side CF | `extract_to_side_by_side_cf` | CAP and CF fit; every released-touchpoint, ownership, consistency, transaction, identity, lifecycle, runtime and retirement/boundary fact is proven |
+| SIDE_BY_SIDE_KYMA | 81 | B/C/D/Unknown | A | Side-by-side Kyma | `extract_to_side_by_side_kyma` | CAP and a concrete Kubernetes requirement fit; the same complete Level A evidence is proven |
 | HYBRID | 90 | B/C/D/Unknown | Architecture-dependent | Hybrid | `hybrid_extension` | On-stack transactional responsibilities and side-by-side responsibilities both exist |
 | B_KEEP_PRIVATE | 100 | B | B | Classic on-stack | `keep_at_level_b` | Private Edition/on-premise permits B and no justified A business case exists |
 | MECHANICAL_REMEDIATION | 110 | B/C/D | Architecture-dependent | Current allowed domain | `migrate_custom_code` | Selected findings are deterministic quick fixes or bounded mechanical corrections |
@@ -62,14 +62,22 @@ Primary actions are shown in the decision rows. Specialized dispatches remain ex
 | `rap_logic` | RAP behavior implementation inside an approved on-stack design |
 | `rap_full_stack_researched` | Production RAP stack after research and plan approval |
 | `greenfield_rap_may` | MAY-only prototype path; never a default production refactor |
+| `model_cap_persistence` | Runs `modernize-abap-cap-schema` only for CAP-owned or replicated data |
+| `generate_cap_services` | Builds the approved CAP service/remote/event boundary |
+| `scaffold_cap_fiori_elements` | Builds Fiori Elements only for `uiTarget=cap_fiori_elements` |
+| `modernize_side_by_side_ui5` | Modernizes freestyle UI5 only for `uiTarget=ui5_freestyle` |
+| `verify_cap_solution` | Compiles and tests CAP contracts, authorization, events and parity; unresolved 501/TODO handlers fail |
 
 ## Non-negotiable evidence
 
 - Standard-first and AEM reasoning precede a target decision.
-- Level A requires all relevant touchpoints to be released, not just one dependency.
+- BTP Level A requires all relevant touchpoints to be released plus explicit data ownership,
+  consistency, transaction, identity, lifecycle, runtime-fit and ERP retirement/boundary evidence.
+- CF or Kyma deployment never proves Level A by itself. The runtime changes packaging, not the
+  Clean Core classification rule.
 - Releasing one custom API upgrades only that dependency. Reclassify every consumer afterward.
 - Wrapper output is composite and records the wrapper's own B or C debt separately.
-- Key User and Kyma actions are plan/handoff paths until an exposed, validated implementation
-  capability exists.
+- Key User remains a plan/handoff path. CAP Kyma preparation uses the official CAP Helm workflow;
+  actual deployment still requires cluster, registry and delivery approval.
 - Generative writes require diff approval. Deterministic SAP quick fixes may share one explicit
   package-and-transport approval, but still require syntax, activation, ATC and tests.

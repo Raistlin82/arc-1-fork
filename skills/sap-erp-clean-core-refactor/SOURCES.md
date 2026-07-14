@@ -8,12 +8,16 @@ sufficient evidence for a write decision.
 
 | Priority | Source | What it proves |
 |---:|---|---|
-| 1 | Live ARC-1 system evidence | Actual release, components, object state, dependencies, ATC findings, transports and tests |
+| 1 | Live ARC-1 system evidence | Actual ERP release, components, object state, dependencies, ATC findings, transports and ABAP tests |
 | 2 | Local curated Clean Core knowledge | Architecture rules, AEM criteria, levels, wrappers, governance and page provenance |
 | 3 | Official structured SAP object data | Released API/extension-point status and successors by edition/release |
 | 4 | Official SAP Help, product documentation and samples | Product behavior, supported technology and implementation guidance |
 | 5 | SAP Notes and lifecycle sources | Release-specific corrections/exceptions requiring authenticated access |
 | 6 | SAP Community/blogs | Symptom discovery only after official sources are insufficient |
+
+For side-by-side implementation proof, generated CAP model hashes, local compile/test output,
+deployed-runtime evidence and the approved architecture record complement ARC-1. They prove the BTP
+target; they do not override ARC-1 evidence about the connected S/4 system.
 
 When sources conflict, the plan records the conflict. Live system evidence wins for current object
 state; official SAP release-specific documentation wins for supportability; the unit remains
@@ -110,7 +114,11 @@ retrieval date and source URL. A name-only keyword match is not enough.
 | SAP Help - ABAP Cloud | https://help.sap.com/docs/abap-cloud | Language version, released APIs and developer extensibility |
 | SAP Business Accelerator Hub | https://api.sap.com/ | Released remote APIs and events |
 | SAP CAP documentation | https://cap.cloud.sap/docs/ | CAP side-by-side implementation |
+| CAP `cds.test` | https://cap.cloud.sap/docs/node.js/cds-test | Current CAP Node.js test API and runner guidance |
+| CAP Fiori UI guidance | https://cap.cloud.sap/docs/guides/uis/fiori | CAP annotations, Fiori preview and app separation |
+| CAP Kyma deployment | https://cap.cloud.sap/docs/guides/deploy/to-kyma | Official `cds add kyma`, Helm build and deployment workflow |
 | SAP BTP documentation | https://help.sap.com/docs/btp/sap-business-technology-platform | Runtime, security and service architecture |
+| SAP Fiori tools | https://help.sap.com/docs/SAP_FIORI_tools | CAP/RAP-aware Fiori Elements generation and validation |
 | SAP Fiori Design Guidelines | https://experience.sap.com/fiori-design-web/ | UX and accessibility decisions |
 | SAP Discovery Center | https://discovery-center.cloud.sap/ | BTP services and reference missions |
 | SAP samples | https://github.com/SAP-samples | Supported implementation examples, never classification authority |
@@ -149,6 +157,12 @@ Every non-trivial decision stores:
   "openConflict": null
 }
 ```
+
+A side-by-side Level A record additionally stores the exact released API/event/custom RAP contract,
+all-touchpoint result, direct/unreleased access checks, data ownership, replication controls,
+transaction and identity models, runtime-fit rationale, CAP compile/test evidence, deployment
+evidence where executed, parity result and ERP retirement or stable-boundary plan. A wrapper is
+recorded as a separate B/C component even when its facade is released.
 
 Cache age never upgrades confidence. Recheck API release state, supported contracts and successor
 availability before execution even when planning evidence is cached.

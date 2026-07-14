@@ -253,11 +253,11 @@ A LIKELY_UNUSED object whose callers are all UNUSED is transitively deletable. O
 
 ### 6d. Follow-up options
 
-- "Want to see the static reference graph as a tree?" (→ chained `SAPNavigate where-used`)
+- "Want to see the static reference graph as a tree?" (→ chained `SAPNavigate(action="references", type="<type>", name="<name>")` calls)
 - "Want to clean-core-check the USED objects before worrying about unused ones?" (→ [sap-clean-core-atc](../sap-clean-core-atc/SKILL.md))
 - "Want documentation for the USED objects?" (→ [sap-object-documenter](../sap-object-documenter/SKILL.md))
 - "Want to turn this into a reviewed S/4HANA migration dossier with HTML/CSV/graph outputs?" (→ [sap-migration-dossier](../sap-migration-dossier/SKILL.md))
-- "Want to start deleting UNUSED objects?" → Manual: this skill **does not delete anything**; the user does it via `SAPWrite` or a transport
+- "Want to start deleting UNUSED objects?" → Manual: this skill **does not delete anything**; after approval use `SAPWrite(action="delete", type="<type>", name="<name>", transport="<transport>")` or a transport-owned retirement flow
 
 ## Error Handling
 

@@ -8,6 +8,10 @@ function matchesCondition(condition, facts) {
   throw new Error(`Unsupported Clean Core condition: ${JSON.stringify(condition)}`);
 }
 
+function matchesConditions(conditions, facts) {
+  return conditions.every((condition) => matchesCondition(condition, facts));
+}
+
 export function resolveDecision(chain, facts) {
   if (!facts.sourceLevel) throw new Error('sourceLevel is required');
   return [...chain.decisions]
@@ -15,6 +19,15 @@ export function resolveDecision(chain, facts) {
     .find(
       (decision) =>
         decision.sourceLevels.includes(facts.sourceLevel) &&
-        decision.conditions.every((condition) => matchesCondition(condition, facts)),
+        matchesConditions(decision.conditions, facts),
     );
+}
+
+export function resolveDispatches(chain, parentAction, facts) {
+  return (chain.specializedDispatches ?? []).filter(
+    (dispatch) =>
+      dispatch.mode !== 'mayOnly' &&
+      dispatch.parentActions.includes(parentAction) &&
+      matchesConditions(dispatch.conditions ?? [], facts),
+  );
 }

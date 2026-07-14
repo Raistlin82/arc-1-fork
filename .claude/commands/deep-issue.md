@@ -38,7 +38,7 @@ All `~/DEV/*` repos are **read-only references** — never modify them. If a pat
 | **SAP ADT language server** | `~/DEV/arc-1-lsp/` (`vendor/adt-ls`, `docs/adt-ls-*`) | How SAP's **own** server calls ADT — a second independent witness |
 | **Reference ADT-over-MCP impls** | `~/DEV/mcp-abap-adt/`, `~/DEV/mcp-abap-adt-fr0ster/` | How **others** implement the same op — and whether they fixed this exact bug |
 | **ABAP language reference** | `~/DEV/abap-docs/docs/` | ABAP keyword/syntax semantics when the issue touches language constructs |
-| **SAP docs / Notes (MCP)** | `sap-docs` MCP (`search`, `fetch`, `sap_community_search`, `sap_search_objects`, `abap_feature_matrix`) + `sap-notes` MCP (`search`, `fetch`) | Official docs, community threads, and SAP Notes/KBAs for known corrections — **cite the Note number** when a fix depends on it. For broad web research, `/deep-research` |
+| **SAP docs / Notes (MCP)** | When exposed by tool discovery, use the active `sap-docs` MCP (`search`, `fetch`, `sap_community_search`, `sap_search_objects`, `abap_feature_matrix`) and `sap-notes` MCP (`search`, `fetch`), always with their live schemas | Official docs, community threads, and SAP Notes/KBAs for known corrections — **cite the Note number** when a fix depends on it. For broad web research, `/deep-research` |
 | **Live SAP systems** | `arc1-cli call <Tool> ...`, `npm run probe -- --save-fixtures tests/fixtures/probe/<name>`. Systems: **NW 7.50** (`npl`), **S/4HANA 2023 / 758** (`a4h`), **ABAP Platform 2025 / 816** (`a4h-2025`) — creds + recipes in `INFRASTRUCTURE.md` | **Ground truth.** Reproduce the issue yourself, on the release(s) it names |
 
 ---

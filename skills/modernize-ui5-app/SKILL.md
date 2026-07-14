@@ -1789,7 +1789,7 @@ What's next:
   `_event: Button$PressEvent`. The latter creates an unused-import that needs a second edit.
   See Trap 4 above.
 - **ARC-1 is optional for this skill.** Use it only if you need to look up a V4 service
-  binding URL (e.g. `SAPRead type=SRVB name=<service_binding>`) or confirm a status-code /
+  binding URL (e.g. `SAPRead(type="SRVB", name="<service_binding>")`) or confirm a status-code /
   enum mapping from the backing CDS / behaviour definition. Skip otherwise.
 - **fiori-mcp is NOT used here** — that's for Fiori Elements with annotations, not for
   freestyle TS apps with manual controls.

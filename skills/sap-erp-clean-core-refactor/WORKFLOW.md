@@ -77,6 +77,20 @@ ATC success alone is not proof of the object language version. If current ARC-1 
 cannot prove the language version for an object type, attach verified ADT/package evidence manually.
 Without that evidence, retain `research_required` and do not declare Level A.
 
+For side-by-side Level A on BTP, the plan must run `modernize-abap-side-by-side-core` and prove:
+
+- the exact existing API, custom RAP API or event crossing the ERP boundary;
+- every relevant touchpoint is released and no direct S/4 database/unreleased access remains;
+- `dataOwnership` is `s4`, `cap`, `replicated` or `none`, with consistency controls;
+- SAP and CAP transaction boundaries, retries, idempotency and compensation;
+- authentication, principal propagation/technical identity and authorization ownership;
+- independent lifecycle, support and ERP retirement or stable-boundary plan;
+- why CF or Kyma fits. CAP business applications prefer CF unless a concrete Kubernetes need is
+  evidenced.
+
+The plan also selects `cdsTarget`, `capServiceRequired` and exactly one `uiTarget`. Missing facts
+remain `research_required`; BTP deployment is not classification evidence.
+
 ### 4. Approve logical units explicitly
 
 Approve decisions per logical unit, not for the package as a whole. Use the unit identifiers emitted
@@ -92,8 +106,10 @@ Transport: DEVK900123
 Keep ORDER_EXTERNAL_SYNC as research_required. Do not execute unlisted units.
 ```
 
-Key User and Kyma decisions approve a manual handoff, not an invented ARC-1 write. Wrapper approval
-must include owner, exception class, isolated package, successor watch and retirement trigger.
+Key User decisions approve a manual handoff, not an invented ARC-1 write. Kyma deployment approval
+is separate from architecture approval and requires a real cluster, registry, namespace and
+delivery owner. Wrapper approval must include owner, exception class, isolated package, successor
+watch and retirement trigger.
 
 ### 5. Open only the required write ceiling
 
@@ -156,11 +172,14 @@ flowchart TD
     KU -->|Yes| KUH["Level A on-stack Key User handoff"]
     KU -->|No| DOM{"Target domain"}
     DOM -->|Tight S/4 coupling| ONS["On-stack Developer Extensibility"]
-    DOM -->|Independent lifecycle| SBS["Side-by-side Cloud Foundry"]
+    DOM -->|Independent lifecycle| SBS["Side-by-side core decision"]
     DOM -->|Both| HYB["Hybrid responsibility split"]
-    DOM -->|Kyma| KYM["Kyma architecture handoff"]
+    SBS --> RUN{"Runtime fit"}
+    RUN -->|Business CAP| CF["Cloud Foundry"]
+    RUN -->|Kubernetes need| KYM["Kyma"]
     ONS --> CC["Classify all touchpoints A/B/C/D or Unknown"]
-    SBS --> CC
+    CF --> CC
+    KYM --> CC
     HYB --> CC
     CC --> ACT{"Resolve first evidenced chain.json decision"}
     ACT --> REL["Release custom API"]
@@ -171,7 +190,6 @@ flowchart TD
     STD --> PLAN["Reviewed plan"]
     DEL --> PLAN
     KUH --> PLAN
-    KYM --> PLAN
     REL --> PLAN
     RW --> PLAN
     WR --> PLAN
@@ -203,6 +221,9 @@ These compact forms describe the mode contract; invoke them through the agent sy
 operator quickstart.
 
 The human plan gate sits between Decide and Execute. No write-capable delegate may run before it.
+For side-by-side actions, `chain.json.gatePhases` separates plan, build, accept and retire gates;
+parity, CAP verification and retirement proof are outcomes of later phases, not circular build
+prerequisites.
 
 ## Plan sequence
 
@@ -217,6 +238,38 @@ The human plan gate sits between Decide and Execute. No write-capable delegate m
 9. Live SAP release state and official documentation confirm the specific successor or extension
    point.
 10. The decision matrix selects a target domain and action. The output is editable and read-only.
+
+## Side-by-side Level A sequence
+
+```mermaid
+flowchart TD
+    A["Approved AEM side-by-side candidate"] --> B["modernize-abap-side-by-side-core"]
+    B --> C{"Released ERP boundary"}
+    C -->|Existing API/event| D["Consume contract"]
+    C -->|Custom RAP| E["sap-abap-cds plus researched RAP branch"]
+    C -->|Wrapper B/C| X["Composite A+B or A+C, not pure A"]
+    D --> O{"Data ownership"}
+    E --> O
+    O -->|S/4 or none| S["No CAP persistence generation"]
+    O -->|CAP or replicated| P["modernize-abap-cap-schema"]
+    S --> V["modernize-abap-cap-service when required"]
+    P --> V
+    V --> U{"UI target"}
+    U -->|CAP Fiori Elements| FE["scaffold-cap-fiori-elements"]
+    U -->|Freestyle UI5| UI5["modernize-ui5-app"]
+    U -->|None| T["generate-cap-cds-test"]
+    FE --> T
+    UI5 --> T
+    T --> R{"Runtime"}
+    R -->|CF| CF["MTA and CF delivery"]
+    R -->|Kyma| K["deploy-cap-to-kyma"]
+    CF --> Q["Parity, operations and ERP retirement proof"]
+    K --> Q
+```
+
+ABAP CDS and CAP CDS may both appear only for `cdsTarget=dual_boundary`: ABAP CDS/RAP exposes the
+released S/4 boundary; CAP CDS models CAP-owned or replicated state. They never model the same
+ownership accidentally.
 
 ## Execution sequence
 
@@ -250,8 +303,8 @@ and every generated redesign, require concrete diff approval.
 | `rewrite_on_stack_abap_cloud` | ARC-1 plus ABAP/RAP skills | Level A can remain embedded in S/4HANA |
 | `release_api` | ARC-1 | Use the live supported contract, then reclassify consumers |
 | `create_or_use_wrapper` | ARC-1 plus human exception governance | Wrapper package/component is separate; report composite level |
-| `extract_to_side_by_side_cf` | CAP/Fiori skills; ARC-1 manages ERP boundary | Old ERP code retires only after parity |
-| `plan_kyma_side_by_side` | Architecture handoff | No current Kyma executor in the CAP skill |
+| `extract_to_side_by_side_cf` | Common side-by-side contract, conditional CAP/CDS/UI/test chain, CF packaging | Old ERP code retires only after parity and operations proof |
+| `extract_to_side_by_side_kyma` | Same common CAP chain plus official CAP Kyma/Helm workflow | Requires a concrete Kubernetes need and cluster/registry delivery approval |
 | `hybrid_extension` | Composite on-stack and CF executors | Record responsibility and transaction boundaries |
 | `keep_at_level_b` | Documentation/governance | Private/on-prem only; Level B needs no informational ATC exemption |
 | `remove_unused` | ARC-1 after evidence and owner approval | Final references check immediately before delete |
@@ -291,11 +344,15 @@ uncontrolled commits/rollbacks or an API whose semantics cannot be stabilized.
 
 - The plan records business need, landscape, target domain and source evidence.
 - The selected action exists in `chain.json` and all operation IDs exist in `action-catalog.json`.
-- Manual Key User/Kyma branches contain owner, implementation app/tool and acceptance criteria.
+- Manual Key User branches contain owner, implementation app/tool and acceptance criteria.
 - Every write is inside ARC-1 package, transport and authorization gates.
 - Every generated diff has explicit approval.
 - Every changed unit has syntax, activation, ATC and applicable test evidence.
 - Every `developer-on-stack` Level A unit proves its ABAP Cloud target package, object language
   version and released touchpoints; missing metadata blocks the A classification.
+- Every side-by-side Level A unit has the complete side-by-side decision contract. Schema, service,
+  UI and runtime skills match its facts; no unresolved `501`/migration TODO remains.
+- `dataOwnership=s4|none` never dispatches `modernize-abap-cap-schema`; CAP Fiori Elements and
+  freestyle UI5 are never dispatched together.
 - Composite wrapper debt and retirement triggers remain visible in governance output.
 - `sap-transport-review` passes before release.

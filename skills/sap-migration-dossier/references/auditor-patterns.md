@@ -105,14 +105,14 @@ Classic user exits:
 - CMOD projects: `MODATTR`
 - project to enhancement assignment: `MODACT`
 - enhancement components: `MODSAP`
-- customer include source: `TRDIR` names like `ZX*`, then `SAPRead(type="INCL")`
+- customer include source: `TRDIR` names like `ZX*`, then `SAPRead(type="INCL", name="<include_name>")`
 
 Classic BAdIs:
 - implementation metadata often lives in `SXC_ATTR` / `SXC_EXIT`
 - release-specific fields vary; query failures are methodology gaps
 
 Enhancement framework:
-- use `SAPRead(type="ENHO")` when names are known
+- use `SAPRead(type="ENHO", name="<enhancement_implementation>")` when names are known
 - package inventory may reveal `ENHO` / `ENHS` entries
 
 Standard modifications:
@@ -121,7 +121,7 @@ Standard modifications:
 - treat every standard modification as SPAU-relevant effort
 
 Cross references:
-- prefer `SAPContext` and `SAPNavigate(action="references")`
+- prefer `SAPContext(action="deps", type="<type>", name="<name>")` and `SAPNavigate(action="references", type="<type>", name="<name>")`
 - `CROSS` and `WBCROSSGT` are optional fallback evidence and can be stale
 
 Usage:

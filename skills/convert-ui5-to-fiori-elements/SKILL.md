@@ -169,7 +169,7 @@ real jobs:
 | Language | TypeScript | Modern default; extension files use type-safe APIs |
 | OData V4 service URL | **Prefer the SRVD-direct path** on the system's HTTPS port: `https://<host>:<https-port>/sap/opu/odata4/sap/<srvb>/srvd/sap/<srvb>/0001` (e.g. `https://a4h.marianzeis.de:50001/sap/opu/odata4/sap/zui_dm_projects_o4/srvd/sap/zui_dm_projects_o4/0001`). Falls back to the Gateway hub path `http://<host>:<http-port>/sap/opu/odata4/sap/<srvb>/srvd_a2x/sap/<service>/0001` only when SRVD-direct isn't reachable. | Run 5 + Run 6 verified the SRVD-direct path works without `/n/IWFND/MAINT_SERVICE` registration on 7.5x systems. The hub path requires the routing-group manual step. |
 | Main entity | Root entity alias exposed by the SRVB (e.g. the alias on `define root view entity ... alias <X>`) | The LR+OP floorplan is rooted at a single entity |
-| Annotations location | **In CDS via `SAPWrite update DDLS`** — not in a local annotation file inside the FE app | The annotations belong to the service; FE app reads them through `$metadata`. Local annotation files are an antipattern for RAP-bound apps. |
+| Annotations location | **In CDS via `SAPWrite(action="update", type="DDLS", name="<projection>", source="<annotated_source>")`** — not in a local annotation file inside the FE app | The annotations belong to the service; FE app reads them through `$metadata`. Local annotation files are an antipattern for RAP-bound apps. |
 | Extension language | TypeScript (controller extensions) | Match the rest of the chain |
 | Validation | If exposed: `mcp__SAPUI5_MCP_Server__run_ui5_linter` + `mcp__SAPUI5_MCP_Server__run_manifest_validation`; always run TypeScript/build checks available in the project (`npx tsc --noEmit`, `npm run build`/app scripts) | MCP checks are hard gates only when the MCP is installed; never call absent UI5 tools |
 | Acceptance | FE app runs end-to-end against the V4 service. Browser smoke covers every feature inventoried in Phase 1 — reproduced through annotations or extension hooks. | Concrete deliverable |
@@ -978,7 +978,7 @@ UI5 MCP calls used (only when exposed; otherwise report "not exposed/skipped"):
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `$metadata` reflects no annotations after `SAPWrite update DDLS` | DDLS reactivated but SRVB wasn't republished | `SAPActivate(action="publish_srvb", name="<V4_SRVB>")` |
+| `$metadata` reflects no annotations after `SAPWrite(action="update", type="DDLS", name="<projection>", source="<annotated_source>")` | DDLS reactivated but SRVB wasn't republished | `SAPActivate(action="publish_srvb", name="<V4_SRVB>")` |
 | `mcp__fiori-mcp__list_functionalities` returns empty / fails | Server not registered, or `npx` cache stale | Verify `.cursor/mcp.json`; in a fresh shell, `npx --yes @sap-ux/fiori-mcp-server@latest fiori-mcp` should print server-ready logs |
 | Generator fails with "service unreachable" | The `<V4_service_URL>` is gated by 403 because of the V4 routing group | Surface the `/n/IWFND/MAINT_SERVICE` manual step from `migrate-segw-to-rap.md` Phase 6 |
 | Generator succeeds but FE app shows a blank shell | `mainEntity` passed without annotated CDS | Re-check Phase 4 — every entity in the `@UI.Facet` chain needs at least `@UI.LineItem` and (for OP root) `@UI.HeaderInfo` |

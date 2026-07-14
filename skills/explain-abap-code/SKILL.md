@@ -260,7 +260,7 @@ Offer the user next steps:
 - "Want me to analyze the ATC findings and suggest fixes?" (→ migrate-custom-code skill)
 - "Want me to generate unit tests for this class?" (→ generate-abap-unit-test skill)
 - "Want me to show the full dependency graph?" (→ SAPContext with depth=2)
-- For a BDEF: "Want me to implement a missing determination/validation/action body?" (→ generate-rap-logic skill) or "Want me to scaffold the behavior pool handlers?" (→ `SAPWrite(action="scaffold_rap_handlers")`)
+- For a BDEF: "Want me to implement a missing determination/validation/action body?" (→ generate-rap-logic skill) or "Want me to scaffold the behavior pool handlers?" (→ `SAPWrite(action="scaffold_rap_handlers", type="CLAS", name="<behavior_pool>", bdefName="<bdef_name>")`)
 
 ## Error Handling
 

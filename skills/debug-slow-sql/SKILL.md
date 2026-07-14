@@ -84,7 +84,9 @@ entity/list request from the Network tab, not a `$batch` POST.)
   a small useful result = a scan/selectivity problem. It does **not** expose the HANA execution plan or buffer
   state — use ST05/HANA for those. A `SAPQuery` that **times out** is itself evidence of an unbounded scan —
   record the timeout as the signal, don't just retry with a smaller `maxRows`. (Needs `SAP_ALLOW_FREE_SQL` for
-  freestyle SQL; multi-column `WHERE` via `SAPRead(type="TABLE_QUERY")` needs `SAP_ALLOW_DATA_PREVIEW`.)
+  freestyle SQL; multi-column `WHERE` via `SAPRead(type="TABLE_QUERY", name="<table_or_cds>",
+  columns=["<column>"], where=[{field:"<field>", op:"EQ", value:"<value>"}])` needs
+  `SAP_ALLOW_DATA_PREVIEW`.)
 - **Equality also slow? It's the view, not your filter.** If `SAPQuery` with an exact `WHERE key = '…'` is as
   slow as a `LIKE '%…%'` (both tens of seconds), the `LIKE` is a red herring — the cost is the CDS itself: a wide
   `SELECT DISTINCT`, a deep join the filter can't start from (the filtered field isn't index-leading), or an
@@ -175,7 +177,7 @@ the `url` argument.
 
 | Symptom in the trace/SQL | Likely cause | Confirm | Typical fix |
 |--------------------------|--------------|---------|-------------|
-| Huge `rows fetched` ≫ rows shown; long duration | Full scan / poor selectivity | `cds_sql` shows no indexed `WHERE`; `SAPQuery totalRows` large / ST05 high rows fetched | Add a `WHERE` on indexed fields; add a secondary index (SE11); push the filter into the CDS |
+| Huge `rows fetched` ≫ rows shown; long duration | Full scan / poor selectivity | `cds_sql` shows no indexed `WHERE`; large `totalRows` in the SAPQuery response / ST05 high rows fetched | Add a `WHERE` on indexed fields; add a secondary index (SE11); push the filter into the CDS |
 | `LIKE '%term%'` | Leading-wildcard = index unusable | Read DDLS/ABAP source | Search help / fuzzy (HANA) / full-text index; anchor the pattern; pre-filter |
 | Same table hit thousands of times | N+1 (SELECT in LOOP) | `traces dbAccesses` shows a giant count on one table | `FOR ALL ENTRIES` / a join / read-all-then-loop; RAP: prefetch |
 | `SELECT *` then use 2 fields | Over-fetch | `cds_sql` / source | Select only needed fields; trim the CDS projection |
@@ -217,7 +219,7 @@ Deliver a tight diagnosis, not a tool log:
    480 ms"). Cite the **SAP** figure (`gwtotal`/`gwappdb`), never `wallClockMs`: wall-clock also counts
    network/MCP/proxy (`odata_perf` returns that gap as `clientWaitMs`), so when `clientWaitMs` dwarfs `gwtotal`
    the latency is the landscape, not the query.
-2. **The statement** — the offending SQL (from `cds_sql` / ST05) and what it scans (`SAPQuery totalRows` / ST05
+2. **The statement** — the offending SQL (from `cds_sql` / ST05) and what it scans (SAPQuery `totalRows` / ST05
    rows fetched, the table, the missing index).
 3. **Root cause** — one sentence, mapped to the catalog above.
 4. **Fix** — concrete and minimal (the index to add, the filter to push down, the N+1 to collapse), with the

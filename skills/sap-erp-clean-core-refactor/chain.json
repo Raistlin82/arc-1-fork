@@ -13,19 +13,19 @@
   "landscapes": {
     "s4_public_cloud": {
       "allowedLevels": ["A"],
-      "allowedDomains": ["standard", "key_user_on_stack", "developer_on_stack", "side_by_side_cf", "hybrid", "retired"]
+      "allowedDomains": ["standard", "key_user_on_stack", "developer_on_stack", "side_by_side_cf", "side_by_side_kyma", "hybrid", "retired"]
     },
     "btp_abap_environment": {
       "allowedLevels": ["A"],
-      "allowedDomains": ["developer_on_stack", "side_by_side_cf", "hybrid", "retired"]
+      "allowedDomains": ["developer_on_stack", "side_by_side_cf", "side_by_side_kyma", "hybrid", "retired"]
     },
     "s4_private_cloud": {
       "allowedLevels": ["A", "B", "C_exception"],
-      "allowedDomains": ["standard", "key_user_on_stack", "developer_on_stack", "classic_on_stack", "side_by_side_cf", "hybrid", "retired"]
+      "allowedDomains": ["standard", "key_user_on_stack", "developer_on_stack", "classic_on_stack", "side_by_side_cf", "side_by_side_kyma", "hybrid", "retired"]
     },
     "s4_on_premise": {
       "allowedLevels": ["A", "B", "C_exception"],
-      "allowedDomains": ["standard", "key_user_on_stack", "developer_on_stack", "classic_on_stack", "side_by_side_cf", "hybrid", "retired"]
+      "allowedDomains": ["standard", "key_user_on_stack", "developer_on_stack", "classic_on_stack", "side_by_side_cf", "side_by_side_kyma", "hybrid", "retired"]
     }
   },
   "targetDomains": [
@@ -34,12 +34,36 @@
     "developer_on_stack",
     "classic_on_stack",
     "side_by_side_cf",
-    "side_by_side_kyma_manual",
+    "side_by_side_kyma",
     "hybrid",
     "current_allowed_domain",
     "retired",
     "research"
   ],
+  "sideBySideContract": {
+    "requiredDecisionFacts": [
+      "implementationModel",
+      "serviceBoundary",
+      "releasedIntegrationBoundary",
+      "allTouchpointsReleased",
+      "technologyAllowed",
+      "unreleasedSapAccess",
+      "directS4DatabaseAccess",
+      "dataOwnership",
+      "dataConsistencyPlanDefined",
+      "transactionBoundaryDefined",
+      "identityModelDefined",
+      "apiOrEventContractGoverned",
+      "lifecycleIndependent",
+      "runtimeFitProven",
+      "erpRetirementOrBoundaryPlanDefined"
+    ],
+    "implementationModels": ["cap", "non_cap", "undecided"],
+    "dataOwnershipValues": ["s4", "cap", "replicated", "none"],
+    "cdsTargetValues": ["none", "abap_cds", "cap_cds", "dual_boundary"],
+    "serviceBoundaryValues": ["existing_released_api", "custom_rap", "released_event", "unavailable"],
+    "uiTargetValues": ["none", "cap_fiori_elements", "ui5_freestyle", "external"]
+  },
   "skillCoverage": {
     "self": ["sap-erp-clean-core-refactor"],
     "planCore": [
@@ -60,14 +84,18 @@
       "migrate-segw-to-rap",
       "generate-analytics-star-schema",
       "generate-cds-analytical-query",
-      "debug-slow-sql"
+      "debug-slow-sql",
+      "convert-ui5-to-fiori-elements"
     ],
     "sideBySide": [
+      "modernize-abap-side-by-side-core",
       "modernize-abap-to-btp-cap",
       "modernize-abap-cap-schema",
       "modernize-abap-cap-service",
-      "convert-ui5-to-fiori-elements",
-      "modernize-ui5-app"
+      "generate-cap-cds-test",
+      "scaffold-cap-fiori-elements",
+      "modernize-ui5-app",
+      "deploy-cap-to-kyma"
     ],
     "releaseAndTransport": ["sap-transport-review"],
     "learning": ["analyze-chat-session"],
@@ -90,6 +118,14 @@
     "wrapper_isolated": { "severity": "must", "executor": "agent", "fallback": "block" },
     "wrapper_exception_governed": { "severity": "must", "executor": "human", "fallback": "block" },
     "manual_handoff_recorded": { "severity": "must", "executor": "agent", "fallback": "block" },
+    "side_by_side_level_a_proven": { "severity": "must", "executor": "agent", "fallback": "research" },
+    "data_ownership_proven": { "severity": "must", "executor": "agent", "fallback": "research" },
+    "integration_contract_proven": { "severity": "must", "executor": "agent", "fallback": "research" },
+    "identity_model_proven": { "severity": "must", "executor": "agent", "fallback": "research" },
+    "runtime_target_proven": { "severity": "must", "executor": "agent", "fallback": "research" },
+    "btp_delivery_scoped": { "severity": "must", "executor": "human", "fallback": "block" },
+    "cap_solution_verified": { "severity": "must", "executor": "agent", "fallback": "block" },
+    "source_retirement_proven": { "severity": "must", "executor": "human", "fallback": "block" },
     "governance_baseline": { "severity": "should", "executor": "agent", "fallback": "degraded" }
   },
   "actions": {
@@ -137,20 +173,82 @@
     },
     "extract_to_side_by_side_cf": {
       "execution": "delegated_guarded",
-      "localSkills": ["modernize-abap-to-btp-cap", "modernize-abap-cap-schema", "modernize-abap-cap-service", "convert-ui5-to-fiori-elements", "modernize-ui5-app"],
-      "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "owner_approved", "parity_approved", "transport_scoped"],
-      "operationIds": ["read_source", "read_dependencies", "read_api_state", "transport_check"]
-    },
-    "plan_kyma_side_by_side": {
-      "execution": "manual_handoff",
-      "localSkills": ["sap-migration-dossier"],
-      "gates": ["aem_recorded", "manual_handoff_recorded", "owner_approved"],
+      "localSkills": ["modernize-abap-side-by-side-core", "modernize-abap-to-btp-cap"],
+      "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "side_by_side_level_a_proven", "data_ownership_proven", "integration_contract_proven", "identity_model_proven", "runtime_target_proven", "owner_approved", "generative_diff_approved", "cap_solution_verified", "parity_approved", "btp_delivery_scoped", "source_retirement_proven"],
+      "gatePhases": {
+        "plan": ["aem_recorded", "released_touchpoints", "side_by_side_level_a_proven", "data_ownership_proven", "integration_contract_proven", "identity_model_proven", "runtime_target_proven", "owner_approved"],
+        "build": ["plan_approved", "generative_diff_approved"],
+        "accept": ["cap_solution_verified", "parity_approved", "btp_delivery_scoped"],
+        "retire": ["source_retirement_proven"]
+      },
       "operationIds": ["read_source", "read_dependencies", "read_api_state"]
+    },
+    "extract_to_side_by_side_kyma": {
+      "execution": "delegated_guarded",
+      "localSkills": ["modernize-abap-side-by-side-core", "modernize-abap-to-btp-cap", "deploy-cap-to-kyma"],
+      "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "side_by_side_level_a_proven", "data_ownership_proven", "integration_contract_proven", "identity_model_proven", "runtime_target_proven", "owner_approved", "generative_diff_approved", "cap_solution_verified", "parity_approved", "btp_delivery_scoped", "source_retirement_proven"],
+      "gatePhases": {
+        "plan": ["aem_recorded", "released_touchpoints", "side_by_side_level_a_proven", "data_ownership_proven", "integration_contract_proven", "identity_model_proven", "runtime_target_proven", "owner_approved"],
+        "build": ["plan_approved", "generative_diff_approved"],
+        "accept": ["cap_solution_verified", "parity_approved", "btp_delivery_scoped"],
+        "retire": ["source_retirement_proven"]
+      },
+      "operationIds": ["read_source", "read_dependencies", "read_api_state"]
+    },
+    "model_cap_persistence": {
+      "execution": "delegated_guarded",
+      "localSkills": ["modernize-abap-cap-schema"],
+      "gates": ["plan_approved", "data_ownership_proven", "generative_diff_approved"],
+      "gatePhases": {
+        "plan": ["plan_approved", "data_ownership_proven"],
+        "accept": ["generative_diff_approved"]
+      },
+      "operationIds": ["read_source", "read_dependencies"]
+    },
+    "generate_cap_services": {
+      "execution": "delegated_guarded",
+      "localSkills": ["modernize-abap-cap-service"],
+      "gates": ["plan_approved", "integration_contract_proven", "identity_model_proven", "generative_diff_approved"],
+      "gatePhases": {
+        "plan": ["plan_approved", "integration_contract_proven", "identity_model_proven"],
+        "accept": ["generative_diff_approved"]
+      },
+      "operationIds": ["read_source", "read_dependencies", "read_api_state"]
+    },
+    "scaffold_cap_fiori_elements": {
+      "execution": "delegated_guarded",
+      "localSkills": ["scaffold-cap-fiori-elements"],
+      "gates": ["plan_approved", "owner_approved", "generative_diff_approved"],
+      "gatePhases": {
+        "plan": ["plan_approved", "owner_approved"],
+        "accept": ["generative_diff_approved"]
+      },
+      "operationIds": []
+    },
+    "modernize_side_by_side_ui5": {
+      "execution": "delegated_guarded",
+      "localSkills": ["modernize-ui5-app"],
+      "gates": ["plan_approved", "owner_approved", "generative_diff_approved"],
+      "gatePhases": {
+        "plan": ["plan_approved", "owner_approved"],
+        "accept": ["generative_diff_approved"]
+      },
+      "operationIds": []
+    },
+    "verify_cap_solution": {
+      "execution": "delegated_guarded",
+      "localSkills": ["generate-cap-cds-test"],
+      "gates": ["plan_approved", "cap_solution_verified"],
+      "gatePhases": {
+        "plan": ["plan_approved"],
+        "accept": ["cap_solution_verified"]
+      },
+      "operationIds": []
     },
     "hybrid_extension": {
       "execution": "composite",
-      "localSkills": ["sap-object-documenter", "modernize-abap-to-btp-cap"],
-      "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "owner_approved", "parity_approved", "transport_scoped"],
+      "localSkills": ["sap-object-documenter", "modernize-abap-side-by-side-core"],
+      "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "data_ownership_proven", "integration_contract_proven", "identity_model_proven", "runtime_target_proven", "owner_approved", "parity_approved", "transport_scoped", "btp_delivery_scoped"],
       "operationIds": ["read_source", "read_dependencies", "read_api_state", "transport_check"]
     },
     "remove_unused": {
@@ -298,20 +396,54 @@
       "targetLevel": "A",
       "targetDomain": "side_by_side_cf",
       "action": "extract_to_side_by_side_cf",
-      "conditions": [{ "fact": "selectedDomain", "equals": "side_by_side_cf" }, { "fact": "releasedIntegrationBoundary", "equals": true }],
-      "trigger": "The use case needs independent lifecycle, SaaS or multi-system reach, non-SAP users, mobile/freestyle UX, loose coupling or independent scale.",
-      "evidenceRequired": ["AEM decision", "released integration API", "parity plan"]
+      "conditions": [
+        { "fact": "selectedDomain", "equals": "side_by_side_cf" },
+        { "fact": "implementationModel", "equals": "cap" },
+        { "fact": "serviceBoundary", "in": ["existing_released_api", "custom_rap", "released_event"] },
+        { "fact": "releasedIntegrationBoundary", "equals": true },
+        { "fact": "allTouchpointsReleased", "equals": true },
+        { "fact": "technologyAllowed", "equals": true },
+        { "fact": "unreleasedSapAccess", "equals": false },
+        { "fact": "directS4DatabaseAccess", "equals": false },
+        { "fact": "dataOwnership", "in": ["s4", "cap", "replicated", "none"] },
+        { "fact": "dataConsistencyPlanDefined", "equals": true },
+        { "fact": "transactionBoundaryDefined", "equals": true },
+        { "fact": "identityModelDefined", "equals": true },
+        { "fact": "apiOrEventContractGoverned", "equals": true },
+        { "fact": "lifecycleIndependent", "equals": true },
+        { "fact": "runtimeFitProven", "equals": true },
+        { "fact": "erpRetirementOrBoundaryPlanDefined", "equals": true }
+      ],
+      "trigger": "The use case needs an independently operated CAP application, Cloud Foundry fits, and every Level A side-by-side fact is evidenced.",
+      "evidenceRequired": ["AEM decision", "all released touchpoints", "data ownership and consistency", "transaction and identity model", "CF runtime fit", "parity and ERP retirement/boundary plan"]
     },
     {
-      "id": "SIDE_BY_SIDE_KYMA_MANUAL",
+      "id": "SIDE_BY_SIDE_KYMA",
       "precedence": 81,
       "sourceLevels": ["B", "C", "D", "Unknown"],
-      "targetLevel": "ArchitectureDependent",
-      "targetDomain": "side_by_side_kyma_manual",
-      "action": "plan_kyma_side_by_side",
-      "conditions": [{ "fact": "selectedDomain", "equals": "side_by_side_kyma" }],
-      "trigger": "Kyma is selected, but the current CAP execution skill supports Cloud Foundry only.",
-      "evidenceRequired": ["AEM decision", "Kyma architecture handoff"]
+      "targetLevel": "A",
+      "targetDomain": "side_by_side_kyma",
+      "action": "extract_to_side_by_side_kyma",
+      "conditions": [
+        { "fact": "selectedDomain", "equals": "side_by_side_kyma" },
+        { "fact": "implementationModel", "equals": "cap" },
+        { "fact": "serviceBoundary", "in": ["existing_released_api", "custom_rap", "released_event"] },
+        { "fact": "releasedIntegrationBoundary", "equals": true },
+        { "fact": "allTouchpointsReleased", "equals": true },
+        { "fact": "technologyAllowed", "equals": true },
+        { "fact": "unreleasedSapAccess", "equals": false },
+        { "fact": "directS4DatabaseAccess", "equals": false },
+        { "fact": "dataOwnership", "in": ["s4", "cap", "replicated", "none"] },
+        { "fact": "dataConsistencyPlanDefined", "equals": true },
+        { "fact": "transactionBoundaryDefined", "equals": true },
+        { "fact": "identityModelDefined", "equals": true },
+        { "fact": "apiOrEventContractGoverned", "equals": true },
+        { "fact": "lifecycleIndependent", "equals": true },
+        { "fact": "runtimeFitProven", "equals": true },
+        { "fact": "erpRetirementOrBoundaryPlanDefined", "equals": true }
+      ],
+      "trigger": "The CAP use case has a concrete Kubernetes requirement, Kyma fits, and every Level A side-by-side fact is evidenced.",
+      "evidenceRequired": ["AEM decision", "all released touchpoints", "data ownership and consistency", "transaction and identity model", "Kyma runtime fit", "parity and ERP retirement/boundary plan"]
     },
     {
       "id": "HYBRID",
@@ -320,7 +452,7 @@
       "targetLevel": "ArchitectureDependent",
       "targetDomain": "hybrid",
       "action": "hybrid_extension",
-      "conditions": [{ "fact": "selectedDomain", "equals": "hybrid" }, { "fact": "releasedIntegrationBoundary", "equals": true }],
+      "conditions": [{ "fact": "selectedDomain", "equals": "hybrid" }, { "fact": "releasedIntegrationBoundary", "equals": true }, { "fact": "dataOwnership", "in": ["s4", "cap", "replicated", "none"] }, { "fact": "transactionBoundaryDefined", "equals": true }, { "fact": "identityModelDefined", "equals": true }, { "fact": "responsibilitySplitDefined", "equals": true }],
       "trigger": "The requirement has both tightly coupled on-stack and independently operated side-by-side responsibilities.",
       "evidenceRequired": ["responsibility split", "released integration boundary", "joint parity plan"]
     },
@@ -359,11 +491,19 @@
     }
   ],
   "specializedDispatches": [
-    { "condition": "SEGW OData V2 service", "parentActions": ["rewrite_on_stack_abap_cloud", "extract_to_side_by_side_cf"], "action": "migrate_segw_to_rap" },
-    { "condition": "analytical ALV or read-only aggregate report", "parentActions": ["rewrite_on_stack_abap_cloud"], "action": "analytical_embedded" },
-    { "condition": "RAP behavior implementation gap", "parentActions": ["rewrite_on_stack_abap_cloud"], "action": "rap_logic" },
-    { "condition": "full production RAP stack", "parentActions": ["rewrite_on_stack_abap_cloud"], "action": "rap_full_stack_researched" },
-    { "condition": "small greenfield CRUD prototype, never a production refactor default", "mode": "mayOnly", "parentActions": [], "action": "greenfield_rap_may" }
+    { "condition": "SEGW OData V2 service", "conditions": [{ "fact": "hasSegwService", "equals": true }], "parentActions": ["rewrite_on_stack_abap_cloud", "extract_to_side_by_side_cf", "extract_to_side_by_side_kyma", "hybrid_extension"], "action": "migrate_segw_to_rap" },
+    { "condition": "custom released S/4 RAP boundary", "conditions": [{ "fact": "serviceBoundary", "equals": "custom_rap" }, { "fact": "hasSegwService", "equals": false }], "parentActions": ["extract_to_side_by_side_cf", "extract_to_side_by_side_kyma", "hybrid_extension"], "action": "rap_full_stack_researched" },
+    { "condition": "CAP-owned or replicated persistence", "conditions": [{ "fact": "dataOwnership", "in": ["cap", "replicated"] }], "parentActions": ["extract_to_side_by_side_cf", "extract_to_side_by_side_kyma"], "action": "model_cap_persistence" },
+    { "condition": "CAP service required", "conditions": [{ "fact": "capServiceRequired", "equals": true }], "parentActions": ["extract_to_side_by_side_cf", "extract_to_side_by_side_kyma"], "action": "generate_cap_services" },
+    { "condition": "CAP Fiori Elements UI", "conditions": [{ "fact": "uiTarget", "equals": "cap_fiori_elements" }], "parentActions": ["extract_to_side_by_side_cf", "extract_to_side_by_side_kyma"], "action": "scaffold_cap_fiori_elements" },
+    { "condition": "side-by-side freestyle UI5", "conditions": [{ "fact": "uiTarget", "equals": "ui5_freestyle" }], "parentActions": ["extract_to_side_by_side_cf", "extract_to_side_by_side_kyma"], "action": "modernize_side_by_side_ui5" },
+    { "condition": "CAP target verification", "conditions": [{ "fact": "implementationModel", "equals": "cap" }], "parentActions": ["extract_to_side_by_side_cf", "extract_to_side_by_side_kyma"], "action": "verify_cap_solution" },
+    { "condition": "hybrid side-by-side runtime is Cloud Foundry", "conditions": [{ "fact": "sideBySideRuntime", "equals": "cf" }], "parentActions": ["hybrid_extension"], "action": "extract_to_side_by_side_cf" },
+    { "condition": "hybrid side-by-side runtime is Kyma", "conditions": [{ "fact": "sideBySideRuntime", "equals": "kyma" }], "parentActions": ["hybrid_extension"], "action": "extract_to_side_by_side_kyma" },
+    { "condition": "analytical ALV or read-only aggregate report", "conditions": [{ "fact": "embeddedAnalyticsTarget", "equals": true }], "parentActions": ["rewrite_on_stack_abap_cloud"], "action": "analytical_embedded" },
+    { "condition": "RAP behavior implementation gap", "conditions": [{ "fact": "rapBehaviorGap", "equals": true }], "parentActions": ["rewrite_on_stack_abap_cloud"], "action": "rap_logic" },
+    { "condition": "full production RAP stack", "conditions": [{ "fact": "fullProductionRapTarget", "equals": true }], "parentActions": ["rewrite_on_stack_abap_cloud"], "action": "rap_full_stack_researched" },
+    { "condition": "small greenfield CRUD prototype, never a production refactor default", "conditions": [{ "fact": "prototypeRequested", "equals": true }], "mode": "mayOnly", "parentActions": [], "action": "greenfield_rap_may" }
   ],
   "governance": {
     "mandatoryBaseline": ["clean_core_share", "technical_debt_score", "unused_code_share", "business_modifications"],

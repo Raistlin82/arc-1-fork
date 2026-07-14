@@ -12,7 +12,7 @@ This skill replicates SAP Joule's "CDS Analytical Model Generation" capability (
 ## Prerequisites — read this first
 
 - **Requires SAP_BASIS 7.5x with the analytics annotations.** Verify with `SAPManage(action="probe")` (`rap.available`). If RAP/CDS isn't available, stop.
-- The output is a set of **interdependent** CDS views (cube → dimensions → texts). They must be created as inactive drafts and activated together so SAP's activator resolves the cross-references in one pass. This skill uses `SAPWrite(action="batch_create", activateAtEnd=true)` for exactly that.
+- The output is a set of **interdependent** CDS views (cube → dimensions → texts). They must be created as inactive drafts and activated together so SAP's activator resolves the cross-references in one pass. This skill uses `SAPWrite(action="batch_create", activateAtEnd=true, objects=[{type:"DDLS", name:"<name>", source:"<source>"}])` for exactly that.
 
 ## Smart Defaults (apply silently, do NOT ask)
 

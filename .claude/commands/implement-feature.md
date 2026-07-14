@@ -39,7 +39,7 @@ Based on the feature description, identify and read all relevant source files. U
 | Add transport feature | `src/adt/transport.ts`, `src/handlers/transport.ts` |
 | Add DDIC domain/data element write | `src/adt/ddic-xml.ts`, `src/adt/crud.ts`, `src/handlers/write.ts`, `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
 | Add context feature | `src/context/compressor.ts`, `src/context/deps.ts` |
-| Add CDS impact analysis context | `src/adt/cds-impact.ts`, `src/adt/codeintel.ts` (`findWhereUsed`), `src/handlers/context.ts` (`SAPContext action="impact"`), `tests/unit/adt/cds-impact.test.ts` |
+| Add CDS impact analysis context | `src/adt/cds-impact.ts`, `src/adt/codeintel.ts` (`findWhereUsed`), `src/handlers/context.ts` (`SAPContext(action="impact", type="DDLS", name="<name>")`), `tests/unit/adt/cds-impact.test.ts` |
 | Add diagnostic | `src/adt/diagnostics.ts`, `src/handlers/diagnose.ts` |
 
 ### 1c. Read existing tests for the affected area
@@ -53,7 +53,7 @@ Find and read the corresponding test files in `tests/unit/` that mirror the sour
 
 Search the codebase for similar patterns already implemented. If the feature extends an existing pattern (e.g., adding a new error hint follows the same shape as existing ones), identify that pattern to follow consistently.
 
-When researching an existing ABAP object in a connected SAP system, start with `SAPContext(action="deps", type=..., name=...)` before raw `SAPRead`. The context call includes the object's KTD when available and compressed dependency contracts; use `SAPRead` afterward only for exact source, method bodies, grep, drafts, revisions, or metadata.
+When researching an existing ABAP object in a connected SAP system, start with `SAPContext(action="deps", type="<type>", name="<name>")` before raw `SAPRead`. The context call includes the object's KTD when available and compressed dependency contracts; use `SAPRead` afterward only for exact source, method bodies, grep, drafts, revisions, or metadata.
 
 ### 1e. Summarize findings
 

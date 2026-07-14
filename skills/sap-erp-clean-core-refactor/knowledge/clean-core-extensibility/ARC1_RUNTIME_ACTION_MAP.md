@@ -42,7 +42,7 @@ argument names. It must not abbreviate a call in generated executable instructio
 | Knowledge concept | Evidence pack | Candidate actions |
 |---|---|---|
 | Standard-first and AEM | requirement, standard parity, users, coupling, consistency, data, lifecycle, TCO | `replace_with_standard`, target-domain selection, `research_required` |
-| Level A domains | allowed technology plus all released touchpoints | `no_action`, `replace_with_key_user_extensibility`, `rewrite_on_stack_abap_cloud`, `extract_to_side_by_side_cf`, `hybrid_extension` |
+| Level A domains | allowed technology plus all released touchpoints; BTP also requires ownership, consistency, identity, lifecycle and runtime-fit proof | `no_action`, `replace_with_key_user_extensibility`, `rewrite_on_stack_abap_cloud`, `extract_to_side_by_side_cf`, `extract_to_side_by_side_kyma`, `hybrid_extension` |
 | Release contracts | live API state, supported contracts, fan-in and owner approval | `release_api`, then consumer reclassification |
 | Wrapper access | no released successor, landscape permission, package isolation, exception governance | `create_or_use_wrapper` with composite A+B or A+C result |
 | Brownfield debt | runtime/static use, fan-in, business owner, current level | `remove_unused`, rewrite, side-by-side, keep B or research |
@@ -106,8 +106,11 @@ SAPManage(action="set_api_state", name="ZCL_CC_WRAPPER", objectType="CLAS", apiS
 SAPWrite(action="update", type="CLAS", name="ZCL_CONSUMER", source="<rewritten_consumer>", transport="DEVK900001")
 SAPDiagnose(action="atc", type="CLAS", name="ZCL_CONSUMER", variant="ABAP_CLOUD_READINESS")
 SAPDiagnose(action="unittest", type="CLAS", name="ZCL_CC_WRAPPER", coverage=true)
-SAPWrite(action="create", type="SKTD", name="ZCC_WRAPPER_DOC", description="Wrapper decision", package="ZCC_DOC", transport="DEVK900001", refObjectType="DDLS/DF", refObjectName="ZI_EXAMPLE", source="<governance_record>")
+SAPWrite(action="create", type="SKTD", name="ZCC_WRAPPERS", description="Wrapper decision", package="ZCC_DOC", transport="DEVK900001", refObjectType="DEVC/K", refObjectName="ZCC_WRAPPERS", source="<governance_record>")
 ```
+
+The KTD is attached to the wrapper package (`DEVC/K`), not to the wrapper class: ARC-1 does not
+route class parents for KTD creation. The KTD name must exactly match the documented package name.
 
 The wrapper must live outside the ABAP Cloud component. `HOME` is an example and must be replaced
 with the landscape's actual Standard ABAP software component. ARC-1 does not currently create ATC
@@ -130,9 +133,9 @@ Release happens only after `sap-transport-review`; ARC-1 performs its inactive-o
 | Target/action | Current status | Runtime behavior |
 |---|---|---|
 | On-stack ABAP Cloud | Executable through ARC-1 for supported ADT object types | Generate, validate, write and activate under normal gates |
-| Cloud Foundry CAP | Executable through the CAP skill chain | ARC-1 manages ERP evidence/API boundary and later retirement |
+| Cloud Foundry CAP | Executable through the common side-by-side contract and conditional CAP chain | ARC-1 manages ERP evidence/API boundary and later retirement |
 | Key User | Planning and handoff | Record SAP app/tool, extension point, owner and acceptance tests; no invented ARC-1 mutation |
-| Kyma | Planning and handoff | Do not call the CF-only CAP executor as if it deployed to Kyma |
+| Kyma CAP | Executable preparation through the same CAP chain plus official CAP Kyma/Helm tooling | Require a concrete Kubernetes need and actual cluster/registry approval; never claim an unexecuted deployment |
 | ATC exemption creation | Manual/external | Record owner, finding, rationale and expiry; do not invent a tool action |
 
 ## Runtime result contract

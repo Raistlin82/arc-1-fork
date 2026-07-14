@@ -1,19 +1,23 @@
 ---
 name: modernize-abap-cap-schema
-description: Generate a CAP CDS data model (`db/schema.cds`) from a Z* package's ABAP database tables. Maps DDIC types to CDS, infers Associations/Compositions from foreign keys, auto-applies `cuid` / `managed` aspects. Use when asked to "convert Z tables to CDS entities", "generate CAP schema from ABAP TABL", "reverse-engineer Z tables", or as sub-skill of `modernize-abap-to-btp-cap`.
+description: Generates a CAP CDS persistence model from explicitly approved ABAP tables after the side-by-side decision assigns their data ownership to CAP or governed replication. Maps DDIC semantics without confusing CAP CDS with ABAP CDS. Use only with a reviewed ownership manifest, never to copy every Z table mechanically.
 ---
 
 # Modernize ABAP → CAP Schema
 
-Produces `<target>/db/schema.cds` from a Z* package's tables (`TABL`). Greenfield CDS for the **CAP runtime** (`@sap/cds`), NOT ABAP CDS DDL.
+Produces `<target>/db/schema.cds` from explicitly selected customer tables (`TABL`). This is CDS for
+the **CAP runtime** (`@sap/cds`), not ABAP CDS DDL.
 
 Sub-skill of [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-cap/SKILL.md). Also usable standalone for table-only reverse-engineering.
 
 ## Input
 
 ```
-<Z-package> <target-dir> [--namespace=com.example.foo]
+<Z-package> <target-dir> --decision=<path>/side-by-side-decision.json --tables=<T1,T2,...> [--namespace=com.example.foo]
 ```
+
+Require `dataOwnership=cap|replicated`. Refuse `s4` and `none`. The table list must come from the
+approved bounded context; package enumeration is evidence, not consent to migrate every table.
 
 ## Defaults
 
@@ -24,7 +28,7 @@ Sub-skill of [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-
 | `cuid` aspect | auto-applied if PK is `sysuuid_x16` (RAW(16)) |
 | `managed` aspect | auto-applied if table has any of `crusr` / `crdat` / `cruzt` / `chusr` / `chdat` / `chuzt` |
 | `temporal` aspect | NOT auto-applied (rare 1:1 mapping; flag for user review) |
-| Key | first DDIC key field |
+| Key | preserve every DDIC key field; redesign only through an approved migration decision |
 | Currency / Quantity | `@Semantics.amount.currencyCode` / `@Semantics.quantity.unitOfMeasure` |
 | Comments | DDIC short text + field labels → `@Common.Label` |
 
@@ -56,13 +60,18 @@ Sub-skill of [`../modernize-abap-to-btp-cap/SKILL.md`](../modernize-abap-to-btp-
 
 ## Workflow
 
-### Step 1 — Enumerate tables
+### Step 1 — Validate ownership and enumerate evidence
 
-`SAPRead(type="DEVC", name="<pkg>")` recursively, then filter `TABL` rows whose names are in the customer namespace. Use `SAPSearch(searchType="tadir_lookup", names=["<table_name>"], objectType="TABL")` only to validate exact table names across packages; `tadir_lookup` does not enumerate by `packageName`.
+Load `side-by-side-decision.json`, then read `SAPRead(type="DEVC", name="<pkg>")` recursively and
+confirm that every requested `--tables` entry exists in the customer namespace. Use
+`SAPSearch(searchType="tadir_lookup", names=["<table_name>"], objectType="TABL")` only to validate
+exact names across packages; `tadir_lookup` does not enumerate by `packageName`.
+
+Do not add package tables that are absent from the approved list.
 
 ### Step 2 — Read DDIC details (per table)
 
-`SAPRead(type="TABL", name="<table>")` — ARC-1 returns the DDIC table/structure as CDS-like source. Parse fields, keys and type references from that source; drill into `SAPRead(type="DTEL")` / `SAPRead(type="DOMA")` only when labels, fixed values, conversion exits or domain semantics are needed.
+`SAPRead(type="TABL", name="<table>")` — ARC-1 returns the DDIC table/structure as CDS-like source. Parse fields, keys and type references from that source; drill into `SAPRead(type="DTEL", name="<data_element>")` / `SAPRead(type="DOMA", name="<domain>")` only when labels, fixed values, conversion exits or domain semantics are needed.
 
 For complex domains / data elements: drill in only when the DDIC source type alone is insufficient (e.g. fixed value lists → `@assert.range`).
 
@@ -85,6 +94,10 @@ From DDIC foreign-key references:
 
 Bidirectional inference: write both sides (`<parent>.items : Composition of many <child>` AND `<child>.parent : Association to <parent>`).
 
+Preserve composite primary and foreign keys. Never collapse a multi-field DDIC key to its first
+field. If CAP conventions require a surrogate UUID, model the legacy key as a unique business key
+and document migration/reconciliation before changing identity semantics.
+
 ### Step 5 — Emit + validate
 
 Write `<target>/db/schema.cds` in CAP pretty-print format. Validate via:
@@ -101,9 +114,13 @@ With `@sap/cds-mcp` connected, cross-check doubtful mappings against the authori
 
 Write `<target>/docs/schema-notes.md` with:
 - Tables migrated + their CAP entity name + namespace
+- Ownership mode, approving decision record and source contract
 - Aspects auto-applied
 - Associations inferred + cardinality reasoning
 - Manual review items: temporal candidates, ambiguous FKs, `LCHR` / `LRAW` size limits
+
+For `replicated`, also record source API/event version, external key, ordering/version field,
+idempotency key, reconciliation query, retention/deletion behavior and failure owner.
 
 ## Gotchas
 
@@ -113,12 +130,15 @@ Write `<target>/docs/schema-notes.md` with:
 - **`@AbapCatalog` annotations** (DDIC): do NOT carry over; CAP has its own (`@cds.persistence.skip`, `@assert.range`, etc.).
 - **Domain fixed values**: map to `@assert.range` if ≤10 values, otherwise emit a CodeList entity.
 - **Hierarchical / parent-child Z tables**: review `Composition` choice — sometimes Association is safer (no cascade delete).
+- **S/4-owned data**: model a remote service contract in CAP rather than persistence. Do not invoke
+  this skill merely because a TABL exists in the source package.
 
 ## When NOT to use
 
 - Greenfield CDS design from scratch → use [`../generate-rap-service/SKILL.md`](../generate-rap-service/SKILL.md) or hand-write
 - View-only entities (no underlying TABL) → not the target of this skill
 - Multi-package data model with cross-package FK → split into multiple invocations, then merge manually
+- `dataOwnership=s4|none` -> consume a released remote contract or remain stateless
 
 ## References
 

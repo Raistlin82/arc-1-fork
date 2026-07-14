@@ -218,7 +218,7 @@ Call `abap_generators-list_generators` and pick the generator whose **display na
 If no matching generator is listed, the framework isn't available on this release → skip to *Batch Creation*.
 
 ### 3b-3. Read the input schema
-`abap_generators-get_schema` needs five inputs and errors without a real referenced table:
+`abap_generators-get_schema` needs four inputs for the referenced-table variant and errors without a real referenced table:
 
 ```
 abap_generators-get_schema(
@@ -245,7 +245,7 @@ serviceBinding.name      → ZUI_ARC1_DEMO_BOOK_O4   (binding type: OData V4 - U
 `abap_generators-generate_objects(generatorId="<id>", <filled schema>)`. This is a **mutation** — apply the same guardrails as any ARC-1 write (allowlisted package + a real transport, or `$TMP`). One call creates the CDS root + projection, BDEF + behavior class, metadata extension (DDLX), draft table, service definition, and service binding.
 
 ### 3b-5. Verify, then continue with ARC-1
-Activate/verify with ARC-1 (`SAPActivate`, `SAPRead`) or the official `abap_activate_objects`. **Publish the service binding with ARC-1** — `SAPActivate(action="publish_srvb", name="<binding>")` — because on 7.5x the generator creates and activates the SRVB but its *own* publish step returns a 406 (publish-job content negotiation), leaving it `published:false` with no runtime URL. ARC-1's `publish_srvb` handles the 758 content type and flips it to `published:true` (verified live on S/4HANA 2023: the generated binding went unpublished → published, and `$metadata` then returned HTTP 200). Then use **ARC-1** for anything the single-entity, one-shot generator can't do — add fields, compositions/children, actions + handler bodies (`SAPWrite action="edit_method"`), determinations, validations, and all later edits.
+Activate/verify with ARC-1 (`SAPActivate`, `SAPRead`) or the official `abap_activate_objects`. **Publish the service binding with ARC-1** — `SAPActivate(action="publish_srvb", name="<binding>")` — because on 7.5x the generator creates and activates the SRVB but its *own* publish step returns a 406 (publish-job content negotiation), leaving it `published:false` with no runtime URL. ARC-1's `publish_srvb` handles the 758 content type and flips it to `published:true` (verified live on S/4HANA 2023: the generated binding went unpublished → published, and `$metadata` then returned HTTP 200). Then use **ARC-1** for anything the single-entity, one-shot generator can't do — add fields, compositions/children, actions + handler bodies (`SAPWrite(action="edit_method", type="CLAS", name="<behavior_pool>", method="<handler>", source="<method_source>")`), determinations, validations, and all later edits.
 
 **State which path you took** ("base BO generated via `abap-mcp` `<id>`, extended via ARC-1" vs "built entirely via ARC-1") so the run stays auditable.
 
@@ -883,7 +883,7 @@ Next steps:
 - **Value helps**: No `@Consumption.valueHelpDefinition` annotations. Add manually.
 - **Feature control / side effects**: No backend-driven UI behavior beyond standard CRUD. Add manually when the UI needs dynamic enablement or recalculation hints.
 - **Unmanaged / abstract BOs**: Only managed scenario with UUID keys.
-- **DOMA/DTEL creation**: Uses inline types. For production services, create proper domains and data elements afterward using `SAPWrite(type="DOMA"/"DTEL")`.
+- **DOMA/DTEL creation**: Uses inline types. For production services, create proper domains and data elements afterward using complete `SAPWrite(action="create", type="DOMA", name="<domain>", package="<package>", dataType="CHAR", length=10)` and `SAPWrite(action="create", type="DTEL", name="<data_element>", package="<package>", typeKind="domain", domainName="<domain>")` calls.
 - **FLP registration**: Does not auto-register in Fiori Launchpad. Use `SAPManage` FLP actions afterward.
 
 ### When to Use This Skill

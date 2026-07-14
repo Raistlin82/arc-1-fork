@@ -37,7 +37,7 @@ All `~/DEV/*` repos are **read-only references** — never modify them.
 | **SAP ADT language server** | `~/DEV/arc-1-lsp/` (`vendor/adt-ls`, `docs/adt-ls-*`) | How SAP's own server calls it — second witness |
 | **Reference ADT-over-MCP impls** | `~/DEV/mcp-abap-adt/`, `~/DEV/mcp-abap-adt-fr0ster/` | How others implement the same op; whether the PR reinvents or contradicts a known-good approach |
 | **ABAP language reference** | `~/DEV/abap-docs/docs/` | ABAP semantics when the diff touches language constructs |
-| **SAP docs / Notes (MCP)** | `sap-docs` MCP (`search`, `fetch`, `sap_community_search`, `abap_feature_matrix`) + `sap-notes` MCP (`search`, `fetch`) | Confirm SAP-side facts / Note numbers the PR cites |
+| **SAP docs / Notes (MCP)** | When exposed by tool discovery, use the active `sap-docs` MCP (`search`, `fetch`, `sap_community_search`, `abap_feature_matrix`) and `sap-notes` MCP (`search`, `fetch`), always with their live schemas | Confirm SAP-side facts / Note numbers the PR cites |
 | **Live SAP systems** | `arc1-cli call <Tool> ...`, `npm run probe`, `npm run test:integration`. Systems: **NW 7.50** (`npl`), **758** (`a4h`), **816** (`a4h-2025`) — `INFRASTRUCTURE.md` | **Ground truth.** Re-run the PR's own verification; confirm it on the releases it claims (and the oldest one if release-sensitive) |
 
 ---

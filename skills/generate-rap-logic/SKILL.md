@@ -94,8 +94,10 @@ If this is an existing RAP BO that has already been modified by others, inspect 
 
 ```
 SAPRead(type="VERSIONS", name="<bp_class>", objectType="CLAS")
-SAPRead(type="SKTD", name="<bp_class>")
+SAPRead(type="SKTD", name="<bdef_name>")
 ```
+
+KTD documentation is attached to the BDEF (or another supported RAP artifact), not to the behavior-pool class.
 
 ## Step 2: Identify Target Methods
 

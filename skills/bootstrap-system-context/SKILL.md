@@ -173,7 +173,7 @@ Do not dump the full file contents into chat — the user can open the file.
 ### What This Skill Does NOT Do
 
 - **No source code is read** — identity/components/features only
-- **No package enumeration** — use `setup-abap-mirror` or `SAPRead(type="DEVC")` for that
+- **No package enumeration** — use `setup-abap-mirror` or `SAPRead(type="DEVC", name="<package>")` for that
 - **No SAP system-level configuration changes** — every call is read-only
 
 ### Pairing With Other Skills

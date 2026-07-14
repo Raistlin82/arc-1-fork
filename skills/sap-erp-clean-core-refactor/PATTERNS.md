@@ -91,15 +91,18 @@ Prefer when:
 - integration can be remote/event-driven and loosely coupled;
 - the team requires frequent independent releases.
 
-The ERP side is A only when the integration boundary uses released APIs/events and the old custom
-code is retired or no longer participates in the requirement. BTP deployment alone proves nothing
-about the ERP-side level.
+Prefer CF for conventional CAP business applications and managed BTP service integration. The
+solution reaches A only when every relevant touchpoint is released, no direct S/4 persistence or
+unreleased access remains, and ownership, consistency, transactions, identity, lifecycle,
+operations and ERP retirement/stable-boundary evidence are complete. BTP deployment alone proves
+nothing.
 
 ### Kyma
 
-Kyma is a valid architecture target but currently a manual handoff in this repository. The CF-only
-CAP orchestrator cannot claim a Kyma deployment. Capture workload, APIs/events, cluster/security,
-operations, ownership and acceptance plan, then stop before execution.
+Select Kyma only for a concrete Kubernetes/container requirement such as workload controls,
+operators, sidecars, non-buildpack runtime constraints or cluster-level integration. CAP supports
+official Kyma/Helm preparation, but deployment still requires real cluster, registry, namespace,
+security, operations and delivery evidence. Kyma and CF apply the same Clean Core Level A rules.
 
 ### Hybrid
 
@@ -204,7 +207,7 @@ Specialized dispatches are chosen only after the architecture action:
 - RAP behavior gap: `generate-rap-logic`;
 - full production RAP stack: `generate-rap-service-researched`.
 
-## 9. Side-by-side Cloud Foundry
+## 9. Side-by-side Level A on BTP
 
 The side-by-side plan must define:
 
@@ -217,8 +220,41 @@ The side-by-side plan must define:
 - availability, observability, transport and operations;
 - business parity and ERP retirement sequence.
 
-Use `modernize-abap-to-btp-cap` only after these decisions. The skill creates a staged CF CAP target;
-it does not itself retire ERP objects or deploy to Kyma.
+Run `modernize-abap-side-by-side-core` first and persist these facts in
+`side-by-side-decision.json`. Then dispatch only the selected implementation branches.
+
+### Data ownership
+
+| Ownership | CAP modeling rule |
+|---|---|
+| `s4` | Consume a released remote API/event; no generated CAP persistence for S/4 tables |
+| `cap` | Generate CAP CDS only for the approved bounded context |
+| `replicated` | Generate CAP CDS plus source contract, key, ordering, idempotency, reconciliation, retention and deletion controls |
+| `none` | Keep the service stateless |
+
+### CDS split
+
+| Target | Skill family | Responsibility |
+|---|---|---|
+| S/4 boundary | `sap-abap-cds`, RAP skills, `generate-cds-unit-test` | ABAP CDS/RAP and released ERP contract |
+| CAP model/service | `sap-cap-capire`, `modernize-abap-cap-schema`, `modernize-abap-cap-service`, `generate-cap-cds-test` | CAP CDS persistence, service and tests |
+
+Use both only for `cdsTarget=dual_boundary`. A custom RAP boundary built entirely on released
+touchpoints may support pure A. A wrapper over classic/internal access remains a visible A+B/A+C
+outcome even when CAP consumes its released facade.
+
+### Conditional UI and runtime
+
+- `uiTarget=cap_fiori_elements`: `scaffold-cap-fiori-elements` using CAP OData V4 metadata and CAP
+  annotations;
+- `uiTarget=ui5_freestyle`: `modernize-ui5-app`;
+- `uiTarget=none|external`: neither UI skill;
+- `runtime=cf`: CF/MTA packaging;
+- `runtime=kyma`: `deploy-cap-to-kyma` after CAP verification.
+
+The generated target is accepted only after `generate-cap-cds-test` proves compilation, contracts,
+authorization, events/replication where applicable and business parity. Placeholder `501`/TODO
+handlers are an acceptance failure.
 
 ## 10. Deterministic and generated fixes
 
@@ -285,6 +321,7 @@ execution.
 | Release custom API | 1-8 | fan-in, contract design and compatibility obligations |
 | Wrapper | 3-15 | dependency semantics, isolation, exception and tests |
 | Side-by-side CF | 10-60+ | data, UI, integration, security, operations and parity |
+| Side-by-side Kyma | 15-75+ | CF factors plus container, cluster, registry, Helm, network and operational ownership |
 | Hybrid | sum of owned parts plus 20-40% boundary overhead | consistency, events, failure handling |
 | Retirement | 0.5-5 | references, business approval and cleanup |
 
@@ -299,7 +336,7 @@ The decision engine must correctly handle at least:
 1. Existing A on-stack implementation remains on-stack.
 2. Custom field/UI requirement selects Key User A with manual handoff.
 3. Tight transaction/high-volume requirement selects embedded ABAP Cloud A.
-4. SaaS/mobile/multi-system requirement selects CF side-by-side.
+4. SaaS/mobile/multi-system CAP requirement selects CF only after the complete Level A BTP contract.
 5. Classic BAPI wrapper reports A+B.
 6. Internal-table wrapper reports A+C and a time-bound exception.
 7. Stable custom dependency selects API release and then reclassification.
@@ -308,3 +345,6 @@ The decision engine must correctly handle at least:
 10. Mixed custom field plus mobile use case selects hybrid.
 11. Public Cloud refuses B and wrapper debt.
 12. Missing evidence selects `ResearchRequired`, never D by assumption.
+13. CAP-owned data dispatches CAP schema; S/4-owned data does not.
+14. A justified Kubernetes requirement selects Kyma; runtime preference alone does not.
+15. CAP Fiori Elements and freestyle UI5 are mutually exclusive dispatches.

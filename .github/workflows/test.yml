@@ -96,6 +96,9 @@ jobs:
       - name: Check skill tool references
         run: npm run check:skill-refs
 
+      - name: Check Clean Core skill contract
+        run: npm run check:clean-core-skills
+
       - name: npx package smoke test
         run: npm run test:npx-smoke
 
