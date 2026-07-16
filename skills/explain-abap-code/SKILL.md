@@ -281,7 +281,7 @@ Offer the user next steps:
 
 ### BTP vs On-Premise Differences
 
-- **BTP**: Fewer object types available — no PROG, INCL, FUGR. Focus on released APIs and ABAP Cloud objects. DDLS, DCLS, CLAS, INTF, BDEF, DDLX, SRVD are the primary types. ATC variants are limited to cloud readiness checks.
+- **BTP**: Fewer object types available — no PROG and no INCL (FUGR/FUNC remain readable for released function modules). Focus on released APIs and ABAP Cloud objects. DDLS, DCLS, CLAS, INTF, BDEF, DDLX, SRVD are the primary types. ATC variants are limited to cloud readiness checks.
 - **On-Premise**: Full range of object types. All ATC variants available. Can explain legacy objects (FORM routines, function modules, classic reports).
 
 ### What This Skill Does NOT Do

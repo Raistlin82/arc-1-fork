@@ -19,7 +19,7 @@ If the scope is clear, start immediately:
 
 1. Resolve the scope.
    - Package: `SAPRead(type="DEVC", name="<package>")`
-   - Prefix/namespace: `SAPSearch` per relevant type (`PROG`, `CLAS`, `FUGR`, `FUNC`, `DDLS`, `BDEF`, `SRVD`, `TABL`)
+   - Prefix/namespace: `SAPSearch(query="Z<prefix>*")` — object-name search has NO type filter; classify the hits by the `type` field of each result (or use `searchType="tadir_lookup"` with `names=[...]` for exact names)
    - Object list: resolve ambiguous names with `SAPSearch`
    - Local extract: parse the file and state that evidence is imported, not live ARC-1
 2. Build a small inventory: object, type, package, description, LOC when available, last change/version when available.

@@ -18,6 +18,13 @@ explicit i18n). Pick `convert-ui5-to-fiori-elements.md` instead if the target is
 **Fiori Elements V4** app (annotation-driven; minimal custom code). Both start from the same
 legacy JS app + the same V4 RAP service produced by `migrate-segw-to-rap`.
 
+**CAP side-by-side invocation (`uiTarget=ui5_freestyle`).** When the Clean Core chain
+(`modernize_side_by_side_ui5` action) dispatches this skill, the backend is a **CAP OData
+service on BTP** instead of a RAP service: apply the same modernization checklist and traps,
+but bind the modern app to the CAP service URL from `modernize-abap-cap-service`, package it
+with the CAP MTA (or Kyma chart) instead of the ABAP front-end server, and skip the
+ABAP-repository deployment steps. The legacy app remains the functional reference for parity.
+
 ```
                   migrate-segw-to-rap.md  (backend: SEGW V2 → RAP V4)
                             │

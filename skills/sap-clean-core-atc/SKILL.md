@@ -14,6 +14,10 @@ target architecture.
 
 ```text
 <package-or-object> [--landscape=auto|s4-public-cloud|s4-private-cloud|s4-on-premise|btp-abap-environment]
+
+CLI flags stay kebab-case; every EMITTED landscape value uses the machine contract's snake_case
+identifiers (`s4_public_cloud`, `s4_private_cloud`, `s4_on_premise`, `btp_abap_environment`) so the
+classification JSON feeds `chain.json`/`aem-model.json` and the runtime resolver without mapping.
                     [--assessment-variant=<name>] [--gate-variant=<name>]
 ```
 
@@ -41,7 +45,7 @@ touchpoints. This classifier does not infer deployment location from the level.
 ### 1. Establish live context
 
 1. Read the system context produced by `bootstrap-system-context`; refresh when stale.
-2. Record system release, edition/landscape, components, available ATC variants and feature probes.
+2. Record system release, edition/landscape, components and feature probes. ARC-1 cannot enumerate ATC check variants: record the variants the customer NAMES (assessment `ABAP_CLOUD_READINESS`, governed copy of `ABAP_CLOUD_DEVELOPMENT_DEFAULT`) and verify each by attempting the ATC run — a missing variant fails with an explicit SAP error, which is the availability evidence.
 3. Discover an official SAP documentation MCP exact-object capability when exposed; record its
    namespace. Otherwise use official structured SAP release data.
 
@@ -137,7 +141,7 @@ Write a package/object report containing:
   "level": "B",
   "provisionalWorstKnownLevel": "B",
   "targetCompliance": {
-    "landscape": "s4-private-cloud",
+    "landscape": "s4_private_cloud",
     "acceptable": true
   },
   "touchpoints": [

@@ -31,7 +31,10 @@ No input required. Optionally:
 SAPRead(type="SYSTEM")
 ```
 
-Returns: SID, system type (`onprem` | `btp`), release, kernel version, current user, client, language.
+Returns the effective ADT **user** plus the discovery **collections** (the live endpoint list —
+useful as a capability fingerprint). It does NOT return SID/release/kernel/client: take the
+**release and system type** from `SAPManage(action="probe")` (Step 3) and the component levels
+from Step 2; SID and client come from the connection configuration recorded by the operator.
 
 ## Step 2: Read Installed Components
 
@@ -47,7 +50,7 @@ Returns an array of `{ name, release, description }`. Capture at minimum: `SAP_B
 SAPManage(action="probe")
 ```
 
-Returns feature flags for: `hana`, `abapGit`, `rap`, `amdp`, `ui5`, `ui5repo`, `transport`, `flp`. Each has `available` (bool), `mode`, and a `message`. These drive decisions like "can I generate a RAP stack?" or "is FLP catalog management wired in?"
+Returns feature flags for: `hana`, `abapGit`, `gcts`, `rap`, `amdp`, `ui5`, `ui5repo`, `transport`, `flp`. Each has `available` (bool), `mode`, and a `message`. These drive decisions like "can I generate a RAP stack?" or "is FLP catalog management wired in?" — record `gcts` too, it selects the git backend for transport strategies.
 
 If the user requested to skip this step, mark features as "not probed" in the output.
 

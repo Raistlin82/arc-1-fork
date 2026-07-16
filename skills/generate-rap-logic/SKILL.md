@@ -320,16 +320,22 @@ SAPActivate(objects=[{type:"BDEF", name:"<bdef>"}, {type:"CLAS", name:"<bp_class
 
 **Note:** Activation returns structured responses with detailed error/warning messages including line numbers and URIs. Use this to pinpoint exact issues rather than re-reading full source.
 
-Optionally, if a test class exists, run the unit tests:
+Run the unit tests (MANDATORY when invoked from the Clean Core chain — the `rap_logic` action
+carries the MUST gates `tests_green` and `atc_no_regression`; a standalone quick-fix run may relax
+this only if the user explicitly says so):
 
 ```
-SAPDiagnose(action="unittest", type="CLAS", name="<bp_class>")
+SAPDiagnose(action="unittest", type="CLAS", name="<bp_class>", coverage=true)
 ```
 
-If ATC is available and the change is non-trivial, run it too:
+If no test class exists yet, generate one first with `generate-abap-unit-test` — a behavior
+implementation without regression tests cannot pass `tests_green`.
+
+Run ATC as well (same rule — mandatory under the chain, with the assessment variant recorded by
+`bootstrap-system-context`; any NEW P1/P2 finding vs the baseline blocks the unit):
 
 ```
-SAPDiagnose(action="atc", type="CLAS", name="<bp_class>")
+SAPDiagnose(action="atc", type="CLAS", name="<bp_class>", variant="<assessment variant>")
 ```
 
 Present a summary:
@@ -564,9 +570,9 @@ ENDMETHOD.
 
 ### When to Use This Skill
 
-- After creating a RAP service (use generate-rap-service first)
+- After creating a RAP service (production refactors: `generate-rap-service-researched`; quick explicitly-requested prototypes only: `generate-rap-service`, MAY-only)
 - When the BDEF has determination/validation declarations but empty method stubs
 - When adding new business logic to an existing RAP service
 - When the user describes desired behavior in natural language (e.g., "validate that the end date is after the begin date")
-- NOT for creating the RAP service from scratch (use generate-rap-service)
+- NOT for creating the RAP service from scratch (production default: `generate-rap-service-researched`)
 - NOT for CDS unit tests (use generate-cds-unit-test or generate-abap-unit-test)

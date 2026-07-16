@@ -214,6 +214,15 @@ SAPRead(type="DDLS", name="ZI_Sales_Cube", include="elements")
 
 Confirm the cube is live and its dimension association + measures resolved.
 
+When invoked from the Clean Core chain (`analytical_embedded` action), ATC is a MUST gate
+(`atc_no_regression`) — run it over every created view and compare against the baseline:
+
+```
+SAPDiagnose(action="atc", type="DDLS", name="ZI_Sales_Cube", variant="<assessment variant from bootstrap-system-context>")
+```
+
+Any NEW P1/P2 finding blocks acceptance of the unit.
+
 ## Step 7: Offer the query layer
 
 The cube is the foundation; the query is what end users consume. Offer:

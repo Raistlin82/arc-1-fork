@@ -237,7 +237,7 @@ ZCL_LEGACY_HELPER       CLAS  Z_FI_CUSTOM       2023-11-03 (MARIAN / A4HK900031)
 ...
 ```
 
-"Last change" comes from `SAPRead(type="VERSIONS", name="<name>", objectType="<type>")`. Old + unused = safest to delete.
+"Last change" comes from `SAPRead(type="VERSIONS", name="<name>", objectType="<type>")` — on-prem only, and only for version-managed source objects (PROG, CLAS, INTF, FUNC includes, DDLS…); for types the revisions endpoint rejects (and on BTP), record "last change: not derivable" instead of guessing. Old + unused = safest to delete.
 
 ### 6c. LIKELY_UNUSED table with caller hints
 

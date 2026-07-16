@@ -9,6 +9,15 @@ Create a local abapGit-style mirror of an SAP package or object set. Reads are a
 
 This skill works today with ARC-1's existing `SAPRead` + `DEVC` primitives. When dedicated abapGit export tooling lands in ARC-1, the skill can be simplified — the file layout it produces is the target format either way.
 
+## Dual-context rule (side_by_side_btp_abap)
+
+When this skill runs inside the `rewrite_side_by_side_btp_abap` action of
+`sap-erp-clean-core-refactor`, TWO ARC-1 connections exist: the SOURCE S/4 context (legacy
+evidence reads only) and the TARGET SAP BTP ABAP Environment context. Every `SAPWrite`,
+`SAPActivate` and `SAPTransport` call in this skill goes to the TARGET context; only reads that
+gather legacy evidence (`SAPRead`/`SAPContext`/`SAPNavigate` on the original objects) use the
+SOURCE context. Never write through the source S/4 connection.
+
 ## Smart Defaults (apply silently, do NOT ask)
 
 | Setting | Default | Rationale |
@@ -60,20 +69,21 @@ Normalize slash-form types to the ARC-1 `SAPRead` short codes:
 | `INTF/OI` | `INTF` | `.intf.abap` |
 | `PROG/P` | `PROG` | `.prog.abap` |
 | `FUGR/F` | `FUGR` | `.fugr.abap` (expanded includes) |
-| `FUNC/FF` | `FUNC` | `.func.abap` |
+| `FUGR/FF` | `FUNC` | `.func.abap` (function module; the container is the group) |
 | `DDLS/DF` | `DDLS` | `.ddls.asddls` |
 | `DCLS/DL` | `DCLS` | `.dcls.asdcls` |
 | `DDLX/EX` | `DDLX` | `.ddlx.asddlxs` |
-| `BDEF/BO` | `BDEF` | `.bdef.asbdef` |
+| `BDEF/BDO` | `BDEF` | `.bdef.asbdef` |
 | `SRVD/SRV` | `SRVD` | `.srvd.asrvd` |
 | `SRVB/SVB` | `SRVB` | `.srvb.xml` |
 | `TABL/DT` | `TABL` | `.tabl.xml` |
-| `STRU/DS` | `STRU` | `.stru.xml` |
+| `TABL/DS` (structures; legacy listings may emit `STRU/DS`) | `TABL` | `.tabl.xml` |
 | `DOMA/DD` | `DOMA` | `.doma.xml` |
 | `DTEL/DE` | `DTEL` | `.dtel.xml` |
 | `MSAG/N` | `MSAG` | `.msag.xml` |
-| `ENHO/EO` | `ENHO` | `.enho.xml` |
+| `ENHO/*` (any ENHO subtype; ARC-1 has no slash alias) | `ENHO` | `.enho.xml` |
 
+Reads for structures collapse to the bare `TABL` type — there is no separate `STRU` SAPRead type.
 Skip types not in this table; log them in a `skipped.md` in the mirror root.
 
 ### 1b. For a single object or object list

@@ -9,6 +9,15 @@ Generate ABAP Unit tests for classes with dependency analysis, test doubles, and
 
 This skill replicates SAP Joule's "Unit Test Generation" capability for ABAP classes by combining ARC-1 (SAP system access) with mcp-sap-docs (documentation & best practices). Unlike the CDS unit test skill which targets CDS entities, this skill targets ABAP classes and uses interface-based test doubles instead of CDS Test Double Framework.
 
+## Dual-context rule (side_by_side_btp_abap)
+
+When this skill runs inside the `rewrite_side_by_side_btp_abap` action of
+`sap-erp-clean-core-refactor`, TWO ARC-1 connections exist: the SOURCE S/4 context (legacy
+evidence reads only) and the TARGET SAP BTP ABAP Environment context. Every `SAPWrite`,
+`SAPActivate` and `SAPTransport` call in this skill goes to the TARGET context; only reads that
+gather legacy evidence (`SAPRead`/`SAPContext`/`SAPNavigate` on the original objects) use the
+SOURCE context. Never write through the source S/4 connection.
+
 ## Smart Defaults (apply silently, do NOT ask)
 
 | Setting | Default | Rationale |

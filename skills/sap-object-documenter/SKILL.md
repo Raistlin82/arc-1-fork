@@ -9,6 +9,15 @@ Produce stable, package-scoped documentation for custom ABAP objects — classif
 
 This skill complements [explain-abap-code](../explain-abap-code/SKILL.md) which targets a single object interactively. Use this one when you want **written docs for many objects at once** — e.g., to seed a `docs/` folder during onboarding, or to generate knowledge-transfer material before a team handoff.
 
+## Dual-context rule (side_by_side_btp_abap)
+
+When this skill runs inside the `rewrite_side_by_side_btp_abap` action of
+`sap-erp-clean-core-refactor`, TWO ARC-1 connections exist: the SOURCE S/4 context (legacy
+evidence reads only) and the TARGET SAP BTP ABAP Environment context. Every `SAPWrite`,
+`SAPActivate` and `SAPTransport` call in this skill goes to the TARGET context; only reads that
+gather legacy evidence (`SAPRead`/`SAPContext`/`SAPNavigate` on the original objects) use the
+SOURCE context. Never write through the source S/4 connection.
+
 ## Smart Defaults (apply silently, do NOT ask)
 
 | Setting | Default | Rationale |
@@ -166,7 +175,7 @@ Create `docs/custom-code/<package>/README.md` with the overview table (linking t
 - **Package:** <package>
 - **Style:** Modern | Classic | Mixed | n/a
 - **Purpose:** <one-sentence summary>
-- **Last change:** <SAPRead VERSIONS — most recent timestamp + user>
+- **Last change:** <SAPRead VERSIONS — most recent timestamp + user; on-prem version-managed types only — on BTP or for unsupported types write "not derivable">
 - **Transports:** <SAPTransport action="history" — last 3 TR numbers>
 ```
 

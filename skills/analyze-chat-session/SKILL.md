@@ -76,7 +76,7 @@ For each MCP tool call in the session, record:
 
 | Field | What to capture |
 |---|---|
-| **Tool** | Which of the 11 tools was called (SAPRead, SAPSearch, etc.) |
+| **Tool** | Which of the 12 tools was called (SAPRead, SAPSearch, …, SAPManage) |
 | **Operation** | The specific action/type/include (e.g., `SAPRead(type="CLAS", name="<name>", format="structured")`) |
 | **Intent** | What information was the LLM trying to get? |
 | **Result** | `success`, `error`, `partial`, `empty`, `redundant` |
@@ -260,7 +260,7 @@ After presenting the report, offer:
 1. **"Create GitHub issues?"** — For each suggested ARC-1 improvement, offer to draft a GitHub issue body (still requires user review before posting)
 2. **"Refine a specific finding?"** — Dive deeper into one particular issue
 3. **"Retry the failed approach?"** — If the analysis reveals a better strategy, offer to try it now
-4. **"Save as skill feedback?"** — If the analysis reveals patterns that should be encoded in a skill, offer to update the relevant `.claude/commands/*.md` file
+4. **"Save as skill feedback?"** — If the analysis reveals patterns that should be encoded in a skill, offer to update the relevant `skills/<name>/SKILL.md` file (the repository's skill home; installed copies live under the agent's skills directory)
 
 ---
 

@@ -67,7 +67,10 @@ These are what an overview is *for*. Derive from the data already gathered:
   transport-sequence breakage. To check one object across requests: `SAPTransport(action="history", type="<type>", name="<name>")`. To find them in a working set, `get` the in-scope requests and intersect their object lists.
 - **`$TMP` / local objects** — won't transport; flag requests that carry them.
 - **Empty requests** (`objectCount` 0) — cleanup candidates (delete or release).
-- **Stale** — long-open requests (old `changedAt`); ageing backlog.
+- **Stale** — long-open requests / ageing backlog. `SAPTransport` list/get responses carry NO
+  timestamps: derive age from `SAPRead(type="VERSIONS", name="<object>", objectType="<type>")`
+  on one or two representative objects of the request (on-prem only), or mark staleness as
+  "not derivable" — never invent a `changedAt` value.
 - **Locked objects** (`locked: true` from `get`) — block other developers; may need release or unlock.
 - **No target** (`target` empty) — a *local* request that cannot be transported onward (often a mistake for work meant to ship).
 

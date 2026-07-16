@@ -22,7 +22,7 @@ This skill replicates SAP Joule's "CDS Analytical Query Generation" capability b
 | Package | `$TMP` | Fast prototyping; ask before a transportable package |
 | Authorization | `#NOT_ALLOWED` | **Mandatory** on analytical queries — any other value fails activation |
 | Axis layout | Dimensions → `#ROWS`, measures → `#COLUMNS` | Sensible default grid; user can rearrange |
-| ATC | No | Only run if user asks about code quality |
+| ATC | Standalone runs: only if the user asks. Clean Core chain (`analytical_embedded`): MANDATORY — the action carries the MUST gate `atc_no_regression`; run `SAPDiagnose(action="atc", type="DDLS", name="<query>", variant="<assessment variant>")` and block on NEW P1/P2 findings | Chain gates cannot be silently skipped |
 
 ## Input
 

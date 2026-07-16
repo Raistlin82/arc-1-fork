@@ -731,21 +731,21 @@ If the **official SAP ABAP MCP server** is connected alongside ARC-1 (the `abap-
 If the system supports it and the artifact stack is straightforward:
 
 ```
-SAPWrite(action="batch_create", objects=[
+SAPWrite(action="batch_create", activateAtEnd=true, objects=[
   {type: "TABL", name: "<table>", description: "<desc>", source: "<ddl>"},
   {type: "DDLS", name: "ZI_<entity>", description: "<desc>", source: "<ddl>"},
   {type: "DCLS", name: "ZI_<entity>_DCL", description: "<desc>", source: "<dcl>"},
   {type: "DDLS", name: "ZC_<entity>", description: "<desc>", source: "<ddl>"},
+  {type: "CLAS", name: "ZBP_I_<entity>", description: "<desc>", source: "<class>"},
   {type: "BDEF", name: "ZI_<entity>", description: "<desc>", source: "<bdef>"},
   {type: "BDEF", name: "ZC_<entity>", description: "<desc>", source: "<bdef>"},
   {type: "DDLX", name: "ZC_<entity>", description: "<desc>", source: "<ddlx>"},
   {type: "SRVD", name: "ZSD_<entity>", description: "<desc>", source: "<srvd>"},
-  {type: "CLAS", name: "ZBP_I_<entity>", description: "<desc>", source: "<class>"},
   {type: "SRVB", name: "ZSB_<entity>_V4", description: "<desc>", serviceDefinition: "ZSD_<entity>", bindingType: "ODataV4-UI"}
 ], package="<package>", transport="<transport>")
 ```
 
-Objects are created in array order — put dependencies first.
+Objects are created in array order — put dependencies first (behavior pool CLAS before the interface BDEF that names it). `activateAtEnd=true` is REQUIRED here: the interface BDEF names the behavior pool (`implementation in class zbp_… unique`) while the class references the BDEF (`FOR BEHAVIOR OF`) — a circular pair only a single terminal activator pass can resolve. Without the flag the batch activates inline per object and fails on whichever side comes first.
 
 ### 4b. Sequential Fallback
 
@@ -907,6 +907,26 @@ RAP Service Generation Complete!
   [x] Syntax check: clean
   [x] Lint check: clean
   [x] ATC check: [clean / N findings noted]
+  [x] ABAP Unit: [N tests green / generated via generate-abap-unit-test]
+```
+
+**Unit tests are part of THIS phase when the skill runs as `rap_full_stack_researched` in the
+Clean Core chain** — the action carries the MUST gate `tests_green` and the `run_unit_tests`
+operation. Generate the behavior-pool tests with `generate-abap-unit-test`, then run:
+
+```
+SAPDiagnose(action="unittest", type="CLAS", name="ZBP_I_<Entity>", coverage=true)
+```
+
+Red or missing tests keep `tests_green` pending and the unit write-blocked; deferring tests to a
+"next step" is only acceptable for standalone prototype invocations outside the chain.
+
+**Concrete-diff approval (`generative_diff_approved`)**: before requesting acceptance, present
+the FULL generated sources (or the ARC-1 `read_diff` output per artifact) to the operator — the
+Phase 3b design-plan approval covers the architecture, not the generated code. Record the diff
+approval per logical unit.
+
+```text
 
 ## Consistency with Existing Code
   [x] Naming matches existing convention: [pattern]

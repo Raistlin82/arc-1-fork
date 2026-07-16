@@ -9,12 +9,21 @@ Generate an ABAP Unit test class for a CDS entity using the CDS Test Double Fram
 
 This skill replicates SAP Joule's "CDS Unit Test Generation" capability by combining ARC-1 (SAP system access) with mcp-sap-docs (documentation & best practices).
 
+## Dual-context rule (side_by_side_btp_abap)
+
+When this skill runs inside the `rewrite_side_by_side_btp_abap` action of
+`sap-erp-clean-core-refactor`, TWO ARC-1 connections exist: the SOURCE S/4 context (legacy
+evidence reads only) and the TARGET SAP BTP ABAP Environment context. Every `SAPWrite`,
+`SAPActivate` and `SAPTransport` call in this skill goes to the TARGET context; only reads that
+gather legacy evidence (`SAPRead`/`SAPContext`/`SAPNavigate` on the original objects) use the
+SOURCE context. Never write through the source S/4 connection.
+
 ## Smart Defaults (apply silently, do NOT ask)
 
 | Setting | Default | Rationale |
 |---|---|---|
 | Test class name | `ZCL_TEST_<entity_name>` | Standard convention |
-| Package | `$TMP` | Fast prototyping |
+| Package | `$TMP` standalone; the APPROVED target package + transport when invoked from the Clean Core chain (`transport_scoped` gate — and ATC skips `$TMP`, so a `$TMP` test class cannot feed `atc_no_regression`) | Fast prototyping vs governed execution |
 | Test scope | All testable semantics | User can narrow after seeing the list |
 | Risk level | `HARMLESS` | CDS test doubles don't modify real data |
 | Duration | `SHORT` | Unit tests should be fast |
@@ -293,7 +302,7 @@ Show the user:
 If tests fail:
 1. Analyze the failure message
 2. Determine if it's a test data issue, assertion issue, or CDS logic issue
-3. Fix the test method using `SAPWrite(action="edit_method", type="CLAS", name="<test_class_name>", method="<ltc_class>~<failing_method>", source="<fixed_method_body>", transport="<transport>")`
+3. Fix the test method using `SAPWrite(action="edit_method", type="CLAS", name="<test_class_name>", method="<failing_method>", source="<fixed_method_body>", transport="<transport>")` — the generated test class is a GLOBAL class whose methods live in the main include, so the method specifier is the bare method name (a `<local_class>~<method>` specifier is only for local classes inside another class's includes)
 4. Re-activate and re-run
 
 ## Error Handling

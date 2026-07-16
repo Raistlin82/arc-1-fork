@@ -31,7 +31,7 @@ resettable package.
 | CDS composition syntax (managed) | `composition [0..*] of <child> as <name>` — **no `on` clause**. Key linking is implicit via matching key fields / `with foreign key` in the child | 7.58 rejects `on` on managed compositions. The recovery is dropping `on`, not switching to `association to`. |
 | `@Semantics.*` on 7.58 | `createdAt`, `lastChangedAt`, **and `localInstanceLastChangedAt`** are all valid on 7.58 — put `localInstanceLastChangedAt` on the local-instance etag field (`abp_locinst_lastchange_tstmpl`), exactly as SAP's own RAP generator does. `@Semantics.businessDate.from/to` also work. | Verified live on S/4HANA 2023 (758, 2026-06-12): standalone CDS views with `localInstanceLastChangedAt` and with `businessDate.from/to` both activate. An earlier "unknown annotation on 7.58" note was a misdiagnosis — draft annotations are genuinely absent only on pre-7.55 releases. |
 | Draft table field names (when draft=ON) | Use BO-alias casing **without underscores** — e.g. `projectid`, `startdate`, NOT `project_id`, `start_date`. ABAP normalizes BDEF aliases (`ProjectId`, `StartDate`) to `PROJECTID`, `STARTDATE` — the draft table lookup is by that normalized name, not by the active table's snake_case. | Run 2: BDEF activation failed with *"key field PROJECTID expected at position 2, found PROJECT_ID"*. The active table can keep snake_case (BDEF mapping handles it); the draft table cannot — it has no mapping clause. |
-| Naming | SAP-standard `Z<prefix>_<entity>`: `ZR_` root, `ZC_` projection, `ZI_<entity>_BEH` BDEF, `ZBP_` behavior pool, `ZUI_<service>_O4` V4 SRVB | Aligns with SAP-internal conventions; the leading `Z` is the customer namespace |
+| Naming | SAP-standard `Z<prefix>_<entity>`: `ZR_` root, `ZC_` projection, BDEF = SAME name as the entity it defines behavior for (`ZR_<entity>` root behavior, `ZC_<entity>` projection behavior — a RAP BDEF cannot have a different name), `ZBP_` behavior pool, `ZUI_<service>_O4` V4 SRVB | Aligns with SAP-internal conventions; the leading `Z` is the customer namespace |
 | Pre-write lint | On | Set `SAP_ABAP_RELEASE=<your_release>` in ARC-1 config (PR #255) so the lint preset matches the system release. The older `SAP_LINT_BEFORE_WRITE=false` workaround is no longer needed. |
 | Pre-write SAP check | On for activation-blockers only | We rely on activation feedback, not `--check-before-write` |
 
@@ -336,7 +336,7 @@ Legacy → New RAP
 
 ZDM_PROJECT (table, untouched)        ─► ZR_DM_PROJECT  (CDS root view entity)
                                         ZC_DM_PROJECT  (CDS projection view, exposed via service)
-                                        ZI_DM_PROJECT  (BDEF for root)
+                                        ZR_DM_PROJECT  (BDEF for root — same name as the entity)
 ZDM_TASK    (table, untouched)        ─► ZR_DM_TASK    + ZC_DM_TASK
 ZDM_TIMEENTRY (table, untouched)      ─► ZR_DM_TIMEENTRY + ZC_DM_TIMEENTRY
 
@@ -359,7 +359,7 @@ which gives RAP managed lifecycle semantics for free.
 ### 5c. Action
 
 ```
-ZI_DM_PROJECT (BDEF):
+ZR_DM_PROJECT (BDEF — same name as the root entity):
   define behavior for ZR_DM_PROJECT alias Project
     persistent table zdm_project
     lock master
@@ -396,6 +396,13 @@ re-present.
 > gate. Print the plan as a manifest and advance directly to Phase 5f / Phase 6. Only stop
 > if Phase 5 surfaced a genuine conflict (missing input, contradictory scenario flags, etc.).
 > See Run 6 findings — full-chain automations otherwise hit a phantom gate.
+>
+> **Exception — Clean Core chain invocation.** When this skill runs as the
+> `migrate_segw_to_rap` action of `sap-erp-clean-core-refactor`, the chain's MUST human gates
+> (`plan_approved`, `generative_diff_approved`) can NEVER be waived by a pre-supplied
+> "run end-to-end" instruction: the plan approval and the concrete diff approval are recorded
+> per logical unit by the orchestrator. Non-interactive mode only removes the redundant
+> conversational re-ask, not the gates themselves.
 
 ### 5f. Lock the artifact list as a Phase-6 contract
 
@@ -456,8 +463,8 @@ SAPSearch(searchType="tadir_lookup",
           names=["ZDM_PROJECT_D","ZDM_TASK_D","ZDM_TIMEENTRY_D",
                  "ZR_DM_PROJECT","ZR_DM_TASK","ZR_DM_TIMEENTRY",
                  "ZC_DM_PROJECT","ZC_DM_TASK","ZC_DM_TIMEENTRY",
-                 "ZI_DM_PROJECT_BEH","ZI_DM_TASK_BEH","ZI_DM_TIMEENTRY_BEH",
-                 "ZBP_DM_PROJECT","ZUI_DM_PROJECTS","ZUI_DM_PROJECTS_O4"])
+                 "ZBP_DM_PROJECT","ZBP_DM_TASK","ZBP_DM_TIMEENTRY",
+                 "ZUI_DM_PROJECTS","ZUI_DM_PROJECTS_O4"])
 ```
 
 Read the response in this order:
@@ -631,11 +638,11 @@ dats_tims_to_tstmp(
 >    ```text
 >    SAPWrite(action="batch_create", activateAtEnd=true, objects=[
 >      {type:"DDLS", name:"ZR_DM_PROJECT", source:"<root source>"},
->      {type:"DDLS", name:"ZI_DM_TASK", source:"<child source>"}
+>      {type:"DDLS", name:"ZR_DM_TASK", source:"<child source>"}
 >    ], package="<target_package>", transport="<transport>")
 >    ```
 > 2. **Per-file `SAPWrite(action="create", type="DDLS", name="<name>", source="<source>", package="<target_package>", transport="<transport>")`** for each root, then a **single
->    `SAPActivate(action="activate", objects=[{type:"DDLS", name:"ZR_DM_PROJECT"}, {type:"DDLS", name:"ZI_DM_TASK"}])` batch** at the end (after every DDL
+>    `SAPActivate(action="activate", objects=[{type:"DDLS", name:"ZR_DM_PROJECT"}, {type:"DDLS", name:"ZR_DM_TASK"}])` batch** at the end (after every DDL
 >    source has landed). Works on every ARC-1 release.
 > 3. Manual bottom-up: create the parent draft → activate the child first → activate
 >    parent last. More tool calls; rarely needed.
@@ -871,11 +878,13 @@ That single call (PR-C, ARC-1 ≥ post-2026-05-10) does:
    `managed implementation in class zbp_dm_project unique` agree. Refuses to mutate
    on mismatch.
 3. Calls the same scaffold engine `scaffold_rap_handlers` uses, with `autoApply=true`:
-   - Auto-creates missing `lhc_<alias>` skeletons (CCDEF + CCIMP).
+   - Auto-creates missing `lhc_<alias>` skeletons in CCIMP only (never CCDEF — local handler
+     classes are self-contained `CLASS … DEFINITION … IMPLEMENTATION` blocks in the
+     implementations include).
    - Injects `METHODS …` signatures for every action / determination / validation /
      authorization the BDEF requires.
    - Injects empty `METHOD … ENDMETHOD.` stubs in CCIMP.
-4. Writes CCDEF + CCIMP via the PR #257 include= path under one stateful lock.
+4. Writes CCIMP via the PR #257 include= path under one stateful lock.
 5. Activates the class.
 
 Returns a structured JSON report including `discovery`, `validation`, `scaffoldChanged`,
@@ -1116,6 +1125,20 @@ If counts don't match, the CDS where-clauses are likely wrong — re-read the le
 methods for filters you missed. If actions fail with 412/428 even with both headers, the
 service likely needs a fresh `publish_srvb` to pick up newer BDEF action declarations.
 
+### 7e. ATC + unit-test gates (MANDATORY when invoked from the Clean Core chain)
+
+The `migrate_segw_to_rap` action carries the MUST gates `atc_no_regression` and `tests_green` —
+the smoke test alone satisfies neither:
+
+1. **ATC** over every created artifact (behavior pool at minimum):
+   `SAPDiagnose(action="atc", type="CLAS", name="ZBP_DM_PROJECT", variant="<assessment variant from bootstrap-system-context>")`.
+   Compare against the pre-migration baseline; any NEW P1/P2 finding blocks acceptance.
+2. **ABAP Unit** on the behavior pool (generate the tests with `generate-abap-unit-test` when the
+   legacy DPC_EXT logic was ported):
+   `SAPDiagnose(action="unittest", type="CLAS", name="ZBP_DM_PROJECT", coverage=true)`.
+   Failures block the unit; do not advance to transport review with red tests.
+
+Record both results in the plan evidence before requesting `sap-transport-review`.
 
 ---
 
@@ -1177,6 +1200,8 @@ SAPTransport(action="create", description="ARC-1 RAP migration outputs - resetta
   it'll tell you the released-cloud equivalent.
 - Use the active SAP docs MCP `abap_feature_matrix` tool to check which RAP features are available on the
   user's release (e.g. `etag master`, `unmanaged save`, `lock master`).
-- `generate-rap-service-researched.md` is the canonical creator. This skill's job is the
-  *discovery + translation*; delegating the actual create+activate to the deeper skill keeps
-  this one focused.
+- `generate-rap-service-researched` remains the canonical greenfield RAP creator and the
+  reference for stack conventions. This skill performs its own create+activate in Phase 6
+  (the artifact list is locked by the Phase-5f contract); consult the researched skill when a
+  Phase-6 pattern needs a deeper variant, and keep this skill focused on SEGW *discovery +
+  translation*.

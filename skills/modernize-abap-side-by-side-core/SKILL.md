@@ -27,10 +27,11 @@ Write `<target-dir>/docs/side-by-side-decision.json`:
   "logicalUnit": "ORDER_APPROVAL",
   "targetLevel": "A",
   "implementationModel": "cap",
-  "runtime": "cf",
+  "sideBySideRuntime": "cf",
   "serviceBoundary": "existing_released_api",
   "releasedIntegrationBoundary": true,
   "allTouchpointsReleased": true,
+  "technologyAllowed": true,
   "unreleasedSapAccess": false,
   "directS4DatabaseAccess": false,
   "dataOwnership": "s4",
@@ -49,17 +50,27 @@ Write `<target-dir>/docs/side-by-side-decision.json`:
 }
 ```
 
+The field names and value sets match `chain.json` `sideBySideContract`/`decisionFactCatalog`
+verbatim — the contract file doubles as the runtime resolver's fact input, so a renamed key (for
+example `runtime` instead of `sideBySideRuntime`) silently drops the fact.
+
 Allowed values:
 
 | Field | Values |
 |---|---|
-| `implementationModel` | `cap`, `non_cap`, `undecided` |
-| `runtime` | `cf`, `kyma`, `undecided` |
+| `implementationModel` | `cap`, `non_cap`, `abap_cloud`, `undecided` |
+| `sideBySideRuntime` | `cf`, `kyma`, `btp_abap`, `undecided` |
 | `serviceBoundary` | `existing_released_api`, `custom_rap`, `released_event`, `unavailable` |
-| `dataOwnership` | `s4`, `cap`, `replicated`, `none` |
-| `cdsTarget` | `none`, `abap_cds`, `cap_cds`, `dual_boundary` |
+| `dataOwnership` | `s4`, `cap`, `btp_abap`, `replicated`, `none` |
+| `cdsTarget` | `none`, `abap_cds`, `btp_abap_cds`, `cap_cds`, `dual_boundary` |
 | `uiTarget` | `none`, `cap_fiori_elements`, `ui5_freestyle`, `external` |
 | `overallOutcome` | `A`, `A+B`, `A+C`, `ResearchRequired` |
+
+`implementationModel=abap_cloud` with `sideBySideRuntime=btp_abap` expresses the SAP BTP ABAP
+Environment variant (`side_by_side_btp_abap`); it additionally requires the distinct target ARC-1
+context facts (`sourceArc1Context`, `targetArc1Context`, `btpAbapTargetConnected`) from the
+orchestrator. `non_cap` is recognized but has no executable chain yet — it lands on
+`ResearchRequired` with an explicit conflict.
 
 Every boolean must carry evidence or an explicit not-applicable rationale. Missing evidence is not
 `false`; it makes the outcome `ResearchRequired`.
@@ -94,7 +105,7 @@ Every boolean must carry evidence or an explicit not-applicable rationale. Missi
 | `uiTarget=cap_fiori_elements` | `scaffold-cap-fiori-elements` |
 | `uiTarget=ui5_freestyle` | `modernize-ui5-app` |
 | Any CAP target | `generate-cap-cds-test` |
-| `runtime=kyma` | `deploy-cap-to-kyma` after build and tests |
+| `sideBySideRuntime=kyma` | `deploy-cap-to-kyma` after build and tests |
 | `serviceBoundary=custom_rap` | ABAP CDS/RAP branch before CAP consumption |
 
 `sap-abap-cds` applies only to the S/4 ABAP CDS/RAP boundary. `sap-cap-capire` applies to CAP CDS.

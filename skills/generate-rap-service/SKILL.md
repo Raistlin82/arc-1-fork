@@ -9,6 +9,13 @@ Generate a complete RAP OData UI service from a natural language description of 
 
 This skill replicates SAP Joule's "RAP Service Generation" capability by combining ARC-1 (SAP system access) with mcp-sap-docs (documentation & best practices).
 
+**MAY-only in the Clean Core chain.** In `sap-erp-clean-core-refactor` this skill is the
+`greenfield_rap_may` action: a small greenfield CRUD prototype that the operator EXPLICITLY
+requested, gated on `owner_approved`. It is never selected automatically and is NEVER the
+default for a production refactor — production RAP targets go through
+`generate-rap-service-researched` (`rap_full_stack_researched`). "Production-ready defaults"
+below refers to code quality of the generated prototype, not to a production mandate.
+
 **v1 Guardrails** (fast path): managed scenario only, UUID internal early numbering, single root entity by default, standard CRUD first, draft optional, OData V4 preferred. For multi-entity compositions or heavy custom actions, prefer `generate-rap-service-researched`.
 
 ## Smart Defaults (apply silently, do NOT ask)
@@ -254,21 +261,23 @@ Activate/verify with ARC-1 (`SAPActivate`, `SAPRead`) or the official `abap_acti
 Instead of creating each artifact individually in Steps 4-13, you can use batch creation to create all RAP artifacts in a single tool call:
 
 ```
-SAPWrite(action="batch_create", objects=[
+SAPWrite(action="batch_create", activateAtEnd=true, objects=[
   {type: "TABL", name: "<table_name>", description: "<Entity> Table", source: "<table_ddl>"},
   {type: "DDLS", name: "ZI_<entity>", description: "<Entity> Interface View", source: "<interface_view_ddl>"},
   {type: "DCLS", name: "ZI_<entity>_DCL", description: "<Entity> Access Control", source: "<interface_dcl_source>"},
   {type: "DDLS", name: "ZC_<entity>", description: "<Entity> Projection View", source: "<projection_view_ddl>"},
+  {type: "CLAS", name: "ZBP_I_<entity>", description: "<Entity> Behavior Pool", source: "<class_source>"},
   {type: "BDEF", name: "ZI_<entity>", description: "<Entity> Interface Behavior", source: "<interface_bdef>"},
   {type: "BDEF", name: "ZC_<entity>", description: "<Entity> Projection Behavior", source: "<projection_bdef>"},
   {type: "DDLX", name: "ZC_<entity>", description: "<Entity> Metadata Extension", source: "<ddlx_source>"},
   {type: "SRVD", name: "ZSD_<entity>", description: "<Entity> Service Definition", source: "<srvd_source>"},
-  {type: "CLAS", name: "ZBP_I_<entity>", description: "<Entity> Behavior Pool", source: "<class_source>"},
   {type: "SRVB", name: "ZSB_<entity>_V4", description: "<Entity> Service Binding", serviceDefinition: "ZSD_<entity>", bindingType: "ODataV4-UI"}
 ], package="<package>", transport="<transport>")
 ```
 
-Objects are created and activated in array order — put dependencies first (table before CDS views, DCLS after DDLS, CDS views before BDEFs, behavior pool before interface BDEF). The batch stops on the first failure and reports which objects succeeded and which failed.
+Objects are created and activated in array order — put dependencies first (table before CDS views, DCLS after DDLS, CDS views before BDEFs, behavior pool CLAS before the interface BDEF that names it). The batch stops on the first failure and reports which objects succeeded and which failed.
+
+`activateAtEnd=true` is REQUIRED for a full RAP stack: the interface BDEF names the behavior pool (`implementation in class zbp_… unique`) and the behavior pool references the BDEF (`FOR BEHAVIOR OF zi_…`) — a circular pair no inline per-object activation order can satisfy. With the flag, ARC-1 writes inactive drafts and runs ONE terminal activator pass over the whole graph.
 
 Set `package` and `transport` at the top level when every artifact shares them. If a batch item needs to override either value, put `package` and/or `transport` on that object; item-level values win.
 
