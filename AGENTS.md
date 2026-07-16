@@ -34,6 +34,9 @@ npm run lint / lint:fix / format  # Biome
 npm run dev / dev:http          # Dev mode (stdio / HTTP Streamable)
 npm run test:integration[:slow|:crud]  # Needs SAP credentials (TEST_SAP_URL)
 npm run test:e2e[:slow]         # Needs running MCP server (syncs fixtures first)
+npm run test:eval[:live]        # LLM evals (tests/evals; :live needs credentials)
+npm run check:skill-refs        # skills/ docs ↔ frozen tool surface guard (CI)
+npm run check:clean-core-skills # clean-core chain contract guard (CI)
 TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test:integration:btp[:smoke]
 ```
 
@@ -129,12 +132,19 @@ src/
 │   └── diagnostics.ts, codeintel.ts # ST22/traces + find-def/refs/where-used/completion
 ├── context/                    # deps.ts, cds-deps.ts, contract.ts, compressor.ts, method-surgery.ts, grep.ts
 ├── cache/                      # cache.ts, memory.ts, sqlite.ts, caching-layer.ts (ETag), inactive-list-cache.ts, warmup.ts
+├── authz/                      # policy.ts — ACTION_POLICY (tool, action) → scope
+├── registry/                   # tool-registry.ts — typed dispatch table for built-in AND plugin tools (FEAT-61; ≠ handlers/tool-registry.ts type tables)
+├── plugins/                    # manifest-interpreter.ts — declarative *.tool.json plugin tier (GET-only)
+├── public/                     # `arc-1/public` @experimental extension API (apiVersion fuse, no semver)
+├── skills-installer.ts         # `arc1 skills install` — copies skills/ into agent dirs
 ├── aff/                        # validator.ts (Ajv 2020-12) + bundled AFF schemas/
 ├── probe/                      # ADT type-availability probe (catalog, runner, fixtures)
 └── lint/                       # lint.ts (@abaplint/core), config-builder.ts, pre-write-hints.ts, presets/
 
-scripts/ci/                     # check-file-sizes (ratchet), coverage/reliability reporting
-tests/                          # helpers/ unit/ integration/ e2e/ fixtures/ (tool-definitions = LLM-surface snapshots)
+skills/                         # 30 agent skills (SKILL.md) shipped in the npm package + Claude Code plugin; sap-erp-clean-core-refactor = orchestration chain (chain.json + runtime/)
+public/ui/                      # read-only UI console (#485) — copied to dist/ by build
+scripts/ci/                     # check-file-sizes (ratchet), check-skill-tool-refs, check-clean-core-skills, coverage/reliability reporting
+tests/                          # helpers/ unit/ integration/ e2e/ evals/ fixtures/ (tool-definitions = LLM-surface snapshots)
 ```
 
 ## Key Files for Common Tasks
@@ -212,6 +222,7 @@ Terse routing only — full gotchas per row in [docs/dev-guide.md](docs/dev-guid
 | BTP auth / Destination Service | `src/adt/oauth.ts` (browser OAuth) + `src/server/server.ts` (`buildAdtConfig` per-user destination) + `@arc-mcp/xsuaa-auth` dep |
 | AFF schema / validation | `src/aff/schemas/` + `src/aff/validator.ts` / `src/handlers/write/create.ts` (create/batch_create paths) |
 | CI coverage / reliability reporting | `scripts/ci/coverage-summary.mjs`, `scripts/ci/collect-test-reliability.mjs`, `.github/workflows/test.yml` |
+| Agent skill / clean-core chain | `skills/<name>/SKILL.md` + `skills/README.md`; chain: `skills/sap-erp-clean-core-refactor/{chain.json,WORKFLOW.md,runtime/}` — instructional `SAPTool(...)` refs are CI-validated against `tests/fixtures/tool-definitions` (`check:skill-refs`); changing the tool surface can fail skill-docs CI |
 
 ## Architecture: Request Flow
 
