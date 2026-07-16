@@ -182,6 +182,7 @@ the plan before execution.
 
 ## Supporting references
 
+- [`GETTING-STARTED.md`](./GETTING-STARTED.md): beginner step-by-step user guide (two-layer model, five modes, worked example, glossary).
 - [`WORKFLOW.md`](./WORKFLOW.md#operator-quickstart): operator quickstart, sequence and gates.
 - [`INTEGRATIONS.md`](./INTEGRATIONS.md): ARC-1, local skills, SAP skills and MCP capability map.
 - [`PATTERNS.md`](./PATTERNS.md): architecture, wrapper, execution and governance patterns.

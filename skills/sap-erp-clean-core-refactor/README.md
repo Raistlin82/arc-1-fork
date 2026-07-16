@@ -27,6 +27,10 @@ not accepted as an unexplained domain preference. Incomplete or conflicting fact
 
 ## Start here
 
+**New to this skill?** Read the beginner walkthrough first:
+[`GETTING-STARTED.md`](./GETTING-STARTED.md) — a plain-language, step-by-step guide to your first
+run (the two-layer model, the five modes, a worked example, golden rules and a glossary).
+
 Before a live system run, follow the
 [`WORKFLOW.md` operator quickstart](./WORKFLOW.md#operator-quickstart). It contains the complete
 read-only discovery, estimate, plan approval, scoped-write execution, transport review and
@@ -102,6 +106,7 @@ Level is a compliance dimension, not the architecture selector. Wrapper results 
 
 | File | Purpose |
 |---|---|
+| [`GETTING-STARTED.md`](./GETTING-STARTED.md) | Beginner step-by-step user guide (start here) |
 | [`SKILL.md`](./SKILL.md) | Agent protocol |
 | [`WORKFLOW.md`](./WORKFLOW.md) | Operator flow and acceptance gates |
 | [`DECISION_MATRIX.md`](./DECISION_MATRIX.md) | Human-readable ordered decisions |
