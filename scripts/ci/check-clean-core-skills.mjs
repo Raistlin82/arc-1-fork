@@ -147,8 +147,23 @@ if (chain) {
     if (!gate.executor || !gate.fallback) fail(`gate ${name} needs executor and fallback`);
   }
 
+  const allowedExecutions = new Set([
+    'read_only',
+    'hybrid',
+    'manual_handoff',
+    'arc1_guarded',
+    'arc1_target_guarded',
+    'arc1_guarded_composite',
+    'documented_exception',
+    'delegated_guarded',
+    'composite',
+    'may_only',
+  ]);
   for (const [name, action] of Object.entries(actions)) {
     if (!action.execution) fail(`action ${name} needs execution`);
+    else if (!allowedExecutions.has(action.execution)) {
+      fail(`action ${name} has unknown execution ${action.execution} (writeBlocked semantics hinge on this vocabulary)`);
+    }
     if (!Array.isArray(action.localSkills)) fail(`action ${name} needs localSkills[]`);
     if (!Array.isArray(action.gates) || action.gates.length === 0) fail(`action ${name} needs non-empty gates[]`);
     if (!Array.isArray(action.operationIds)) fail(`action ${name} needs operationIds[]`);
@@ -185,7 +200,10 @@ if (chain) {
       fail(`decision ${decision.id} needs conditions[]`);
     }
     for (const condition of decision.conditions ?? []) {
-      const supported = condition.always === true || (typeof condition.fact === 'string' && (Object.hasOwn(condition, 'equals') || Array.isArray(condition.in)));
+      const supported =
+        condition.always === true ||
+        (typeof condition.fact === 'string' &&
+          (Object.hasOwn(condition, 'equals') || Object.hasOwn(condition, 'notEquals') || Array.isArray(condition.in)));
       if (!supported) fail(`decision ${decision.id} has unsupported condition ${JSON.stringify(condition)}`);
     }
     if (!Array.isArray(decision.evidenceRequired) || decision.evidenceRequired.length === 0) {
@@ -195,6 +213,9 @@ if (chain) {
 
   for (const dispatch of dispatches) {
     const parents = Array.isArray(dispatch.parentActions) ? dispatch.parentActions : [];
+    if (dispatch.mode !== undefined && dispatch.mode !== 'mayOnly') {
+      fail(`dispatch ${dispatch.condition} has unknown mode ${dispatch.mode}`);
+    }
     if (dispatch.mode === 'mayOnly' && parents.length) fail(`MAY-only dispatch ${dispatch.condition} cannot have parents`);
     if (dispatch.mode !== 'mayOnly' && !parents.length) fail(`dispatch ${dispatch.condition} needs parentActions[]`);
     for (const parent of parents) if (!actionNames.has(parent)) fail(`dispatch ${dispatch.condition} has unknown parent ${parent}`);
@@ -205,8 +226,33 @@ if (chain) {
     for (const condition of dispatch.conditions ?? []) {
       const supported =
         condition.always === true ||
-        (typeof condition.fact === 'string' && (Object.hasOwn(condition, 'equals') || Array.isArray(condition.in)));
+        (typeof condition.fact === 'string' &&
+          (Object.hasOwn(condition, 'equals') || Object.hasOwn(condition, 'notEquals') || Array.isArray(condition.in)));
       if (!supported) fail(`dispatch ${dispatch.condition} has unsupported condition ${JSON.stringify(condition)}`);
+    }
+  }
+
+  // Fact-vocabulary closure: every condition fact must be documented in decisionFactCatalog,
+  // and every catalog entry must actually be used by a decision, dispatch or the AEM model.
+  const factCatalog = chain.decisionFactCatalog && typeof chain.decisionFactCatalog === 'object' ? chain.decisionFactCatalog : {};
+  if (!Object.keys(factCatalog).length) fail('chain.json needs a decisionFactCatalog documenting every condition fact');
+  const usedConditionFacts = new Set();
+  for (const decision of decisions) {
+    for (const condition of decision.conditions ?? []) if (condition.fact) usedConditionFacts.add(condition.fact);
+  }
+  for (const dispatch of dispatches) {
+    for (const condition of dispatch.conditions ?? []) if (condition.fact) usedConditionFacts.add(condition.fact);
+  }
+  for (const fact of usedConditionFacts) {
+    if (!factCatalog[fact]) fail(`condition fact ${fact} is missing from decisionFactCatalog`);
+  }
+  const aemFactNames = new Set([
+    ...Object.keys(aemModel?.requiredFacts ?? {}),
+    ...Object.values(aemModel?.conditionalFacts ?? {}).flatMap((definitions) => Object.keys(definitions)),
+  ]);
+  for (const fact of Object.keys(factCatalog)) {
+    if (!usedConditionFacts.has(fact) && !aemFactNames.has(fact)) {
+      fail(`decisionFactCatalog entry ${fact} is used by no decision, dispatch or AEM fact — remove or wire it`);
     }
   }
 
@@ -356,6 +402,40 @@ if (chain && scenarios) {
       }
     } catch (error) {
       fail(`runtime decision scenario ${scenario.id} failed: ${error.message}`);
+    }
+  }
+
+  // Replay coverage: every non-MAY-only specialized dispatch must be exercised by at least one
+  // scenario, so a dispatch can never silently rot without a locking scenario.
+  const coveredDispatchConditions = new Set();
+  const collectCoverage = (facts, rootAction) => {
+    try {
+      for (const node of resolveExecutionPlan(chain, rootAction, facts)) {
+        if (node.selectedBy && node.selectedBy !== 'decision') coveredDispatchConditions.add(node.selectedBy);
+      }
+    } catch {
+      // scenario replay above already reported resolver failures
+    }
+  };
+  for (const scenario of scenarios.scenarios ?? []) {
+    const decision = resolveDecision(chain, scenario.facts);
+    if (decision) collectCoverage(scenario.facts, decision.action);
+  }
+  for (const scenario of scenarios.runtimeScenarios ?? []) {
+    if (!aemModel) break;
+    try {
+      const result = resolveCleanCorePlan(chain, aemModel, scenario.facts);
+      for (const node of result.actions ?? []) {
+        if (node.selectedBy && node.selectedBy !== 'decision') coveredDispatchConditions.add(node.selectedBy);
+      }
+    } catch {
+      // already reported
+    }
+  }
+  for (const dispatch of chain.specializedDispatches ?? []) {
+    if (dispatch.mode === 'mayOnly') continue;
+    if (!coveredDispatchConditions.has(dispatch.condition)) {
+      fail(`specialized dispatch "${dispatch.condition}" is exercised by no decision/runtime scenario`);
     }
   }
 }

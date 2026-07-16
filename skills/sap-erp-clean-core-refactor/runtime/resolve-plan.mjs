@@ -24,17 +24,36 @@ export function run(argv, stdin = undefined) {
   if (factsIndex < 0 || !argv[factsIndex + 1]) return { output: usage(), exitCode: 1 };
 
   const factsPath = argv[factsIndex + 1];
-  const rawFacts = factsPath === '-' ? (stdin ?? readFileSync(0, 'utf8')) : readFileSync(factsPath, 'utf8');
-  const chain = JSON.parse(readFileSync(fileURLToPath(new URL('chain.json', skillDir)), 'utf8'));
-  const aemModel = JSON.parse(readFileSync(fileURLToPath(new URL('aem-model.json', skillDir)), 'utf8'));
-  const result = resolveCleanCorePlan(chain, aemModel, JSON.parse(rawFacts));
+  const parseJson = (raw, label) => {
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      throw new Error(`${label} is not valid JSON: ${error.message}`);
+    }
+  };
+  const readRequired = (path, label) => {
+    try {
+      return readFileSync(path, 'utf8');
+    } catch (error) {
+      throw new Error(`cannot read ${label} (${path}): ${error.message}`);
+    }
+  };
+  const rawFacts =
+    factsPath === '-' ? (stdin ?? readFileSync(0, 'utf8')) : readRequired(factsPath, 'facts file');
+  const chain = parseJson(readRequired(fileURLToPath(new URL('chain.json', skillDir)), 'chain.json'), 'chain.json');
+  const aemModel = parseJson(
+    readRequired(fileURLToPath(new URL('aem-model.json', skillDir)), 'aem-model.json'),
+    'aem-model.json',
+  );
+  const result = resolveCleanCorePlan(chain, aemModel, parseJson(rawFacts, `facts (${factsPath})`));
   return { output: JSON.stringify(result, null, argv.includes('--compact') ? 0 : 2), exitCode: 0 };
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   try {
     const result = run(process.argv.slice(2));
-    process.stdout.write(`${result.output}\n`);
+    const stream = result.exitCode === 0 ? process.stdout : process.stderr;
+    stream.write(`${result.output}\n`);
     process.exitCode = result.exitCode;
   } catch (error) {
     process.stderr.write(`clean-core:resolve: ${error.message}\n`);

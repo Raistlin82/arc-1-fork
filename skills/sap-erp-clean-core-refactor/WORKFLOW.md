@@ -14,10 +14,13 @@ plugin installation, use the equivalent `/arc-1:sap-erp-clean-core-refactor` com
 ### 0. Confirm the two layers
 
 ARC-1 provides the live SAP tools. The orchestrator is a separate skill that tells the agent how to
-use those tools. If the skill is not already installed, install it once:
+use those tools. If the skill is not already installed, install it once (requires an arc-1 npm
+release that ships this skill; from a repository checkout use the local equivalent):
 
 ```bash
 npx arc-1@latest skills install sap-erp-clean-core-refactor --agent codex --global
+# from a checkout of this repository:
+npm run build && node dist/cli.js skills install sap-erp-clean-core-refactor --agent codex --global
 ```
 
 Start with ARC-1 read-only. Confirm that the connection works before requesting any plan or write.
@@ -95,7 +98,9 @@ For every side-by-side Level A target on BTP, the plan must prove:
 
 - the exact existing API, custom RAP API or event crossing the ERP boundary;
 - every relevant touchpoint is released and no direct S/4 database/unreleased access remains;
-- `dataOwnership` is `s4`, `btp_abap`, `cap`, `replicated` or `none`, with consistency controls;
+- `dataOwnership` with consistency controls — per target: `s4`, `btp_abap`, `replicated` or
+  `none` for BTP ABAP Environment; `s4`, `cap`, `replicated` or `none` for CF/Kyma CAP
+  (`btp_abap` ownership never pairs with a CAP runtime and vice versa);
 - SAP and CAP transaction boundaries, retries, idempotency and compensation;
 - authentication, principal propagation/technical identity and authorization ownership;
 - independent lifecycle, support and ERP retirement or stable-boundary plan;
@@ -158,9 +163,11 @@ Stop after each logical unit for concrete diff approval.
 ```
 
 Execution captures an as-found baseline, applies deterministic findings first, runs the selected
-architecture action, checks candidate syntax, writes through ARC-1, activates, runs ATC and tests,
-presents the concrete diff, and reclassifies the accepted unit. A failed gate stops that unit and
-does not authorize work on the next one.
+architecture action, checks candidate syntax, presents the concrete diff for approval, writes
+through ARC-1 only after that approval, activates, runs ATC and tests, and reclassifies the
+accepted unit. A failed gate stops that unit and does not authorize work on the next one.
+Deterministic SAP quick fixes are the one exception: their batch shares one explicit
+package/transport approval instead of per-diff approval (PATTERNS §10).
 
 ### 7. Review transport and govern
 
@@ -202,20 +209,28 @@ flowchart TD
     KYM --> CC
     HYB --> CC
     CC --> ACT{"Resolve first evidenced chain.json decision"}
+    ACT --> NOA["No action (retain proven A)"]
     ACT --> REL["Release custom API"]
     ACT --> RW["Rewrite on-stack ABAP Cloud"]
     ACT --> BTPABAP["Rewrite in BTP ABAP Environment"]
+    ACT --> EXT["Extract to side-by-side CF or Kyma (CAP)"]
+    ACT --> HYBX["Hybrid split (on-stack + CF/Kyma extraction)"]
     ACT --> WR["A consumer plus B/C wrapper"]
     ACT --> KEEP["Keep B on Private/on-prem"]
+    ACT --> MECH0["Deterministic remediation (migrate_custom_code)"]
     ACT --> RES["ResearchRequired"]
     STD --> PLAN["Reviewed plan"]
     DEL --> PLAN
     KUH --> PLAN
+    NOA --> PLAN
     REL --> PLAN
     RW --> PLAN
     BTPABAP --> PLAN
+    EXT --> PLAN
+    HYBX --> PLAN
     WR --> PLAN
     KEEP --> PLAN
+    MECH0 --> PLAN
     SBS --> PLAN
     HYB --> PLAN
     RES --> PLAN
@@ -281,7 +296,7 @@ flowchart TD
     V --> U{"UI target"}
     U -->|CAP Fiori Elements| FE["scaffold-cap-fiori-elements"]
     U -->|Freestyle UI5| UI5["modernize-ui5-app"]
-    U -->|None| T["generate-cap-cds-test"]
+    U -->|None or external| T["generate-cap-cds-test"]
     FE --> T
     UI5 --> T
     T --> R{"Runtime"}
@@ -306,12 +321,12 @@ flowchart LR
     D --> E
     E --> F["Candidate lint and syntax"]
     F -->|Fail| STOP["Proposal only / ResearchRequired"]
-    F -->|Pass| G["ARC-1 write and activation"]
+    F -->|Pass| I["Concrete diff approval"]
+    I -->|Reject| STOP
+    I -->|Accept| G["ARC-1 write and activation"]
     G --> H["ATC and tests"]
     H -->|Regression| R["Rollback from version baseline"]
-    H -->|Pass| I["Concrete diff approval"]
-    I -->|Reject| R
-    I -->|Accept| J["Reclassify and update plan"]
+    H -->|Pass| J["Reclassify and update plan"]
 ```
 
 Deterministic SAP quick fixes may reuse one explicit approval scoped to package and transport. They
@@ -330,7 +345,9 @@ and every generated redesign, require concrete diff approval.
 | `create_or_use_wrapper` | ARC-1 plus human exception governance | Wrapper package/component is separate; report composite level |
 | `extract_to_side_by_side_cf` | Common side-by-side contract, conditional CAP/CDS/UI/test chain, CF packaging | Old ERP code retires only after parity and operations proof |
 | `extract_to_side_by_side_kyma` | Same common CAP chain plus official CAP Kyma/Helm workflow | Requires a concrete Kubernetes need and cluster/registry delivery approval |
-| `hybrid_extension` | Composite on-stack and CF executors | Record responsibility and transaction boundaries |
+| `hybrid_extension` | Composite on-stack and CF/Kyma executors (`sideBySideRuntime` picks the extraction) | Record responsibility and transaction boundaries |
+| `no_action` | Documentation only | Retain proven Level A; governance baseline still records it |
+| `migrate_custom_code` | ARC-1 deterministic quick-fix loop | One explicit package/transport approval; syntax, activation, ATC, tests remain mandatory |
 | `keep_at_level_b` | Documentation/governance | Private/on-prem only; Level B needs no informational ATC exemption |
 | `remove_unused` | ARC-1 after evidence and owner approval | Final references check immediately before delete |
 | `research_required` | Read-only research | Never converted to D without evidence |

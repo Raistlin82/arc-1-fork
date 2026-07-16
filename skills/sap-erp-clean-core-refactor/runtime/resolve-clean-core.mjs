@@ -4,6 +4,7 @@ function matchesCondition(condition, facts) {
   if (condition.always === true) return true;
   const actual = facts[condition.fact];
   if (Object.hasOwn(condition, 'equals')) return actual === condition.equals;
+  if (Object.hasOwn(condition, 'notEquals')) return actual !== condition.notEquals;
   if (Array.isArray(condition.in)) return condition.in.includes(actual);
   throw new Error(`Unsupported Clean Core condition: ${JSON.stringify(condition)}`);
 }
@@ -72,22 +73,32 @@ export function resolveAem(aemModel, chain, facts) {
   let selectedDomain;
   const conflicts = [];
 
-  if (matchesConditions(aemModel.keyUserSelector.conditions, facts)) {
+  if (matchesConditions(aemModel.keyUserSelector.conditions, facts) && !sideBySideSignals.length) {
     selectedDomain = aemModel.keyUserSelector.domain;
+  } else if (matchesConditions(aemModel.keyUserSelector.conditions, facts)) {
+    conflicts.push(
+      'Key-user fit conflicts with evidenced side-by-side drivers; split responsibilities or re-scope before selecting key user extensibility.',
+    );
   } else if (onStackSignals.length && sideBySideSignals.length) {
     if (facts.responsibilitySplitDefined) selectedDomain = 'hybrid';
     else conflicts.push('On-stack and side-by-side drivers both exist, but no responsibility split is defined.');
   } else if (onStackSignals.length) {
     selectedDomain = facts.classicRetentionApproved ? 'classic_on_stack' : 'embedded_abap_cloud_on_stack';
   } else if (sideBySideSignals.length) {
-    const selectors = aemModel.sideBySideSelectors.filter((selector) =>
-      matchesConditions(selector.conditions, facts),
-    );
-    if (selectors.length === 1) selectedDomain = selectors[0].domain;
-    else if (selectors.length > 1) {
-      conflicts.push('More than one side-by-side implementation/runtime selector matched.');
+    if (facts.implementationModel === 'non_cap') {
+      conflicts.push(
+        'implementationModel non_cap is recognized by AEM but has no executable side-by-side chain yet; keep research_required or choose cap/abap_cloud.',
+      );
+    } else {
+      const selectors = aemModel.sideBySideSelectors.filter((selector) =>
+        matchesConditions(selector.conditions, facts),
+      );
+      if (selectors.length === 1) selectedDomain = selectors[0].domain;
+      else if (selectors.length > 1) {
+        conflicts.push('More than one side-by-side implementation/runtime selector matched.');
+      }
+      else conflicts.push('The side-by-side implementation model and runtime are missing, undecided or incompatible.');
     }
-    else conflicts.push('The side-by-side implementation model and runtime are missing, undecided or incompatible.');
   } else {
     conflicts.push('No authoritative on-stack or side-by-side AEM driver was evidenced.');
   }
@@ -149,10 +160,13 @@ export function resolveAem(aemModel, chain, facts) {
       sourceArc1Context: facts.sourceArc1Context,
       targetArc1Context: facts.targetArc1Context,
     },
-    derivedFacts: selectedDomain === 'side_by_side_btp_abap' ? { btpAbapTargetConnected: true } : {},
+    derivedFacts: {},
     derivedGates: {
       aem_recorded: true,
-      ...(selectedDomain === 'side_by_side_btp_abap' ? { btp_abap_target_connected: true } : {}),
+      // The gate derives ONLY from operator/probe-proven evidence, never from domain selection alone.
+      ...(selectedDomain === 'side_by_side_btp_abap' && facts.btpAbapTargetConnected === true
+        ? { btp_abap_target_connected: true }
+        : {}),
     },
     sourcePages: aemModel.sourcePages,
   });
@@ -195,11 +209,15 @@ export function resolveExecutionPlan(chain, rootAction, facts) {
     const action = chain.actions?.[actionName];
     if (!action) throw new Error(`Unknown Clean Core action: ${actionName}`);
     const gateEvidence = facts.gates ?? {};
-    const gates = action.gates.map((gate) => ({
-      gate,
-      severity: chain.gateCatalog[gate].severity,
-      status: gateEvidence[gate] === true ? 'passed' : 'pending',
-    }));
+    const gates = action.gates.map((gate) => {
+      const catalogEntry = chain.gateCatalog?.[gate];
+      if (!catalogEntry) throw new Error(`Unknown Clean Core gate: ${gate} (missing from gateCatalog)`);
+      return {
+        gate,
+        severity: catalogEntry.severity,
+        status: gateEvidence[gate] === true ? 'passed' : 'pending',
+      };
+    });
     const node = {
       order: nodes.length + 1,
       action: actionName,
@@ -235,9 +253,21 @@ function decisionById(chain, id) {
   return decision;
 }
 
+const VALID_SOURCE_LEVELS = new Set(['A', 'B', 'C', 'D', 'Unknown']);
+// Domains that never bind to one landscape: they keep or defer the current placement.
+const LANDSCAPE_EXEMPT_DOMAINS = new Set(['current_allowed_domain', 'research']);
+
 /** Resolve standard-first, AEM, the ordered decision, recursive actions, operations and gates. */
 export function resolveCleanCorePlan(chain, aemModel, facts) {
   if (!facts.sourceLevel) throw new Error('sourceLevel is required');
+
+  const planConflicts = [];
+  if (!VALID_SOURCE_LEVELS.has(facts.sourceLevel)) {
+    planConflicts.push(`sourceLevel ${JSON.stringify(facts.sourceLevel)} is not one of A, B, C, D, Unknown.`);
+  }
+  if (facts.landscape !== undefined && !chain.landscapes?.[facts.landscape]) {
+    planConflicts.push(`landscape ${JSON.stringify(facts.landscape)} is not a known landscape.`);
+  }
 
   let aem;
   let decision;
@@ -279,11 +309,13 @@ export function resolveCleanCorePlan(chain, aemModel, facts) {
   } else {
     aem = resolveAem(aemModel, chain, facts);
     if (aem.status === 'resolved') {
+      // Operator-provided facts and gate evidence always win over AEM-derived values:
+      // an explicit false must never be silently flipped to passed.
       resolvedFacts = {
-        ...facts,
         ...aem.derivedFacts,
+        ...facts,
         selectedDomain: aem.selectedDomain,
-        gates: { ...(facts.gates ?? {}), ...aem.derivedGates },
+        gates: { ...aem.derivedGates, ...(facts.gates ?? {}) },
       };
       decision = resolveDecision(chain, resolvedFacts);
     } else {
@@ -291,7 +323,28 @@ export function resolveCleanCorePlan(chain, aemModel, facts) {
     }
   }
 
-  if (!decision) decision = decisionById(chain, 'ANY_TO_RESEARCH');
+  if (!decision) {
+    planConflicts.push('No decision conditions matched the evidenced facts; falling back to research.');
+    decision = decisionById(chain, 'ANY_TO_RESEARCH');
+  }
+
+  // Landscape ceiling applies on EVERY branch, including the AEM-bypassing
+  // standard-parity and unused shortcuts (the AEM path also checks it earlier).
+  const allowedDomains = chain.landscapes?.[facts.landscape]?.allowedDomains;
+  if (
+    allowedDomains &&
+    !LANDSCAPE_EXEMPT_DOMAINS.has(decision.targetDomain) &&
+    !allowedDomains.includes(decision.targetDomain)
+  ) {
+    planConflicts.push(
+      `Decision ${decision.id} targets domain ${decision.targetDomain}, which landscape ${facts.landscape} does not allow.`,
+    );
+    decision = decisionById(chain, 'ANY_TO_RESEARCH');
+  }
+  if (planConflicts.length && decision.id !== 'ANY_TO_RESEARCH') {
+    decision = decisionById(chain, 'ANY_TO_RESEARCH');
+  }
+
   const actions = resolveExecutionPlan(chain, decision.action, resolvedFacts);
   return {
     version: 1,
@@ -304,6 +357,7 @@ export function resolveCleanCorePlan(chain, aemModel, facts) {
       action: decision.action,
       evidenceRequired: decision.evidenceRequired,
     },
+    conflicts: planConflicts,
     actions,
     writeBlocked: actions.some((action) => action.writeBlocked),
   };

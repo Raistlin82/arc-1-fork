@@ -27,9 +27,9 @@ approved chain action may invoke ARC-1 writes.
 | Dependencies and fan-in | `read_dependencies`, `find_references` |
 | Classification | `atc_assessment`, `read_api_state` |
 | Deterministic remediation | `quickfix_preview`, `quickfix_apply`, `lint_candidate`, `format_candidate`, `syntax_check` |
-| Source mutation | `write_update`, `activate_object`, `activate_batch` |
+| Source mutation | `write_update`, `edit_method`, `scaffold_rap_handlers`, `activate_object`, `activate_batch` |
 | On-stack creation | `batch_create_objects`, `publish_service_binding` |
-| Wrapper | `create_wrapper_package`, `create_wrapper_class`, `release_api`, `write_governance_document` |
+| Wrapper | `create_wrapper_package`, `create_wrapper_class`, `release_api`, `read_governance_document`, `write_governance_document` |
 | Regression proof | `run_unit_tests`, `read_diff`, `atc_assessment` |
 | Retirement | `find_references`, `delete_object` |
 | Transport | `transport_check`, `transport_create`, `transport_release` |
@@ -42,7 +42,7 @@ argument names. It must not abbreviate a call in generated executable instructio
 | Knowledge concept | Evidence pack | Candidate actions |
 |---|---|---|
 | Standard-first and AEM | requirement, standard parity, users, coupling, consistency, data, lifecycle, TCO | `replace_with_standard`, target-domain selection, `research_required` |
-| Level A domains | allowed technology plus all released touchpoints; BTP also requires ownership, consistency, identity, lifecycle and runtime-fit proof | `no_action`, `replace_with_key_user_extensibility`, `rewrite_on_stack_abap_cloud`, `extract_to_side_by_side_cf`, `extract_to_side_by_side_kyma`, `hybrid_extension` |
+| Level A domains | allowed technology plus all released touchpoints; BTP also requires ownership, consistency, identity, lifecycle and runtime-fit proof | `no_action`, `replace_with_key_user_extensibility`, `rewrite_on_stack_abap_cloud`, `rewrite_side_by_side_btp_abap`, `extract_to_side_by_side_cf`, `extract_to_side_by_side_kyma`, `hybrid_extension` |
 | Release contracts | live API state, supported contracts, fan-in and owner approval | `release_api`, then consumer reclassification |
 | Wrapper access | no released successor, landscape permission, package isolation, exception governance | `create_or_use_wrapper` with composite A+B or A+C result |
 | Brownfield debt | runtime/static use, fan-in, business owner, current level | `remove_unused`, rewrite, side-by-side, keep B or research |
@@ -51,8 +51,9 @@ argument names. It must not abbreviate a call in generated executable instructio
 
 ## Valid call examples
 
-These examples are duplicated only to make the runtime boundary explicit. CI validates them and
-the catalog against the frozen ARC-1 schemas.
+These examples are duplicated only to make the runtime boundary explicit. CI schema-validates
+`action-catalog.json` exampleArgs against the frozen ARC-1 tool fixtures and validates the tool
+and action NAMES used in these snippets; the snippet argument values themselves are illustrative.
 
 ### Inventory and evidence
 

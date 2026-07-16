@@ -22,6 +22,7 @@ const levelABtpFacts = {
   keyUserFit: false,
   selectedDomain: 'side_by_side_cf',
   implementationModel: 'cap',
+  sideBySideRuntime: 'cf',
   serviceBoundary: 'existing_released_api',
   releasedIntegrationBoundary: true,
   allTouchpointsReleased: true,
@@ -61,6 +62,7 @@ describe('Clean Core side-by-side decisions', () => {
     const facts = {
       ...levelABtpFacts,
       selectedDomain: 'side_by_side_kyma',
+      sideBySideRuntime: 'kyma',
       serviceBoundary: 'released_event',
       dataOwnership: 'replicated',
       uiTarget: 'none',
@@ -123,8 +125,8 @@ describe('Clean Core AEM resolver', () => {
     );
   });
 
-  it('derives BTP ABAP Environment as side-by-side', () => {
-    const result = resolveAem(aemModel, chain, {
+  it('derives BTP ABAP Environment as side-by-side and gates on operator-proven connection', () => {
+    const facts = {
       ...aemBase,
       targetUsers: 'external_consumer',
       transactionConsistencyRequired: false,
@@ -137,12 +139,23 @@ describe('Clean Core AEM resolver', () => {
       sourceArc1Context: 's4-source',
       targetArc1Context: 'btp-abap-target',
       targetLandscape: 'btp_abap_environment',
-    });
+      serviceBoundary: 'existing_released_api',
+      dataOwnership: 'btp_abap',
+      btpAbapTargetConnected: true,
+    };
+    const result = resolveAem(aemModel, chain, facts);
 
     expect(result.status).toBe('resolved');
     expect(result.selectedDomain).toBe('side_by_side_btp_abap');
-    expect(result.derivedFacts).toEqual({ btpAbapTargetConnected: true });
+    expect(result.derivedFacts).toEqual({});
     expect(result.derivedGates).toEqual({ aem_recorded: true, btp_abap_target_connected: true });
+
+    // The gate must NEVER derive from domain selection alone: without the proven fact it stays out.
+    const unprovenFacts: Record<string, unknown> = { ...facts };
+    delete unprovenFacts.btpAbapTargetConnected;
+    const unproven = resolveAem(aemModel, chain, unprovenFacts);
+    expect(unproven.status).toBe('research_required');
+    expect(unproven.missingFacts).toContain('btpAbapTargetConnected');
   });
 
   it('blocks BTP ABAP Environment when source and target ARC-1 contexts are reused', () => {
@@ -211,6 +224,33 @@ describe('Clean Core runtime plan resolver', () => {
     ]);
   });
 
+  it('never flips explicit operator-false gate evidence to passed', () => {
+    const facts = decisionScenarios.runtimeScenarios.find(
+      (scenario: { id: string }) => scenario.id === 'aem_side_by_side_btp_abap',
+    ).facts;
+    const result = resolveCleanCorePlan(chain, aemModel, {
+      ...facts,
+      gates: { btp_abap_target_connected: false },
+    });
+
+    const targetGate = result.actions[0].gates.find(
+      (gate: { gate: string }) => gate.gate === 'btp_abap_target_connected',
+    );
+    expect(targetGate.status).toBe('pending');
+    expect(result.writeBlocked).toBe(true);
+  });
+
+  it('enforces the landscape domain ceiling on AEM-bypassing branches', () => {
+    const result = resolveCleanCorePlan(chain, aemModel, {
+      sourceLevel: 'B',
+      standardParity: 'acceptable',
+      landscape: 'btp_abap_environment',
+    });
+
+    expect(result.decision.id).toBe('ANY_TO_RESEARCH');
+    expect(result.conflicts.join(' ')).toContain('does not allow');
+  });
+
   it('expands hybrid dispatches recursively', () => {
     const facts = {
       ...aemBase,
@@ -227,6 +267,7 @@ describe('Clean Core runtime plan resolver', () => {
       identityModelDefined: true,
       capServiceRequired: true,
       uiTarget: 'cap_fiori_elements',
+      cdsTarget: 'none',
     };
 
     const result = resolveCleanCorePlan(chain, aemModel, facts);

@@ -112,7 +112,30 @@
     "side_by_side_btp_abap": {
       "sourceArc1Context": { "type": "string" },
       "targetArc1Context": { "type": "string" },
-      "targetLandscape": { "type": "enum", "values": ["btp_abap_environment"] }
+      "targetLandscape": { "type": "enum", "values": ["btp_abap_environment"] },
+      "btpAbapTargetConnected": { "type": "boolean" },
+      "serviceBoundary": { "type": "enum", "values": ["existing_released_api", "custom_rap", "released_event", "unavailable"] },
+      "dataOwnership": { "type": "enum", "values": ["s4", "cap", "btp_abap", "replicated", "none"] }
+    },
+    "side_by_side_cf": {
+      "serviceBoundary": { "type": "enum", "values": ["existing_released_api", "custom_rap", "released_event", "unavailable"] },
+      "dataOwnership": { "type": "enum", "values": ["s4", "cap", "btp_abap", "replicated", "none"] },
+      "capServiceRequired": { "type": "boolean" },
+      "uiTarget": { "type": "enum", "values": ["none", "cap_fiori_elements", "ui5_freestyle", "external"] },
+      "cdsTarget": { "type": "enum", "values": ["none", "abap_cds", "btp_abap_cds", "cap_cds", "dual_boundary"] }
+    },
+    "side_by_side_kyma": {
+      "serviceBoundary": { "type": "enum", "values": ["existing_released_api", "custom_rap", "released_event", "unavailable"] },
+      "dataOwnership": { "type": "enum", "values": ["s4", "cap", "btp_abap", "replicated", "none"] },
+      "capServiceRequired": { "type": "boolean" },
+      "uiTarget": { "type": "enum", "values": ["none", "cap_fiori_elements", "ui5_freestyle", "external"] },
+      "cdsTarget": { "type": "enum", "values": ["none", "abap_cds", "btp_abap_cds", "cap_cds", "dual_boundary"] }
+    },
+    "hybrid": {
+      "sideBySideRuntime": { "type": "enum", "values": ["cf", "kyma"] },
+      "capServiceRequired": { "type": "boolean" },
+      "uiTarget": { "type": "enum", "values": ["none", "cap_fiori_elements", "ui5_freestyle", "external"] },
+      "cdsTarget": { "type": "enum", "values": ["none", "abap_cds", "btp_abap_cds", "cap_cds", "dual_boundary"] }
     }
   }
 }

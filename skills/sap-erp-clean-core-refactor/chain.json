@@ -5,6 +5,7 @@
   "modes": ["discover", "estimate", "plan", "execute", "govern"],
   "decisionStages": [
     "standard_first",
+    "unused_code",
     "extension_use_case",
     "target_domain",
     "clean_core_classification",
@@ -65,6 +66,51 @@
     "cdsTargetValues": ["none", "abap_cds", "btp_abap_cds", "cap_cds", "dual_boundary"],
     "serviceBoundaryValues": ["existing_released_api", "custom_rap", "released_event", "unavailable"],
     "uiTargetValues": ["none", "cap_fiori_elements", "ui5_freestyle", "external"]
+  },
+  "decisionFactCatalog": {
+    "standardParity": { "type": "enum", "values": ["acceptable", "gap"], "collectedBy": "standard-first review (protocol step 3.1) with business-owner parity decision" },
+    "unusedProven": { "type": "boolean", "collectedBy": "sap-unused-code runtime and static evidence" },
+    "keyUserFit": { "type": "boolean", "collectedBy": "AEM extension-use-case review" },
+    "releasedExtensionPoint": { "type": "boolean", "collectedBy": "released extension-point lookup (API state, key-user catalog)" },
+    "allTouchpointsReleased": { "type": "boolean", "collectedBy": "read_api_state over every relevant touchpoint" },
+    "technologyAllowed": { "type": "boolean", "collectedBy": "sap-clean-core-atc classification" },
+    "customerOwnedApi": { "type": "boolean", "collectedBy": "ownership review of the unreleased dependency" },
+    "onlyUnreleasedDependency": { "type": "boolean", "collectedBy": "read_dependencies + find_references fan-in analysis" },
+    "supportedReleaseContract": { "type": "boolean", "collectedBy": "read_api_state supported-contracts probe (C0-C4 per type/release)" },
+    "selectedDomain": { "type": "enum", "values": ["standard", "key_user_on_stack", "embedded_abap_cloud_on_stack", "classic_on_stack", "side_by_side_btp_abap", "side_by_side_cf", "side_by_side_kyma", "hybrid", "current_allowed_domain", "retired", "research"], "collectedBy": "AEM resolver output; a supplied value is validated against AEM, never an override" },
+    "landscape": { "type": "enum", "values": ["s4_public_cloud", "s4_private_cloud", "s4_on_premise", "btp_abap_environment"], "collectedBy": "bootstrap-system-context probe" },
+    "releasedSuccessor": { "type": "boolean", "collectedBy": "successor research (SAP documentation MCPs + read_api_state)" },
+    "abapCloudTargetPackageApproved": { "type": "boolean", "collectedBy": "target package/software-component approval" },
+    "abapCloudLanguageVersionProven": { "type": "boolean", "collectedBy": "live abapLanguageVersion=cloudDevelopment metadata or manually verified ADT evidence" },
+    "classicApiAvailable": { "type": "boolean", "collectedBy": "classic documented API research for the wrapper path" },
+    "wrapperApproved": { "type": "boolean", "collectedBy": "human wrapper exception governance" },
+    "internalExceptionApproved": { "type": "boolean", "collectedBy": "human time-bound Level C exception approval" },
+    "implementationModel": { "type": "enum", "values": ["cap", "non_cap", "abap_cloud", "undecided"], "collectedBy": "AEM questionnaire" },
+    "sideBySideRuntime": { "type": "enum", "values": ["cf", "kyma", "btp_abap", "undecided"], "collectedBy": "AEM questionnaire" },
+    "serviceBoundary": { "type": "enum", "values": ["existing_released_api", "custom_rap", "released_event", "unavailable"], "collectedBy": "modernize-abap-side-by-side-core boundary contract" },
+    "releasedIntegrationBoundary": { "type": "boolean", "collectedBy": "modernize-abap-side-by-side-core + read_api_state" },
+    "unreleasedSapAccess": { "type": "boolean", "collectedBy": "dependency scan for unreleased SAP objects" },
+    "directS4DatabaseAccess": { "type": "boolean", "collectedBy": "dependency scan for direct S/4 persistence access" },
+    "dataOwnership": { "type": "enum", "values": ["s4", "cap", "btp_abap", "replicated", "none"], "collectedBy": "modernize-abap-side-by-side-core data-ownership contract" },
+    "dataConsistencyPlanDefined": { "type": "boolean", "collectedBy": "side-by-side consistency/replication plan" },
+    "transactionBoundaryDefined": { "type": "boolean", "collectedBy": "side-by-side transaction/compensation design" },
+    "identityModelDefined": { "type": "boolean", "collectedBy": "identity propagation and authorization design" },
+    "apiOrEventContractGoverned": { "type": "boolean", "collectedBy": "API/event contract governance review" },
+    "lifecycleIndependent": { "type": "boolean", "collectedBy": "lifecycle/operations independence review" },
+    "runtimeFitProven": { "type": "boolean", "collectedBy": "runtime-fit evidence (CF default; Kyma needs a concrete Kubernetes requirement)" },
+    "erpRetirementOrBoundaryPlanDefined": { "type": "boolean", "collectedBy": "ERP retirement or stable-boundary plan" },
+    "btpAbapTargetConnected": { "type": "boolean", "collectedBy": "live probe of the DISTINCT target ARC-1 context (system_probe against the BTP ABAP Environment); never derived from domain selection" },
+    "responsibilitySplitDefined": { "type": "boolean", "collectedBy": "hybrid responsibility-split approval" },
+    "documentedClassicTechnology": { "type": "boolean", "collectedBy": "classic technology documentation evidence for keep-at-B" },
+    "deterministicFindingsOnly": { "type": "boolean", "collectedBy": "ATC finding triage (quickfixable/bounded mechanical only)" },
+    "hasSegwService": { "type": "boolean", "collectedBy": "SEGW detection during inventory (generated classes, service evidence, targeted lookup); absence means unknown, which keeps the custom-RAP dispatch eligible" },
+    "capServiceRequired": { "type": "boolean", "collectedBy": "modernize-abap-side-by-side-core service contract" },
+    "uiTarget": { "type": "enum", "values": ["none", "cap_fiori_elements", "ui5_freestyle", "external"], "collectedBy": "modernize-abap-side-by-side-core UI contract" },
+    "cdsTarget": { "type": "enum", "values": ["none", "abap_cds", "btp_abap_cds", "cap_cds", "dual_boundary"], "collectedBy": "modernize-abap-side-by-side-core CDS-split contract" },
+    "embeddedAnalyticsTarget": { "type": "boolean", "collectedBy": "analytical requirement triage (aggregate/read-only reporting)" },
+    "rapBehaviorGap": { "type": "boolean", "collectedBy": "RAP behavior implementation gap analysis" },
+    "fullProductionRapTarget": { "type": "boolean", "collectedBy": "approved full production RAP stack decision" },
+    "prototypeRequested": { "type": "boolean", "collectedBy": "explicit operator prototype request (MAY-only, never a production default)" }
   },
   "skillCoverage": {
     "self": ["sap-erp-clean-core-refactor"],
@@ -152,7 +198,7 @@
     },
     "rewrite_on_stack_abap_cloud": {
       "execution": "arc1_guarded",
-      "localSkills": ["setup-abap-mirror", "sap-object-documenter", "generate-abap-unit-test", "generate-cds-unit-test"],
+      "localSkills": ["setup-abap-mirror", "sap-object-documenter", "generate-abap-unit-test", "generate-cds-unit-test", "debug-slow-sql", "convert-ui5-to-fiori-elements"],
       "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "abap_cloud_target_proven", "transport_scoped", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
       "operationIds": ["read_source", "read_dependencies", "write_update", "activate_object", "atc_assessment", "run_unit_tests", "read_diff"]
     },
@@ -167,7 +213,7 @@
         "accept": ["parity_approved"],
         "retire": ["source_retirement_proven"]
       },
-      "operationIds": ["read_source", "read_dependencies", "read_api_state", "write_update", "activate_object", "atc_assessment", "run_unit_tests", "read_diff"]
+      "operationIds": ["read_source", "read_dependencies", "read_api_state", "batch_create_objects", "activate_batch", "publish_service_binding", "write_update", "activate_object", "atc_assessment", "run_unit_tests", "read_diff"]
     },
     "keep_at_level_b": {
       "execution": "documented_exception",
@@ -185,11 +231,12 @@
       "execution": "arc1_guarded_composite",
       "localSkills": ["setup-abap-mirror", "sap-object-documenter", "generate-abap-unit-test"],
       "gates": ["plan_approved", "aem_recorded", "wrapper_isolated", "wrapper_exception_governed", "owner_approved", "transport_scoped", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
-      "operationIds": ["read_api_state", "find_references", "create_wrapper_class", "activate_object", "release_api", "write_update", "atc_assessment", "run_unit_tests", "write_governance_document"]
+      "operationIds": ["read_api_state", "find_references", "create_wrapper_package", "create_wrapper_class", "activate_object", "release_api", "write_update", "atc_assessment", "run_unit_tests", "write_governance_document"]
     },
     "extract_to_side_by_side_cf": {
       "execution": "delegated_guarded",
       "localSkills": ["modernize-abap-side-by-side-core", "modernize-abap-to-btp-cap"],
+      "externalSkills": ["sap-cap-capire", "sap-btp-best-practices", "sap-btp-developer-guide"],
       "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "side_by_side_level_a_proven", "data_ownership_proven", "integration_contract_proven", "identity_model_proven", "runtime_target_proven", "owner_approved", "generative_diff_approved", "cap_solution_verified", "parity_approved", "btp_delivery_scoped", "source_retirement_proven"],
       "gatePhases": {
         "plan": ["aem_recorded", "released_touchpoints", "side_by_side_level_a_proven", "data_ownership_proven", "integration_contract_proven", "identity_model_proven", "runtime_target_proven", "owner_approved"],
@@ -202,6 +249,7 @@
     "extract_to_side_by_side_kyma": {
       "execution": "delegated_guarded",
       "localSkills": ["modernize-abap-side-by-side-core", "modernize-abap-to-btp-cap", "deploy-cap-to-kyma"],
+      "externalSkills": ["sap-cap-capire", "sap-btp-best-practices", "sap-btp-developer-guide"],
       "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "side_by_side_level_a_proven", "data_ownership_proven", "integration_contract_proven", "identity_model_proven", "runtime_target_proven", "owner_approved", "generative_diff_approved", "cap_solution_verified", "parity_approved", "btp_delivery_scoped", "source_retirement_proven"],
       "gatePhases": {
         "plan": ["aem_recorded", "released_touchpoints", "side_by_side_level_a_proven", "data_ownership_proven", "integration_contract_proven", "identity_model_proven", "runtime_target_proven", "owner_approved"],
@@ -214,22 +262,24 @@
     "model_cap_persistence": {
       "execution": "delegated_guarded",
       "localSkills": ["modernize-abap-cap-schema"],
+      "externalSkills": ["sap-cap-capire"],
       "gates": ["plan_approved", "data_ownership_proven", "generative_diff_approved"],
       "gatePhases": {
         "plan": ["plan_approved", "data_ownership_proven"],
         "accept": ["generative_diff_approved"]
       },
-      "operationIds": ["read_source", "read_dependencies"]
+      "operationIds": ["read_source", "read_dependencies", "inventory_package", "exact_tadir_lookup", "find_references"]
     },
     "generate_cap_services": {
       "execution": "delegated_guarded",
       "localSkills": ["modernize-abap-cap-service"],
+      "externalSkills": ["sap-cap-capire"],
       "gates": ["plan_approved", "integration_contract_proven", "identity_model_proven", "generative_diff_approved"],
       "gatePhases": {
         "plan": ["plan_approved", "integration_contract_proven", "identity_model_proven"],
         "accept": ["generative_diff_approved"]
       },
-      "operationIds": ["read_source", "read_dependencies", "read_api_state"]
+      "operationIds": ["read_source", "read_dependencies", "read_api_state", "inventory_package", "exact_tadir_lookup", "find_references"]
     },
     "scaffold_cap_fiori_elements": {
       "execution": "delegated_guarded",
@@ -254,6 +304,7 @@
     "verify_cap_solution": {
       "execution": "delegated_guarded",
       "localSkills": ["generate-cap-cds-test"],
+      "externalSkills": ["sap-cap-capire"],
       "gates": ["plan_approved", "cap_solution_verified"],
       "gatePhases": {
         "plan": ["plan_approved"],
@@ -301,7 +352,7 @@
       "execution": "delegated_guarded",
       "localSkills": ["generate-rap-logic"],
       "gates": ["plan_approved", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
-      "operationIds": ["write_update", "activate_object", "atc_assessment", "run_unit_tests"]
+      "operationIds": ["scaffold_rap_handlers", "edit_method", "batch_create_objects", "activate_object", "atc_assessment", "run_unit_tests"]
     },
     "rap_full_stack_researched": {
       "execution": "delegated_guarded",
@@ -313,7 +364,7 @@
       "execution": "may_only",
       "localSkills": ["generate-rap-service"],
       "gates": ["owner_approved"],
-      "operationIds": ["batch_create_objects", "activate_batch"]
+      "operationIds": ["batch_create_objects", "activate_batch", "publish_service_binding"]
     }
   },
   "decisions": [
@@ -447,6 +498,7 @@
       "conditions": [
         { "fact": "selectedDomain", "equals": "side_by_side_cf" },
         { "fact": "implementationModel", "equals": "cap" },
+        { "fact": "sideBySideRuntime", "equals": "cf" },
         { "fact": "serviceBoundary", "in": ["existing_released_api", "custom_rap", "released_event"] },
         { "fact": "releasedIntegrationBoundary", "equals": true },
         { "fact": "allTouchpointsReleased", "equals": true },
@@ -475,6 +527,7 @@
       "conditions": [
         { "fact": "selectedDomain", "equals": "side_by_side_kyma" },
         { "fact": "implementationModel", "equals": "cap" },
+        { "fact": "sideBySideRuntime", "equals": "kyma" },
         { "fact": "serviceBoundary", "in": ["existing_released_api", "custom_rap", "released_event"] },
         { "fact": "releasedIntegrationBoundary", "equals": true },
         { "fact": "allTouchpointsReleased", "equals": true },
@@ -540,7 +593,7 @@
   ],
   "specializedDispatches": [
     { "condition": "SEGW OData V2 service", "conditions": [{ "fact": "hasSegwService", "equals": true }], "parentActions": ["rewrite_on_stack_abap_cloud", "extract_to_side_by_side_cf", "extract_to_side_by_side_kyma", "hybrid_extension"], "action": "migrate_segw_to_rap" },
-    { "condition": "custom released S/4 RAP boundary", "conditions": [{ "fact": "serviceBoundary", "equals": "custom_rap" }, { "fact": "hasSegwService", "equals": false }], "parentActions": ["extract_to_side_by_side_cf", "extract_to_side_by_side_kyma", "hybrid_extension"], "action": "rap_full_stack_researched" },
+    { "condition": "custom released S/4 RAP boundary", "conditions": [{ "fact": "serviceBoundary", "equals": "custom_rap" }, { "fact": "hasSegwService", "notEquals": true }], "parentActions": ["rewrite_side_by_side_btp_abap", "extract_to_side_by_side_cf", "extract_to_side_by_side_kyma", "hybrid_extension"], "action": "rap_full_stack_researched" },
     { "condition": "CAP-owned or replicated persistence", "conditions": [{ "fact": "dataOwnership", "in": ["cap", "replicated"] }], "parentActions": ["extract_to_side_by_side_cf", "extract_to_side_by_side_kyma"], "action": "model_cap_persistence" },
     { "condition": "CAP service required", "conditions": [{ "fact": "capServiceRequired", "equals": true }], "parentActions": ["extract_to_side_by_side_cf", "extract_to_side_by_side_kyma"], "action": "generate_cap_services" },
     { "condition": "CAP Fiori Elements UI", "conditions": [{ "fact": "uiTarget", "equals": "cap_fiori_elements" }], "parentActions": ["extract_to_side_by_side_cf", "extract_to_side_by_side_kyma"], "action": "scaffold_cap_fiori_elements" },

@@ -268,8 +268,11 @@ outcome even when CAP consumes its released facade.
   annotations;
 - `uiTarget=ui5_freestyle`: `modernize-ui5-app`;
 - `uiTarget=none|external`: neither UI skill;
-- `runtime=cf`: CF/MTA packaging;
-- `runtime=kyma`: `deploy-cap-to-kyma` after CAP verification.
+- `sideBySideRuntime=cf`: CF/MTA packaging;
+- `sideBySideRuntime=kyma`: `deploy-cap-to-kyma` after CAP verification.
+
+The fact key is `sideBySideRuntime` everywhere (aem-model, chain conditions, resolver facts
+files) — a facts file keyed `runtime` silently drops the value.
 
 The generated target is accepted only after `generate-cap-cds-test` proves compilation, contracts,
 authorization, events/replication where applicable and business parity. Placeholder `501`/TODO
@@ -339,6 +342,7 @@ execution.
 | Rewrite on-stack | 2-20 | behavior complexity, fan-in, tests, released successor quality |
 | Release custom API | 1-8 | fan-in, contract design and compatibility obligations |
 | Wrapper | 3-15 | dependency semantics, isolation, exception and tests |
+| Side-by-side BTP ABAP Environment | 8-50+ | target connection/package setup, released remote boundary, ABAP Cloud rewrite, identity, tests, parity and source retirement |
 | Side-by-side CF | 10-60+ | data, UI, integration, security, operations and parity |
 | Side-by-side Kyma | 15-75+ | CF factors plus container, cluster, registry, Helm, network and operational ownership |
 | Hybrid | sum of owned parts plus 20-40% boundary overhead | consistency, events, failure handling |

@@ -41,6 +41,11 @@ connection.
 | Retirement | references, delete | `find_references`, `delete_object` | No deletion |
 | Transport | check, create, recursive release | `transport_check`, `transport_create`, `transport_release` | No write execution/release |
 
+`transport_create` and `transport_release` are workflow-level operations (WORKFLOW steps 5 and 7),
+invoked by the orchestrator outside any single action's `operationIds`: transports are approved per
+plan subset, and release always sits behind `sap-transport-review` plus an explicit approval —
+never inside an action's automatic operation sequence.
+
 Use the catalog rather than writing abbreviated examples in generated plans. Runtime values are
 substituted, but the property names and required inputs remain unchanged.
 
@@ -62,7 +67,7 @@ the KTD `name` must equal `refObjectName`.
 | `sap-object-documenter` | MUST for decisions/exceptions | Standard replacement, Key User, wrapper, keep B | As-is/to-be and governance record |
 | `migrate-custom-code` | MUST for deterministic findings | Quickfixable/mechanical ATC set | Canonical quickfix executor |
 | `generate-abap-unit-test` | SHOULD; MUST for wrapper/high-risk logic | ABAP behavior needs regression protection | Test baseline and generated tests |
-| `generate-cds-unit-test` | SHOULD; MUST for semantic ABAP CDS change | ABAP CDS behavior/filter/aggregation changes in S/4 | ABAP CDS Test Double regression tests |
+| `generate-cds-unit-test` | SHOULD; MUST for semantic ABAP CDS change | ABAP CDS behavior/filter/aggregation changes — in S/4 or in the target BTP ABAP Environment (dual-context rule applies) | ABAP CDS Test Double regression tests |
 | `generate-rap-logic` | Branch-MUST | RAP behavior implementation gap | Behavior-pool implementation |
 | `generate-rap-service-researched` | Branch-MUST | Approved full production RAP target | Research-backed RAP stack |
 | `generate-rap-service` | MAY only | Small prototype explicitly requested | Never a production refactor default |
@@ -123,7 +128,7 @@ These are capability references only. Do not copy their text into this repositor
 | Skill/capability | Severity | Trigger |
 |---|---|---|
 | `sap-abap` | SHOULD | Any generated ABAP rewrite |
-| `sap-abap-cds` | Branch-MUST | ABAP CDS/RAP target in S/4 only; never CAP CDS |
+| `sap-abap-cds` | Branch-MUST | ABAP CDS/RAP targets — embedded in S/4 AND side-by-side in SAP BTP ABAP Environment (`rewrite_side_by_side_btp_abap` names it as externalSkill); never CAP CDS |
 | `sap-api-style` | SHOULD; MUST for externally exposed custom API | Before API release/service contract approval |
 | `sap-btp-best-practices` | Branch-MUST | Every production BTP target |
 | `sap-btp-developer-guide` | Branch-MUST | BTP architecture/deployment handoff |
@@ -177,7 +182,7 @@ handoffs and evidence links for these systems. They are not simulated with inven
 
 | Severity | Meaning |
 |---|---|
-| MUST | The branch blocks when unavailable unless `chain.json` names an accepted fallback |
+| MUST | The branch blocks when unavailable. Gate fallbacks come from `chain.json` `gateCatalog` (block / research / human_review / degraded); a missing MUST capability may only continue through a RECORDED, operator-accepted manual equivalent — a sub-skill can never waive it on its own |
 | SHOULD | Continue only with a recorded degraded/manual equivalent |
 | OPTIONAL | Use when it materially improves the selected branch |
 | MAY-only | Never selected automatically |

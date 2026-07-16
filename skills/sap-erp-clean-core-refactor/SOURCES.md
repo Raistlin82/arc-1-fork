@@ -72,15 +72,17 @@ Important curated page groups:
 | Levels A/B/C/D | 51-75, 566-568 |
 | Level A Key User | 76-125, 801-900 |
 | Developer Extensibility and embedded ABAP Cloud | 126-150 |
-| Side-by-side and SAP Build | 151-225 |
+| Side-by-side and SAP Build | 151-175 |
+| Released APIs and wrappers | 176-225 |
 | On-stack versus side-by-side selection | 281, 301-325 |
-| AEM and wrapper guidance | 326-375 |
+| AEM and wrapper guides pointers | 326-375 |
 | Governance and system setup | 401-475 |
 | Brownfield custom-code transition | 476-550 |
 | AI fixes, wrappers, ATC and exemptions | 551-600 |
 
-Page references are validated for type and uniqueness by `check:clean-core-skills`; content changes
-require human review because page numbers alone cannot prove semantic accuracy.
+`check:clean-core-skills` validates only that `sourcePages` are integer arrays (shape, not
+content); semantic accuracy of every page citation requires human review against the raw
+transcripts, because page numbers alone cannot prove what a page says.
 
 ## Live ARC-1 evidence
 

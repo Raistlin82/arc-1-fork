@@ -74,6 +74,21 @@ Primary actions are shown in the decision rows. Specialized dispatches remain ex
 | `modernize_side_by_side_ui5` | Modernizes freestyle UI5 only for `uiTarget=ui5_freestyle` |
 | `verify_cap_solution` | Compiles and tests CAP contracts, authorization, events and parity; unresolved 501/TODO handlers fail |
 
+## Contract notes
+
+- **Hybrid gate deferral is intentional**: `HYBRID` decides on 7 split-time facts; the CF/Kyma
+  extraction it dispatches carries its own plan-phase MUST gates (ownership, contract, identity,
+  runtime, retirement), which stay `pending` — and keep `writeBlocked=true` — until evidenced in
+  the later phases (see `gatePhases`). Hybrid never shortcuts the side-by-side Level A proof.
+- **`landscapes[*].allowedLevels` is documentation**: level enforcement rides the per-decision
+  conditions and the landscape/domain ceiling that the resolver enforces on every branch;
+  `allowedLevels` records the policy for human readers.
+- **The `greenfield_rap_may` dispatch is unreachable by design**: `mayOnly` dispatches are
+  filtered out of every resolver expansion; the entry documents the only sanctioned invocation
+  (an explicit operator prototype request with `owner_approved`).
+- **Every condition fact is documented** in `chain.json` `decisionFactCatalog` (type, allowed
+  values, and which step or skill collects it); CI fails on an undocumented fact.
+
 ## Non-negotiable evidence
 
 - Standard-first and AEM reasoning precede a target decision.

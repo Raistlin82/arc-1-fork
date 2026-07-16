@@ -164,8 +164,8 @@ the plan before execution.
 - Every changed unit must pass syntax, activation, ATC, applicable tests and approved diff.
 - Use `sap-transport-review` before release.
 - `govern` reports Clean Core Share, Technical Debt Score, Unused Code Share and Business
-  Modifications, plus ATC regression, wrapper successor watch, exception expiry and SAP API
-  changelog review.
+  Modifications, plus ATC regression, wrapper successor watch, exception expiry, unused-code
+  refresh and SAP API changelog review.
 - Use `ABAP_CLOUD_READINESS` for A assessment when available. Use a governed customer copy of
   `ABAP_CLOUD_DEVELOPMENT_DEFAULT` for development/transport blocking. Record fallbacks.
 - Do not create exemptions for informational Level B findings. C/D exceptions must be explicit,

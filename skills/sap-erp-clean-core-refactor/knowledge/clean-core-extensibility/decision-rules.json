@@ -2,21 +2,316 @@
   "version": 1,
   "source": "Clean Core Extensibility for Architects, SAP Cloud ERP Private, v20.9D, 2026-07",
   "rules": [
-    { "id": "CC-LVL-A-DOMAINS", "topics": ["level-a", "on-stack", "side-by-side", "key-user", "developer-extensibility"], "statement": "Level A is a compliance outcome, not a deployment location. It includes key-user extensibility, on-stack developer extensibility with ABAP Cloud, and side-by-side extensions using released touchpoints.", "sourcePages": [76, 126, 151, 304], "confidence": "authoritative" },
-    { "id": "CC-ABAP-CLOUD-LOCATIONS", "topics": ["abap-cloud", "embedded-steampunk", "btp-abap-environment", "on-stack", "side-by-side"], "statement": "Embedded ABAP Cloud in SAP S/4HANA is on-stack Developer Extensibility. SAP BTP ABAP Environment is a side-by-side Level A option and must use a released remote ERP boundary.", "sourcePages": [126, 151, 304, 816], "confidence": "authoritative" },
-    { "id": "CC-STANDARD-FIRST", "topics": ["standard", "avoid-extension", "aem"], "statement": "Assess whether SAP standard already satisfies the requirement before selecting an extension technology.", "sourcePages": [301, 304, 326], "confidence": "authoritative" },
-    { "id": "CC-ONSTACK-SELECT", "topics": ["on-stack", "transaction", "consistency", "high-volume", "s4-data"], "statement": "Prefer on-stack when the extension is tightly coupled to an S/4 process, needs strong transaction consistency, needs high-volume local data access, extends an existing core application, or mostly uses S/4 data.", "sourcePages": [281, 304], "confidence": "authoritative" },
-    { "id": "CC-SIDEBYSIDE-SELECT", "topics": ["side-by-side", "saas", "mobile", "multi-system", "independent-lifecycle"], "statement": "Prefer side-by-side for SaaS or consumer scenarios, non-SAP users, native mobile or freestyle UX, multi-system hubs, loose coupling, independent scaling or operations, and frequent independent releases.", "sourcePages": [281, 304], "confidence": "authoritative" },
-    { "id": "CC-WRAPPER-OUTCOME", "topics": ["wrapper", "level-b", "level-c", "composite"], "statement": "An ABAP Cloud consumer may remain Level A while its isolated wrapper is Level B when it wraps a classic API, or Level C when it wraps an internal SAP object. Report the composite outcome explicitly.", "sourcePages": [326, 350, 567], "confidence": "authoritative" },
-    { "id": "CC-WRAPPER-PLACEMENT", "topics": ["wrapper", "software-component", "isolation"], "statement": "Place wrappers in a dedicated Standard ABAP software component or HOME package, separate from the ABAP Cloud component, and expose only a released wrapper API.", "sourcePages": [326, 350, 470], "confidence": "authoritative" },
-    { "id": "CC-WRAPPER-LIFECYCLE", "topics": ["wrapper", "successor", "retirement", "upgrade"], "statement": "Treat a wrapper as managed debt: unit test it, monitor SAP releases for a released successor, and retire or replace it when the successor becomes available.", "sourcePages": [350, 470, 572, 574], "confidence": "authoritative" },
-    { "id": "CC-ATC-ASSESS", "topics": ["atc", "assessment", "ABAP_CLOUD_READINESS"], "statement": "Use ABAP_CLOUD_READINESS to assess whether custom code can reach Level A, while recording any fallback variant as degraded evidence.", "sourcePages": [574], "confidence": "authoritative" },
-    { "id": "CC-ATC-GATE", "topics": ["atc", "transport", "governance", "ABAP_CLOUD_DEVELOPMENT_DEFAULT"], "statement": "Use a governed copy of ABAP_CLOUD_DEVELOPMENT_DEFAULT for development and transport gates, including Usage of APIs, Allowed SAP Enhancement Technologies, Critical Statements, modification checks and optional security checks.", "sourcePages": [575], "confidence": "authoritative" },
-    { "id": "CC-EXEMPTION-B", "topics": ["atc", "exemption", "level-b"], "statement": "Do not create ATC exemptions for informational Level B findings. Level C exceptions require evidence that no A or B successor exists; Level D exceptions are exceptional and time-bound.", "sourcePages": [572], "confidence": "authoritative" },
-    { "id": "CC-AI-CONFIDENCE", "topics": ["quickfix", "ai-fix", "confidence", "human-review"], "statement": "Deterministic SAP quick fixes are high-confidence. AI-generated fixes require confidence classification; lower-confidence or syntax-failing changes remain proposals for human review.", "sourcePages": [557, 559], "confidence": "authoritative" },
-    { "id": "CC-KEYUSER-LAYER", "topics": ["key-user", "custom-field", "layering", "released-api"], "statement": "Key-user and developer extensibility may access lower layers only through released APIs and extension points. Custom fields are a preferred key-user mechanism and require lifecycle governance.", "sourcePages": [76, 126, 301, 801], "confidence": "authoritative" },
-    { "id": "CC-LEVEL-MAPPING", "topics": ["level-a", "level-b", "level-c", "level-d", "classification"], "statement": "Released SAP APIs and released extension points are Level A; documented classic APIs and extension technologies are Level B; internal objects are Level C; modifications and no-API-zone technologies are Level D unless an authoritative exception applies.", "sourcePages": [51, 566, 568], "confidence": "authoritative" },
-    { "id": "CC-GOVERNANCE", "topics": ["governance", "maturity", "kpi"], "statement": "Governance combines organizational responsibilities, system controls and continuous measurement. Track Clean Core Share, Technical Debt Score, Unused Code Share and Business Modifications.", "sourcePages": [401, 425, 426, 470], "confidence": "authoritative" },
-    { "id": "CC-UNKNOWN", "topics": ["unknown", "evidence", "research"], "statement": "Absence of classification evidence is not proof of Level D. Keep the unit ResearchRequired until release state, technology and successor evidence are established.", "sourcePages": [51, 470, 574], "confidence": "derived" }
+    {
+      "id": "CC-LVL-A-DOMAINS",
+      "topics": [
+        "level-a",
+        "on-stack",
+        "side-by-side",
+        "key-user",
+        "developer-extensibility"
+      ],
+      "statement": "Level A is a compliance outcome, not a deployment location. It includes key-user extensibility, on-stack developer extensibility with ABAP Cloud, and side-by-side extensions using released touchpoints.",
+      "sourcePages": [
+        33,
+        78,
+        139,
+        304
+      ],
+      "confidence": "authoritative"
+    },
+    {
+      "id": "CC-ABAP-CLOUD-LOCATIONS",
+      "topics": [
+        "abap-cloud",
+        "embedded-steampunk",
+        "btp-abap-environment",
+        "on-stack",
+        "side-by-side"
+      ],
+      "statement": "Embedded ABAP Cloud in SAP S/4HANA is on-stack Developer Extensibility. SAP BTP ABAP Environment is a side-by-side Level A option and must use a released remote ERP boundary.",
+      "sourcePages": [
+        110,
+        296,
+        304,
+        816
+      ],
+      "confidence": "authoritative"
+    },
+    {
+      "id": "CC-STANDARD-FIRST",
+      "topics": [
+        "standard",
+        "avoid-extension",
+        "aem"
+      ],
+      "statement": "Assess whether SAP standard already satisfies the requirement before selecting an extension technology.",
+      "sourcePages": [
+        281,
+        304
+      ],
+      "confidence": "authoritative"
+    },
+    {
+      "id": "CC-ONSTACK-SELECT",
+      "topics": [
+        "on-stack",
+        "transaction",
+        "consistency",
+        "high-volume",
+        "s4-data"
+      ],
+      "statement": "Prefer on-stack when the extension is tightly coupled to an S/4 process, needs strong transaction consistency, needs high-volume local data access, extends an existing core application, or mostly uses S/4 data.",
+      "sourcePages": [
+        281,
+        304
+      ],
+      "confidence": "authoritative"
+    },
+    {
+      "id": "CC-SIDEBYSIDE-SELECT",
+      "topics": [
+        "side-by-side",
+        "saas",
+        "mobile",
+        "multi-system",
+        "independent-lifecycle"
+      ],
+      "statement": "Prefer side-by-side for SaaS or consumer scenarios, non-SAP users, native mobile or freestyle UX, multi-system hubs, loose coupling, independent scaling or operations, and frequent independent releases.",
+      "sourcePages": [
+        281,
+        304
+      ],
+      "confidence": "authoritative"
+    },
+    {
+      "id": "CC-WRAPPER-OUTCOME",
+      "topics": [
+        "wrapper",
+        "level-b",
+        "level-c",
+        "composite"
+      ],
+      "statement": "An ABAP Cloud consumer may remain Level A while its isolated wrapper is Level B when it wraps a classic API, or Level C when it wraps an internal SAP object. Report the composite outcome explicitly.",
+      "sourcePages": [
+        64,
+        197,
+        198,
+        567
+      ],
+      "confidence": "authoritative"
+    },
+    {
+      "id": "CC-WRAPPER-PLACEMENT",
+      "topics": [
+        "wrapper",
+        "software-component",
+        "isolation"
+      ],
+      "statement": "Place wrappers in a dedicated Standard ABAP software component or HOME package, separate from the ABAP Cloud component, and expose only a released wrapper API.",
+      "sourcePages": [
+        198,
+        202,
+        473
+      ],
+      "confidence": "authoritative"
+    },
+    {
+      "id": "CC-WRAPPER-LIFECYCLE",
+      "topics": [
+        "wrapper",
+        "successor",
+        "retirement",
+        "upgrade"
+      ],
+      "statement": "Treat a wrapper as managed debt: unit test it, monitor SAP releases for a released successor, and retire or replace it when the successor becomes available.",
+      "sourcePages": [
+        64,
+        567,
+        574
+      ],
+      "confidence": "authoritative"
+    },
+    {
+      "id": "CC-ATC-ASSESS",
+      "topics": [
+        "atc",
+        "assessment",
+        "ABAP_CLOUD_READINESS"
+      ],
+      "statement": "Use ABAP_CLOUD_READINESS to assess whether custom code can reach Level A, while recording any fallback variant as degraded evidence.",
+      "sourcePages": [
+        574
+      ],
+      "confidence": "authoritative"
+    },
+    {
+      "id": "CC-ATC-GATE",
+      "topics": [
+        "atc",
+        "transport",
+        "governance",
+        "ABAP_CLOUD_DEVELOPMENT_DEFAULT"
+      ],
+      "statement": "Use a governed copy of ABAP_CLOUD_DEVELOPMENT_DEFAULT for development and transport gates, including Usage of APIs, Allowed SAP Enhancement Technologies, Critical Statements, modification checks and optional security checks.",
+      "sourcePages": [
+        575
+      ],
+      "confidence": "authoritative"
+    },
+    {
+      "id": "CC-EXEMPTION-B",
+      "topics": [
+        "atc",
+        "exemption",
+        "level-b"
+      ],
+      "statement": "Do not create ATC exemptions for informational Level B findings. Level C exceptions require evidence that no A or B successor exists; Level D exceptions are exceptional and time-bound.",
+      "sourcePages": [
+        572
+      ],
+      "confidence": "authoritative"
+    },
+    {
+      "id": "CC-AI-CONFIDENCE",
+      "topics": [
+        "quickfix",
+        "ai-fix",
+        "confidence",
+        "human-review"
+      ],
+      "statement": "Deterministic SAP quick fixes are high-confidence. AI-generated fixes require confidence classification; lower-confidence or syntax-failing changes remain proposals for human review.",
+      "sourcePages": [
+        557,
+        559
+      ],
+      "confidence": "authoritative"
+    },
+    {
+      "id": "CC-KEYUSER-LAYER",
+      "topics": [
+        "key-user",
+        "custom-field",
+        "layering",
+        "released-api"
+      ],
+      "statement": "Key-user and developer extensibility may access lower layers only through released APIs and extension points. Custom fields are a preferred key-user mechanism and require lifecycle governance.",
+      "sourcePages": [
+        268,
+        301
+      ],
+      "confidence": "authoritative"
+    },
+    {
+      "id": "CC-LEVEL-MAPPING",
+      "topics": [
+        "level-a",
+        "level-b",
+        "level-c",
+        "level-d",
+        "classification"
+      ],
+      "statement": "Released SAP APIs and released extension points are Level A; documented classic APIs and extension technologies are Level B; internal objects are Level C; modifications and no-API-zone technologies are Level D unless an authoritative exception applies.",
+      "sourcePages": [
+        51,
+        566,
+        568
+      ],
+      "confidence": "authoritative"
+    },
+    {
+      "id": "CC-GOVERNANCE",
+      "topics": [
+        "governance",
+        "maturity",
+        "kpi"
+      ],
+      "statement": "Governance combines organizational responsibilities, system controls and continuous measurement. Track Clean Core Share, Technical Debt Score, Unused Code Share and Business Modifications.",
+      "sourcePages": [
+        401,
+        425,
+        426,
+        470
+      ],
+      "confidence": "authoritative"
+    },
+    {
+      "id": "CC-UNKNOWN",
+      "topics": [
+        "unknown",
+        "evidence",
+        "research"
+      ],
+      "statement": "Absence of classification evidence is not proof of Level D. Keep the unit ResearchRequired until release state, technology and successor evidence are established.",
+      "sourcePages": [
+        51,
+        470,
+        574
+      ],
+      "confidence": "derived"
+    },
+    {
+      "id": "CC-REMOVE-UNUSED",
+      "topics": [
+        "unused",
+        "retirement",
+        "governance",
+        "scmon"
+      ],
+      "statement": "Regular code-usage assessment (SCMON/SUSG) identifies unused custom code; retire it after evidence and owner approval. Retirement is a first-class technical-debt reduction activity.",
+      "sourcePages": [
+        510,
+        532,
+        533
+      ],
+      "confidence": "authoritative"
+    },
+    {
+      "id": "CC-CUSTOM-API-RELEASE",
+      "topics": [
+        "released-api",
+        "custom-api",
+        "reclassification"
+      ],
+      "statement": "Check the live API release state and successor before designing a wrapper or rewrite; releasing a stable customer-owned interface under a supported contract upgrades that dependency, after which every consumer is reclassified independently.",
+      "sourcePages": [
+        175,
+        179,
+        197
+      ],
+      "confidence": "derived"
+    },
+    {
+      "id": "CC-HYBRID-SPLIT",
+      "topics": [
+        "hybrid",
+        "on-stack",
+        "side-by-side",
+        "responsibility-split"
+      ],
+      "statement": "A requirement with both tightly coupled on-stack and independently operated responsibilities is split explicitly: on-stack owns transactional consistency, side-by-side owns independent UX or orchestration, and the boundary uses released APIs or events.",
+      "sourcePages": [
+        296,
+        300,
+        304
+      ],
+      "confidence": "derived"
+    },
+    {
+      "id": "CC-KEEP-B-PRIVATE",
+      "topics": [
+        "level-b",
+        "private-cloud",
+        "on-premise",
+        "governance"
+      ],
+      "statement": "SAP S/4HANA Cloud Private Edition and on-premise permit documented classic technology at Level B with AEM rationale and governance; informational Level B ATC findings need no exemption.",
+      "sourcePages": [
+        64,
+        567,
+        572
+      ],
+      "confidence": "authoritative"
+    }
   ]
 }

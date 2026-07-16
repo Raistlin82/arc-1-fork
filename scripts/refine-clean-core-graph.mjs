@@ -126,8 +126,8 @@ function run() {
       curatedLinks.map(([from, to, relation]) => `- \`${from}\` -[${relation}]-> \`${to}\``).join('\n') +
       `\n\nThese bridges connect previously zero-degree high-level concepts. They are marked ` +
       `\`confidence=CURATED\` and never authorize execution. Runtime decisions use ` +
-      `\`decision-rules.json\` plus live evidence. Graphify's original report also labels 94 nodes ` +
-      `as weakly connected; they remain an exploration-quality signal rather than an execution gap.\n`,
+      `\`decision-rules.json\` plus live evidence. Weakly connected nodes reported by Graphify ` +
+      `remain an exploration-quality signal rather than an execution gap.\n`,
   );
   console.log(`Curated graph written: ${curated.nodes.length} nodes, ${curated.links.length} links, ${afterIsolates.length} isolates.`);
 }
