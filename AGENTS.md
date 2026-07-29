@@ -322,3 +322,17 @@ modules; write.ts 2K → write/ package) — apply to any sizeable change:
 
 Migrated from Go to TypeScript on 2026-03-26. Handler monolith split into per-tool modules 2026-06
 (see `docs/plans/completed/2026-06-11-architecture-consolidation-progress.md`).
+
+## Agent skills
+
+### Issue tracker
+
+Issues tracked as GitHub issues on the fork `Raistlin82/arc-1-fork` (via the `gh` CLI; pass `--repo Raistlin82/arc-1-fork` or `gh repo set-default` it — two remotes). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical roles, each label string equal to its name (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context — root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
