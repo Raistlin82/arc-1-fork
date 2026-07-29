@@ -197,9 +197,8 @@ SAPNavigate(action="references", type="<type>", name="<name>", maxResults=1000)
 ```
 
 (`references` is ARC-1's where-used action — it calls SAP's where-used scope API under the hood.)
-The response caps at 100 entries unless `maxResults` is passed; `total` counts every match before
-that cap. For set W membership only `total > 0` matters, so a truncated list still classifies the
-object correctly — but report `total`, never the shown count, whenever the number itself is used.
+`maxResults` lifts the default 100-entry cap; take counts from `total`, never from the returned rows
+(set W membership only needs `total > 0`).
 
 Build **set W** (statically referenced objects — someone calls them in source, even if no one ran them in the observed window).
 

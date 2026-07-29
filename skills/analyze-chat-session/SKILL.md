@@ -292,7 +292,7 @@ Use this reference to assess whether the LLM used the right tools. This is a con
 - `SAPContext(action="deps", type="<type>", name="<name>")` — dependency graph (preferred over manual reads)
 - `SAPContext(action="usages", name="<name>")` — live reverse dependencies from SAP
 - `SAPNavigate(action="definition", uri="<adt_uri>", line=<line>, column=<column>, source="<source>")` — go-to-definition
-- `SAPNavigate(action="references", type="<type>", name="<name>", maxResults=1000)` — where-used (the default caps at 100; `total` reports the real count)
+- `SAPNavigate(action="references", type="<type>", name="<name>", maxResults=1000)` — where-used (default caps at 100)
 
 ### Common Error Recovery Paths
 | Error | Recovery |

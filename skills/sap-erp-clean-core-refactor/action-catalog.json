@@ -8,6 +8,8 @@
     "exact_tadir_lookup": { "tool": "SAPSearch", "requiredInputs": ["names"], "exampleArgs": { "searchType": "tadir_lookup", "names": ["ZCL_EXAMPLE"], "source": "adt", "maxResults": 20 } },
     "read_source": { "tool": "SAPRead", "requiredInputs": ["type", "name"], "exampleArgs": { "type": "CLAS", "name": "ZCL_EXAMPLE" } },
     "read_dependencies": { "tool": "SAPContext", "requiredInputs": ["type", "name"], "exampleArgs": { "action": "deps", "type": "CLAS", "name": "ZCL_EXAMPLE", "depth": 1 } },
+    "read_usages": { "tool": "SAPContext", "requiredInputs": ["type", "name", "maxResults"], "exampleArgs": { "action": "usages", "type": "CLAS", "name": "ZCL_EXAMPLE", "maxResults": 1000 } },
+    "read_impact": { "tool": "SAPContext", "requiredInputs": ["name", "maxResults"], "exampleArgs": { "action": "impact", "type": "DDLS", "name": "Z_I_EXAMPLE", "maxResults": 200 } },
     "find_references": { "tool": "SAPNavigate", "requiredInputs": ["type", "name", "maxResults"], "exampleArgs": { "action": "references", "type": "CLAS", "name": "ZCL_EXAMPLE", "maxResults": 1000 } },
     "atc_assessment": { "tool": "SAPDiagnose", "requiredInputs": ["type", "name", "variant"], "exampleArgs": { "action": "atc", "type": "CLAS", "name": "ZCL_EXAMPLE", "variant": "ABAP_CLOUD_READINESS" } },
     "atc_variants": { "tool": "SAPDiagnose", "requiredInputs": [], "exampleArgs": { "action": "atc_variants", "variant": "*" } },

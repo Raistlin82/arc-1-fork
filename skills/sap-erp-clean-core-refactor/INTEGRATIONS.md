@@ -53,6 +53,20 @@ For a wrapper decision, attach the KTD to the wrapper package with `refObjectTyp
 attempt to attach it to the wrapper class. ARC-1 supports only its verified KTD parent routes, and
 the KTD `name` must equal `refObjectName`.
 
+## What the chain requires from delegated skills
+
+Chain-specific expectations live here, not inside the companion skills, so that upstream keeps
+ownership of those files and the merge surface stays small. When one of these rules is violated by a
+delegate's output, the orchestrator records degraded evidence — it does not silently accept it.
+
+| Expectation | Applies to | Why the chain needs it |
+|---|---|---|
+| `SAPNavigate(action="references", type="<type>", name="<name>", maxResults=<n>)` always passes `maxResults`, and counts are taken from the response's `total`, never from the returned rows | `sap-unused-code`, `sap-migration-dossier`, any fan-in measurement | ARC-1 caps the list at 100 by default. Fan-in is decision evidence for `release_api` and an effort multiplier (PATTERNS §6, §13), so a capped list understates exactly the units that need the most work. `truncated=true` means the consumer inventory is incomplete: record the fan-in as degraded and never claim a complete rewrite scope |
+| ATC variant availability comes from `atc_variants`, not from launching an ATC run | `sap-clean-core-atc` | Variant availability is live evidence. Probing with a full ATC run is expensive and, in `$TMP`, meaningless — ATC skips it, so an empty result proves nothing about the variant |
+| `SAPContext(action="usages", type="<type>", name="<name>", maxResults=<n>)` is a live reverse-dependency lookup; passing `type` avoids an extra name-resolution round trip | any usage evidence | The cache warmup this action once relied on no longer exists; usages always hits SAP |
+| Counts from `usages` and `impact` come from `usageCount` / `summary`, not from the returned entries | `explain-abap-code`, `sap-transport-review`, `debug-slow-sql`, the CDS branches | These actions page too (`usages` defaults to 100, `impact` to 50 per downstream bucket, both max 1000) while the summary fields stay true totals. Operations `read_usages` and `read_impact` therefore carry `maxResults`; a delegate that reports the page size understates the blast radius |
+| `format="structured"` is chosen for structure, never to save tokens | any read | It is a strict superset of a plain read — measured larger in every observed class, from +10% to +1685% |
+
 ## Local skill orchestration
 
 | Skill | Status | Trigger | Role |

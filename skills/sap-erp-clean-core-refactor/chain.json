@@ -268,7 +268,7 @@
         "plan": ["plan_approved", "data_ownership_proven"],
         "accept": ["generative_diff_approved"]
       },
-      "operationIds": ["read_source", "read_dependencies", "inventory_package", "exact_tadir_lookup", "find_references"]
+      "operationIds": ["read_source", "read_dependencies", "read_impact", "inventory_package", "exact_tadir_lookup", "find_references"]
     },
     "generate_cap_services": {
       "execution": "delegated_guarded",
@@ -279,7 +279,7 @@
         "plan": ["plan_approved", "integration_contract_proven", "identity_model_proven"],
         "accept": ["generative_diff_approved"]
       },
-      "operationIds": ["read_source", "read_dependencies", "read_api_state", "inventory_package", "exact_tadir_lookup", "find_references"]
+      "operationIds": ["read_source", "read_dependencies", "read_impact", "read_api_state", "inventory_package", "exact_tadir_lookup", "find_references"]
     },
     "scaffold_cap_fiori_elements": {
       "execution": "delegated_guarded",
@@ -328,7 +328,7 @@
       "execution": "read_only",
       "localSkills": ["explain-abap-code", "sap-migration-dossier"],
       "gates": ["manual_handoff_recorded"],
-      "operationIds": ["read_source", "read_dependencies", "find_references", "read_api_state"]
+      "operationIds": ["read_source", "read_dependencies", "read_usages", "find_references", "read_api_state"]
     },
     "migrate_custom_code": {
       "execution": "arc1_guarded",
