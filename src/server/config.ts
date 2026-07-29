@@ -202,6 +202,19 @@ const LEGACY_CLI_FLAGS: Record<string, string> = {
   'api-key': LEGACY_ENV_VARS.ARC1_API_KEY,
 };
 
+const RETIRED_ENV_VARS: Record<string, string> = {
+  ARC1_CACHE_WARMUP: 'Cache warmup was removed. The normal request-driven cache remains available through ARC1_CACHE.',
+  ARC1_CACHE_WARMUP_PACKAGES:
+    'Cache warmup package filters were removed with cache warmup. Remove this environment variable.',
+  SAP_BTP_DESTINATIONS:
+    'The unreleased multi-destination prototype was removed. Use ARC1_MULTI_TARGET_ENDPOINTS=true and mark subaccount destinations with arc1.enabled=true.',
+};
+
+const RETIRED_CLI_FLAGS: Record<string, string> = {
+  'cache-warmup': RETIRED_ENV_VARS.ARC1_CACHE_WARMUP,
+  'cache-warmup-packages': RETIRED_ENV_VARS.ARC1_CACHE_WARMUP_PACKAGES,
+};
+
 /** Migration guard — throws a helpful error if any legacy identifier is set. */
 function detectLegacyConfig(args: string[]): void {
   const violations: string[] = [];
@@ -225,6 +238,23 @@ function detectLegacyConfig(args: string[]): void {
   }
 }
 
+function detectRetiredConfig(args: string[]): void {
+  const violations: string[] = [];
+  for (const env of Object.keys(RETIRED_ENV_VARS)) {
+    if (process.env[env] !== undefined) violations.push(`  ${env}: ${RETIRED_ENV_VARS[env]}`);
+  }
+  for (const flag of Object.keys(RETIRED_CLI_FLAGS)) {
+    if (args.some((arg) => arg === `--${flag}` || arg.startsWith(`--${flag}=`))) {
+      violations.push(`  --${flag}: ${RETIRED_CLI_FLAGS[flag]}`);
+    }
+  }
+  if (violations.length > 0) {
+    throw new Error(
+      `Removed ARC-1 configuration detected:\n${violations.join('\n')}\n\nSee docs_page/updating.md for migration details.`,
+    );
+  }
+}
+
 /**
  * Parse CLI args + env into a `{ config, sources }` pair.
  * `sources` records where each field's value came from (default / env / flag / file).
@@ -232,6 +262,7 @@ function detectLegacyConfig(args: string[]): void {
  */
 export function resolveConfig(args: string[]): { config: ServerConfig; sources: Record<string, ConfigSource> } {
   detectLegacyConfig(args);
+  detectRetiredConfig(args);
 
   const config = { ...DEFAULT_CONFIG };
   const sources: Record<string, ConfigSource> = {};
@@ -359,6 +390,7 @@ export function resolveConfig(args: string[]): { config: ServerConfig; sources: 
     config.httpAddr = `${addrHost}:${parsedPort}`;
     sources.httpAddr = getFlag('port') !== undefined ? { flag: '--port' } : { env: 'ARC1_PORT' };
   }
+  config.serverName = resolveStr('server-name', 'ARC1_SERVER_NAME', DEFAULT_CONFIG.serverName, 'serverName');
 
   // ── Read-only Admin UI ────────────────────────────────────────────
   const uiFlag = getOptionalFlagValue('ui');
@@ -534,6 +566,18 @@ export function resolveConfig(args: string[]): { config: ServerConfig; sources: 
   );
   const cbPort = resolveStr('btp-oauth-callback-port', 'SAP_BTP_OAUTH_CALLBACK_PORT', '0', 'btpOAuthCallbackPort');
   config.btpOAuthCallbackPort = Number.parseInt(cbPort, 10) || 0;
+  config.multiTargetEndpoints = resolveBool(
+    'multi-target-endpoints',
+    'ARC1_MULTI_TARGET_ENDPOINTS',
+    false,
+    'multiTargetEndpoints',
+  );
+  config.multiTargetAllowBasicAuth = resolveBool(
+    'multi-target-allow-basic-auth',
+    'ARC1_MULTI_TARGET_ALLOW_BASIC_AUTH',
+    false,
+    'multiTargetAllowBasicAuth',
+  );
 
   // ── Principal Propagation ──────────────────────────────────────────
   config.ppEnabled = resolveBool('pp-enabled', 'SAP_PP_ENABLED', false, 'ppEnabled');
@@ -548,9 +592,9 @@ export function resolveConfig(args: string[]): { config: ServerConfig; sources: 
     config.ppStrictExplicit = true;
     sources.ppStrict = { env: 'SAP_PP_STRICT' };
   } else {
-    // Principal propagation should fail closed on JWT propagation failures by default.
-    // Non-JWT API-key/stdio requests keep using the shared client unless strict mode
-    // is explicitly enabled with SAP_PP_STRICT=true / --pp-strict true.
+    // JWT principal-propagation failures always fail closed. The derived default keeps
+    // non-JWT API-key/stdio requests on the shared client unless strict mode is explicitly
+    // enabled with SAP_PP_STRICT=true / --pp-strict true.
     config.ppStrict = config.ppEnabled;
     config.ppStrictExplicit = false;
     sources.ppStrict = 'default';
@@ -610,13 +654,6 @@ export function resolveConfig(args: string[]): { config: ServerConfig; sources: 
     ['memory', 'sqlite', 'none'].includes(cacheMode) ? cacheMode : 'auto'
   ) as ServerConfig['cacheMode'];
   config.cacheFile = resolveStr('cache-file', 'ARC1_CACHE_FILE', '.arc1-cache.db', 'cacheFile');
-  config.cacheWarmup = resolveBool('cache-warmup', 'ARC1_CACHE_WARMUP', false, 'cacheWarmup');
-  config.cacheWarmupPackages = resolveStr(
-    'cache-warmup-packages',
-    'ARC1_CACHE_WARMUP_PACKAGES',
-    '',
-    'cacheWarmupPackages',
-  );
 
   // ── Concurrency ────────────────────────────────────────────────────
   const maxConcurrent = getFlag('max-concurrent') ?? process.env.ARC1_MAX_CONCURRENT;
@@ -642,6 +679,21 @@ export function resolveConfig(args: string[]): { config: ServerConfig; sources: 
     }
   } else {
     sources.authRateLimit = 'default';
+  }
+
+  const mcpHttpRateLimitRaw = process.env.ARC1_MCP_HTTP_RATE_LIMIT;
+  if (mcpHttpRateLimitRaw !== undefined) {
+    const parsed = Number.parseInt(mcpHttpRateLimitRaw, 10);
+    if (Number.isNaN(parsed) || parsed < 0 || String(parsed) !== mcpHttpRateLimitRaw.trim()) {
+      logger.warn(
+        `Invalid ARC1_MCP_HTTP_RATE_LIMIT='${mcpHttpRateLimitRaw}' — expected positive integer or 0. Using the derived MCP HTTP limit.`,
+      );
+    } else {
+      config.mcpHttpRateLimit = parsed;
+      sources.mcpHttpRateLimit = { env: 'ARC1_MCP_HTTP_RATE_LIMIT' };
+    }
+  } else {
+    sources.mcpHttpRateLimit = 'default';
   }
 
   const rateLimitRaw = getFlag('rate-limit') ?? process.env.ARC1_RATE_LIMIT;
@@ -682,7 +734,12 @@ export function resolveConfig(args: string[]): { config: ServerConfig; sources: 
   ) as ServerConfig['logLevel'];
   const logFormat = resolveStr('log-format', 'ARC1_LOG_FORMAT', 'text', 'logFormat');
   config.logFormat = (logFormat === 'json' ? 'json' : 'text') as ServerConfig['logFormat'];
-  config.minimalErrors = resolveBool('minimal-errors', 'ARC1_MINIMAL_ERRORS', false, 'minimalErrors');
+  config.minimalErrors = resolveBool(
+    'minimal-errors',
+    'ARC1_MINIMAL_ERRORS',
+    config.transport === 'http-streamable',
+    'minimalErrors',
+  );
 
   // ── Misc ───────────────────────────────────────────────────────────
   config.verbose = resolveBool('verbose', 'SAP_VERBOSE', false, 'verbose');
@@ -720,6 +777,53 @@ export function validateConfig(config: ServerConfig): void {
     );
   }
 
+  if (config.multiTargetEndpoints) {
+    if (config.transport !== 'http-streamable') {
+      throw new Error('ARC1_MULTI_TARGET_ENDPOINTS=true requires SAP_TRANSPORT=http-streamable.');
+    }
+    if (!config.xsuaaAuth) {
+      throw new Error('ARC1_MULTI_TARGET_ENDPOINTS=true requires SAP_XSUAA_AUTH=true.');
+    }
+    if (config.cacheMode !== 'none') {
+      throw new Error('ARC1_MULTI_TARGET_ENDPOINTS=true requires ARC1_CACHE=none.');
+    }
+    if (config.toolMode !== 'standard') {
+      throw new Error('ARC1_MULTI_TARGET_ENDPOINTS=true requires ARC1_TOOL_MODE=standard.');
+    }
+    if (config.uiMode !== 'off') {
+      throw new Error('ARC1_MULTI_TARGET_ENDPOINTS=true requires ARC1_UI=off.');
+    }
+    if (config.plugins.length > 0) {
+      throw new Error('ARC1_MULTI_TARGET_ENDPOINTS=true does not support ARC1_PLUGINS in v1.');
+    }
+    if (config.cookieFile || config.cookieString || config.ppAllowSharedCookies) {
+      throw new Error(
+        'ARC1_MULTI_TARGET_ENDPOINTS=true does not support shared cookies or SAP_PP_ALLOW_SHARED_COOKIES.',
+      );
+    }
+    if (config.btpServiceKey || config.btpServiceKeyFile) {
+      throw new Error('ARC1_MULTI_TARGET_ENDPOINTS=true requires BTP CF service bindings, not a BTP service key.');
+    }
+    if (config.url || config.username || config.password) {
+      throw new Error(
+        'ARC1_MULTI_TARGET_ENDPOINTS=true does not support a direct SAP_URL/SAP_USER/SAP_PASSWORD connection. Use BTP destinations; configure an optional single-target /mcp through SAP_BTP_DESTINATION.',
+      );
+    }
+    if (config.rateLimit === 0) {
+      console.error(
+        '[warn] ARC1_RATE_LIMIT=0 leaves per-user MCP limiting disabled in multi-target mode. Set a value based on expected active users; 120/min is the recommended beta starting point.',
+      );
+    }
+  }
+
+  // This opt-in is evaluated only by the multi-target runtime. Keep startup nonfatal so an
+  // administrator can stage the setting before enabling the feature, but make the no-op visible.
+  if (config.multiTargetAllowBasicAuth && !config.multiTargetEndpoints) {
+    console.error(
+      '[warn] ARC1_MULTI_TARGET_ALLOW_BASIC_AUTH=true has no effect without ARC1_MULTI_TARGET_ENDPOINTS=true — ignoring the shared Basic opt-in.',
+    );
+  }
+
   if (config.oidcIssuer && !config.oidcAudience) {
     throw new Error(
       'SAP_OIDC_AUDIENCE is required when SAP_OIDC_ISSUER is set — ' +
@@ -730,9 +834,22 @@ export function validateConfig(config: ServerConfig): void {
     throw new Error('SAP_OIDC_ISSUER is required when SAP_OIDC_AUDIENCE is set');
   }
 
+  // Inert, not dangerous — both strict-PP enforcement sites gate on ppEnabled. Warn instead
+  // of crashing: an mtaext cannot unset a base mta.yaml property, so an override that turns
+  // PP off strands SAP_PP_STRICT=true and a hard throw would brick the deployment.
   if (config.ppStrict && !config.ppEnabled) {
-    throw new Error(
-      'SAP_PP_STRICT=true requires SAP_PP_ENABLED=true — strict mode has no effect without principal propagation enabled',
+    console.error(
+      '[warn] SAP_PP_STRICT=true has no effect without SAP_PP_ENABLED=true — ignoring strict mode. Set SAP_PP_ENABLED=true if you meant to enable principal propagation.',
+    );
+  }
+
+  // The mirror-image stranding: an mtaext that turns XSUAA off and adds API keys, but leaves
+  // the base SAP_PP_ENABLED/SAP_PP_STRICT stranded, passes validation (API keys satisfy
+  // hasHttpAuth) and logs a healthy `per-user` scope while server.ts rejects every API-key
+  // call for lacking a JWT. Loud at startup beats 100% of traffic failing silently.
+  if (config.ppEnabled && config.ppStrictExplicit && config.ppStrict && config.apiKeys?.length) {
+    console.error(
+      '[warn] SAP_PP_STRICT=true rejects every non-JWT call, so the configured ARC1_API_KEYS clients cannot call any tool. Set SAP_PP_STRICT=false for mixed PP/API-key operation, or SAP_PP_ENABLED=false to run fully shared.',
     );
   }
 

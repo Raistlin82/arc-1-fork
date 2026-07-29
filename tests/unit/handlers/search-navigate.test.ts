@@ -585,21 +585,83 @@ describe('SAPSearch / SAPQuery / SAPGit / SAPNavigate handlers', () => {
       expect(parsed.rows).toHaveLength(2);
     });
 
-    it('returns parser hint with JOIN-specific addendum when a JOIN query fails with 400', async () => {
+    it('flags dot-notation (alias.field) as the cause of "only one SELECT" — the real fix is a tilde', async () => {
       mockFetch.mockReset();
-      // First call: CSRF token fetch (200)
       mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
-      // Second call: POST returns 400 (parser error)
+      // The exact SAP message for native-SQL dot field access (live-verified on 758).
+      mockFetch.mockResolvedValueOnce(mockResponse(400, 'Only one SELECT statement is allowed.'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
+        sql: 'SELECT b.trkorr, t.text FROM tmsbufreq AS b INNER JOIN tmsbuftxt AS t ON t.trkorr = b.trkorr ORDER BY b.trkorr',
+      });
+      expect(result.isError).toBe(true);
+      const text = result.content[0]?.text ?? '';
+      expect(text).toContain('b~trkorr'); // suggests the tilde form of the first offending token
+      expect(text).toContain('tilde');
+      expect(text).toContain('JOINs, WHERE, and ORDER BY all work');
+      // JOINs are fine — must NOT resurrect the old, wrong "split into single-table queries" advice.
+      expect(text).not.toContain('SAP Note 3605050');
+      expect(text).not.toContain('single-table');
+    });
+
+    it('does not false-flag tilde JOIN with an INTO clause as dot-notation; gives the target-clause hint', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
       mockFetch.mockResolvedValueOnce(mockResponse(400, '"INTO" is invalid at this position'));
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
         sql: 'SELECT a~field1, b~field2 FROM ztable1 AS a INNER JOIN ztable2 AS b ON a~id = b~id INTO TABLE @DATA(lt_result)',
       });
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('ADT freestyle SQL parser rejected this query');
-      expect(result.content[0]?.text).toContain('exactly one SELECT statement');
       expect(result.content[0]?.text).toContain('Remove ABAP target clauses');
-      expect(result.content[0]?.text).toContain('SAP Note 3605050');
-      expect(result.content[0]?.text).toContain('staged single-table queries');
+      expect(result.content[0]?.text).toContain('maxRows parameter');
+      expect(result.content[0]?.text).not.toContain('tilde'); // no dot present → no tilde hint
+      expect(result.content[0]?.text).not.toContain('3605050');
+      expect(result.content[0]?.text).not.toContain('single-table');
+    });
+
+    it.each(['ASC', 'DESC'])('explains ORDER BY … %s rejection with the ABAP sort keywords', async (direction) => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(400, `"${direction}" is not allowed here. "." is expected.`));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
+        sql: `SELECT b~tabname FROM dd02l AS b ORDER BY b~tabname ${direction}`,
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('ASCENDING');
+      expect(result.content[0]?.text).toContain('DESCENDING');
+      expect(result.content[0]?.text).not.toContain('ascending-only');
+    });
+
+    it('does not mistake ASC text inside a string literal for an ORDER BY direction', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(400, 'Invalid query string. Only one SELECT statement is allowed'));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
+        sql: "SELECT descr FROM zt WHERE descr = 'ASC TEST'",
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('ADT freestyle SQL parser rejected this query');
+      expect(result.content[0]?.text).not.toContain('ASCENDING');
+      expect(result.content[0]?.text).not.toContain('DESCENDING');
+    });
+
+    it('hints to split a long IN-list on the backend "longer than 255 characters" mis-parse', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      // SA1-style message: a long IN-list mis-read as one literal running into the INTO TABLE wrapper.
+      mockFetch.mockResolvedValueOnce(
+        mockResponse(
+          400,
+          'The text literal "\'0000000000 INTO TABL..." is longer than 255 characters. Check whether it ends correctly.',
+        ),
+      );
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', {
+        sql: "SELECT matnr, spras, maktx FROM makt WHERE spras IN ('D','E') AND matnr IN ('000000000000069575','000000000000101882','000000000000102927','000000000000125368','000000000000145057','000000000000198979','000000000000227271','000000000000246645','000000000000380774','000000000000380808') ORDER BY matnr, spras",
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Split the largest IN-list');
+      expect(result.content[0]?.text).toContain('multiple IN-clauses');
+      expect(result.content[0]?.text).toContain('ORDER BY');
+      expect(result.content[0]?.text).toContain('preserve semantics');
     });
 
     it('returns parser hint for non-JOIN 400 parser signatures', async () => {
@@ -612,9 +674,8 @@ describe('SAPSearch / SAPQuery / SAPGit / SAPNavigate handlers', () => {
         sql: 'SELECT * FROM ztable1; SELECT * FROM ztable2',
       });
       expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('ADT freestyle SQL parser rejected this query');
-      expect(result.content[0]?.text).toContain('exactly one SELECT statement');
-      expect(result.content[0]?.text).toContain('Remove ABAP target clauses');
+      expect(result.content[0]?.text).toContain('exactly one SELECT');
+      expect(result.content[0]?.text).toContain('without a trailing semicolon');
       expect(result.content[0]?.text).not.toContain('SAP Note 3605050');
     });
 
@@ -657,10 +718,85 @@ describe('SAPSearch / SAPQuery / SAPGit / SAPNavigate handlers', () => {
       expect(postCalls).toHaveLength(2);
       const firstBody = String(postCalls[0]?.[1].body);
       const secondBody = String(postCalls[1]?.[1].body);
-      expect(firstBody).toContain("'Z08'");
-      expect(firstBody).not.toContain("'Z09'");
-      expect(secondBody).toContain("'Z09'");
-      expect(secondBody).toContain("'Z10'");
+      expect([firstBody, secondBody]).toEqual([
+        "SELECT object_name FROM tadir WHERE object_name IN ('Z01', 'Z02', 'Z03', 'Z04', 'Z05', 'Z06', 'Z07', 'Z08')",
+        "SELECT object_name FROM tadir WHERE object_name IN ('Z09', 'Z10')",
+      ]);
+    });
+
+    it('chunks the longest literal IN-list while keeping other IN filters unchanged', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, dataPreviewXml('MATNR', ['M01', 'M02'])));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, dataPreviewXml('MATNR', ['M09', 'M10'])));
+      const sql =
+        "SELECT matnr FROM makt WHERE spras IN ('D', 'E') AND matnr IN ('M01', 'M02', 'M03', 'M04', 'M05', 'M06', 'M07', 'M08', 'M09', 'M10')";
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', { sql });
+
+      expect(result.isError).toBeUndefined();
+      const bodies = freestylePostCalls().map((call) => String(call[1].body));
+      expect(bodies).toHaveLength(2);
+      expect(bodies.every((body) => body.includes("spras IN ('D', 'E')"))).toBe(true);
+      expect(bodies[0]).toContain("matnr IN ('M01', 'M02', 'M03', 'M04', 'M05', 'M06', 'M07', 'M08')");
+      expect(bodies[0]).not.toContain("'M09'");
+      expect(bodies[1]).toContain("matnr IN ('M09', 'M10')");
+    });
+
+    it('selects the longer of two chunkable literal IN-lists', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, dataPreviewXml('OBJ_NAME', ['Z01'])));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, dataPreviewXml('OBJ_NAME', ['Z10'])));
+      const sql =
+        "SELECT object_name FROM tadir WHERE object_type IN ('A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A07', 'A08', 'A09') AND object_name IN ('Z01', 'Z02', 'Z03', 'Z04', 'Z05', 'Z06', 'Z07', 'Z08', 'Z09', 'Z10')";
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', { sql });
+
+      const bodies = freestylePostCalls().map((call) => String(call[1].body));
+      expect(bodies).toHaveLength(2);
+      expect(
+        bodies.every((body) =>
+          body.includes("object_type IN ('A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A07', 'A08', 'A09')"),
+        ),
+      ).toBe(true);
+      expect(bodies[0]).toContain("object_name IN ('Z01', 'Z02', 'Z03', 'Z04', 'Z05', 'Z06', 'Z07', 'Z08')");
+      expect(bodies[1]).toContain("object_name IN ('Z09', 'Z10')");
+    });
+
+    it.each([
+      "SELECT object_name FROM tadir WHERE object_name IN ('Z01', 'Z02', 'Z03', 'Z04', 'Z05', 'Z06', 'Z07', 'Z08', 'Z09') ORDER BY object_name",
+      "SELECT object_type, COUNT(*) FROM tadir WHERE object_name IN ('Z01', 'Z02', 'Z03', 'Z04', 'Z05', 'Z06', 'Z07', 'Z08', 'Z09') GROUP BY object_type",
+      "SELECT SINGLE object_name FROM tadir WHERE object_name IN ('Z01', 'Z02', 'Z03', 'Z04', 'Z05', 'Z06', 'Z07', 'Z08', 'Z09')",
+      "SELECT object_name FROM tadir WHERE object_name IN ('Z01', 'Z02', 'Z03', 'Z04', 'Z05', 'Z06', 'Z07', 'Z08', 'Z09') UP TO 1 ROWS",
+      "SELECT STRING_AGG( object_name, ',' ) FROM tadir WHERE object_name IN ('Z01', 'Z02', 'Z03', 'Z04', 'Z05', 'Z06', 'Z07', 'Z08', 'Z09')",
+    ])('does not chunk queries whose per-chunk results cannot be merged safely', async (sql) => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, dataPreviewXml('RESULT', ['1'])));
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', { sql });
+
+      const postCalls = freestylePostCalls();
+      expect(postCalls).toHaveLength(1);
+      expect(String(postCalls[0]?.[1].body)).toBe(sql);
+    });
+
+    it('deduplicates IN-list literals before splitting across chunks', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, dataPreviewXml('OBJ_NAME', ['Z01'])));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, dataPreviewXml('OBJ_NAME', ['Z09', 'Z10'])));
+      const sql =
+        "SELECT object_name FROM tadir WHERE object_name IN ('Z01', 'Z02', 'Z03', 'Z04', 'Z05', 'Z06', 'Z07', 'Z08', 'Z01', 'Z09', 'Z10')";
+
+      await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPQuery', { sql });
+
+      const bodies = freestylePostCalls().map((call) => String(call[1].body));
+      expect(bodies).toHaveLength(2);
+      expect(bodies.join(' ').match(/'Z01'/g) ?? []).toHaveLength(1);
+      expect(bodies[0]).toContain("'Z08'");
+      expect(bodies[1]).toContain("'Z09', 'Z10'");
     });
 
     it('stops chunked IN-list execution once maxRows is filled', async () => {
@@ -735,7 +871,7 @@ describe('SAPSearch / SAPQuery / SAPGit / SAPNavigate handlers', () => {
 
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain('ADT freestyle SQL parser rejected this query');
-      expect(result.content[0]?.text).toContain('already split this simple long IN list');
+      expect(result.content[0]?.text).toContain('already split the longest literal IN-list');
     });
 
     it('is blocked when free SQL is disallowed', async () => {
@@ -915,16 +1051,20 @@ describe('SAPSearch / SAPQuery / SAPGit / SAPNavigate handlers', () => {
       expect(result.isError).toBeUndefined();
       // Should not get "No references found" since we have a match
       const parsed = JSON.parse(result.content[0]?.text);
-      expect(parsed).toHaveLength(1);
+      expect(parsed.total).toBe(1);
+      expect(parsed.truncated).toBe(false);
+      expect(parsed.references).toHaveLength(1);
     });
 
-    it('falls back to simple references with objectType (returns warning note about dropped filter)', async () => {
+    it('falls back to simple references and STILL applies the objectType filter client-side', async () => {
       mockFetch.mockReset();
       // First call: CSRF token fetch for the POST
       mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
       // Second call: findWhereUsed POST fails with 404 (older SAP system)
       mockFetch.mockRejectedValueOnce(new AdtApiError('Not found', 404, '/usageReferences'));
-      // Third call: findReferences GET succeeds (fallback) — includes CLAS/OC to prove results are unfiltered
+      // Third call: findReferences GET succeeds (fallback) — CLAS/OC must be filtered OUT.
+      // SAP ignores objectTypeFilter server-side, so the filter is applied here; it used to be
+      // silently dropped and apologised for in a "note".
       mockFetch.mockResolvedValueOnce(
         mockResponse(
           200,
@@ -939,16 +1079,14 @@ describe('SAPSearch / SAPQuery / SAPGit / SAPNavigate handlers', () => {
       });
       expect(result.isError).toBeUndefined();
       expect(result.content).toHaveLength(1);
-      const text = result.content[0]?.text;
-      // Response should be valid JSON with note and results
-      const parsed = JSON.parse(text);
-      expect(parsed.note).toContain('objectType filter');
-      expect(parsed.note).toContain('PROG/P');
-      expect(parsed.note).toContain('ignored');
-      expect(parsed.results).toHaveLength(2);
+      const parsed = JSON.parse(result.content[0]?.text);
+      expect(parsed.note).toBeUndefined();
+      expect(parsed.total).toBe(1);
+      expect(parsed.references).toHaveLength(1);
+      expect(parsed.references[0].type).toBe('PROG/P');
     });
 
-    it('falls back to simple references without objectType (no warning note)', async () => {
+    it('falls back to simple references without objectType (returns everything)', async () => {
       mockFetch.mockReset();
       // First call: CSRF token fetch for the POST
       mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'mock-csrf-token' }));
@@ -968,11 +1106,9 @@ describe('SAPSearch / SAPQuery / SAPGit / SAPNavigate handlers', () => {
       });
       expect(result.isError).toBeUndefined();
       expect(result.content).toHaveLength(1);
-      const text = result.content[0]?.text;
-      // No warning — objectType was not requested
-      expect(text).not.toContain('objectType filter');
-      const parsed = JSON.parse(text);
-      expect(parsed).toHaveLength(1);
+      const parsed = JSON.parse(result.content[0]?.text);
+      expect(parsed.total).toBe(1);
+      expect(parsed.references).toHaveLength(1);
     });
 
     it('uses scope-based Where-Used successfully with objectType filter', async () => {
@@ -1003,10 +1139,104 @@ describe('SAPSearch / SAPQuery / SAPGit / SAPNavigate handlers', () => {
       });
       expect(result.isError).toBeUndefined();
       const parsed = JSON.parse(result.content[0]?.text);
-      expect(parsed).toHaveLength(1);
-      expect(parsed[0].name).toBe('ZPROG1');
-      expect(parsed[0].packageName).toBe('$TMP');
-      expect(parsed[0].objectDescription).toBe('Test Program');
+      expect(parsed.total).toBe(1);
+      expect(parsed.references).toHaveLength(1);
+      expect(parsed.references[0].name).toBe('ZPROG1');
+      expect(parsed.references[0].packageName).toBe('$TMP');
+      expect(parsed.references[0].objectDescription).toBe('Test Program');
+    });
+
+    /** usageReferences result with `count` PROG/P entries plus one CLAS/OC entry. */
+    function whereUsedXmlBulk(count: number): string {
+      const rows = Array.from(
+        { length: count },
+        (_, i) => `<usageReferences:referencedObject uri="/sap/bc/adt/programs/programs/zp${i}" isResult="true">
+      <usageReferences:adtObject adtcore:name="ZP${i}" adtcore:type="PROG/P" xmlns:adtcore="http://www.sap.com/adt/core">
+        <adtcore:packageRef adtcore:name="$TMP"/>
+      </usageReferences:adtObject>
+    </usageReferences:referencedObject>`,
+      ).join('\n');
+      return `<?xml version="1.0" encoding="utf-8"?>
+<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
+  <usageReferences:referencedObjects>
+    ${rows}
+    <usageReferences:referencedObject uri="/sap/bc/adt/oo/classes/zcl_x" isResult="true">
+      <usageReferences:adtObject adtcore:name="ZCL_X" adtcore:type="CLAS/OC" xmlns:adtcore="http://www.sap.com/adt/core">
+        <adtcore:packageRef adtcore:name="$TMP"/>
+      </usageReferences:adtObject>
+    </usageReferences:referencedObject>
+  </usageReferences:referencedObjects>
+</usageReferences:usageReferenceResult>`;
+    }
+
+    const bulkRefs = async (args: Record<string, unknown>, count = 250) => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, whereUsedXmlBulk(count)));
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'CLAS',
+        name: 'ZCL_TEST',
+        ...args,
+      });
+      expect(result.isError).toBeUndefined();
+      return JSON.parse(result.content[0]?.text as string);
+    };
+
+    describe('references bounding', () => {
+      it('caps at the 100 default while reporting the true total', async () => {
+        const parsed = await bulkRefs({});
+        expect(parsed.references).toHaveLength(100);
+        // The total must survive slicing — an under-reported blast radius is a wrong answer,
+        // not merely a terse one.
+        expect(parsed.total).toBe(251);
+        expect(parsed.truncated).toBe(true);
+        expect(parsed.hint).toContain('100 of 251');
+      });
+
+      it('honors maxResults (regression: it used to be silently ignored)', async () => {
+        const parsed = await bulkRefs({ maxResults: 5 });
+        expect(parsed.references).toHaveLength(5);
+        expect(parsed.total).toBe(251);
+      });
+
+      it('clamps maxResults to 1000 and ignores junk values', async () => {
+        expect((await bulkRefs({ maxResults: 99999 })).references).toHaveLength(251);
+        expect((await bulkRefs({ maxResults: 0 })).references).toHaveLength(100);
+        expect((await bulkRefs({ maxResults: -3 })).references).toHaveLength(100);
+      });
+
+      it('omits truncated/hint when everything fits', async () => {
+        const parsed = await bulkRefs({}, 10);
+        expect(parsed.total).toBe(11);
+        expect(parsed.truncated).toBe(false);
+        expect(parsed.hint).toBeUndefined();
+      });
+
+      it('filters by objectType client-side, and total counts post-filter', async () => {
+        const parsed = await bulkRefs({ objectType: 'CLAS/OC' });
+        expect(parsed.total).toBe(1);
+        expect(parsed.references[0].name).toBe('ZCL_X');
+      });
+
+      it('matches a bare objectType prefix against subtypes', async () => {
+        const parsed = await bulkRefs({ objectType: 'CLAS', maxResults: 5 });
+        expect(parsed.total).toBe(1);
+        expect(parsed.references[0].type).toBe('CLAS/OC');
+      });
+
+      it('tolerates a padded objectType instead of silently matching nothing', async () => {
+        const parsed = await bulkRefs({ objectType: '  CLAS/OC  ', maxResults: 5 });
+        expect(parsed.total).toBe(1);
+        expect(parsed.references[0].name).toBe('ZCL_X');
+      });
+
+      it('treats a whitespace-only objectType as no filter', async () => {
+        // Otherwise it would filter on the empty type, match nothing, and read as "No references
+        // found" — a wrong answer dressed as an empty one.
+        const parsed = await bulkRefs({ objectType: '   ' });
+        expect(parsed.total).toBe(251);
+      });
     });
 
     it('returns error when neither uri nor type+name provided for references', async () => {
@@ -1134,7 +1364,7 @@ describe('SAPSearch / SAPQuery / SAPGit / SAPNavigate handlers', () => {
         name: 'ZIF_FOO',
       });
       expect(result.isError).toBeUndefined();
-      const refs = JSON.parse(result.content[0]?.text);
+      const refs = JSON.parse(result.content[0]?.text).references;
       // Original 2 entries + 2 augmented implementers
       expect(refs).toHaveLength(4);
       const impl1 = refs.find((r: { name: string }) => r.name === 'ZCL_IMPL1');
@@ -1143,6 +1373,27 @@ describe('SAPSearch / SAPQuery / SAPGit / SAPNavigate handlers', () => {
       expect(impl1.uri).toBe('/sap/bc/adt/oo/classes/zcl_impl1');
       expect(impl1.objectDescription).toBe('implements ZIF_FOO');
       expect(impl1.isResult).toBe(true);
+    });
+
+    it('augments INTF implementers for a PADDED objectType, same as the trimmed value', async () => {
+      // Regression: the filter was trimmed at comparison time but the RAW objectType still reached
+      // augmentInterfaceImplementers, whose /^CLAS/i check rejects " CLAS/OC " — so augmentation was
+      // skipped and the implementers were dropped before the (trimmed) filter could keep them. The
+      // filter is now normalized once at the entry, so padding cannot change behaviour.
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, intfWhereUsedXmlSparse()));
+      mockFetch.mockResolvedValueOnce(mockResponse(200, clsnameXml(['ZCL_IMPL1'])));
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPNavigate', {
+        action: 'references',
+        type: 'INTF',
+        name: 'ZIF_FOO',
+        objectType: '  CLAS/OC  ',
+      });
+      const parsed = JSON.parse(result.content[0]?.text as string);
+      expect(parsed.total).toBe(1);
+      expect(parsed.references[0].name).toBe('ZCL_IMPL1');
     });
 
     it('dedupes — does not re-add an implementer SAP already returned', async () => {
@@ -1167,7 +1418,7 @@ describe('SAPSearch / SAPQuery / SAPGit / SAPNavigate handlers', () => {
         type: 'INTF',
         name: 'ZIF_FOO',
       });
-      const refs = JSON.parse(result.content[0]?.text);
+      const refs = JSON.parse(result.content[0]?.text).references;
       // SAP entry (1) + 1 newly added (ZCL_IMPL2) — dedupe drops the duplicate
       expect(refs).toHaveLength(2);
       expect(refs.filter((r: { name: string }) => r.name === 'ZCL_IMPL1')).toHaveLength(1);
@@ -1191,7 +1442,7 @@ describe('SAPSearch / SAPQuery / SAPGit / SAPNavigate handlers', () => {
         type: 'INTF',
         name: 'ZIF_FOO',
       });
-      const refs = JSON.parse(result.content[0]?.text);
+      const refs = JSON.parse(result.content[0]?.text).references;
       // Only the 2 entries SAP returned — no augmentation
       expect(refs).toHaveLength(2);
       expect(refs.find((r: { name: string; type: string }) => r.type === 'CLAS/OC')).toBeUndefined();
@@ -1209,9 +1460,16 @@ describe('SAPSearch / SAPQuery / SAPGit / SAPNavigate handlers', () => {
         name: 'ZIF_FOO',
         objectType: 'PROG/P',
       });
-      const refs = JSON.parse(result.content[0]?.text);
-      // Only the 2 SAP entries
-      expect(refs).toHaveLength(2);
+      // Augmentation skipped: only CSRF + where-used were fetched, no SEOMETAREL lookup.
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      // The sparse fixture holds only INTF/OI + a structural node, so a PROG/P filter keeps none.
+      // Previously these were returned unfiltered despite the caller asking for PROG/P. The empty
+      // case still returns the envelope — a consumer parsing it must not hit a bare text string.
+      const parsed = JSON.parse(result.content[0]?.text as string);
+      expect(parsed.total).toBe(0);
+      expect(parsed.shown).toBe(0);
+      expect(parsed.truncated).toBe(false);
+      expect(parsed.references).toEqual([]);
     });
 
     it('does not augment for CLAS references (only INTF)', async () => {
@@ -1239,7 +1497,7 @@ describe('SAPSearch / SAPQuery / SAPGit / SAPNavigate handlers', () => {
         type: 'CLAS',
         name: 'ZCL_TARGET',
       });
-      const refs = JSON.parse(result.content[0]?.text);
+      const refs = JSON.parse(result.content[0]?.text).references;
       expect(refs).toHaveLength(1);
       expect(refs[0].name).toBe('ZCL_CALLER');
     });

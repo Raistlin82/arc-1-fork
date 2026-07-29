@@ -52,6 +52,8 @@ export const OPTYPE_SCOPE: Record<OperationTypeCode, Scope> = {
 
 /** The central policy matrix — all tools, all actions/types. */
 export const ACTION_POLICY: Record<string, ActionPolicy> = {
+  // Aggregate multi-target catalog (no SAP request).
+  SAPTargets: { scope: 'read', opType: OperationType.Read },
   // ── SAPRead ──────────────────────────────────────────────────────
   // Tool-level default — applies to all SAP object reads (PROG, CLAS, etc.)
   SAPRead: { scope: 'read', opType: OperationType.Read },
@@ -81,6 +83,7 @@ export const ACTION_POLICY: Record<string, ActionPolicy> = {
   'SAPWrite.update': { scope: 'write', opType: OperationType.Update },
   'SAPWrite.delete': { scope: 'write', opType: OperationType.Delete },
   'SAPWrite.edit_method': { scope: 'write', opType: OperationType.Update },
+  'SAPWrite.edit_unit': { scope: 'write', opType: OperationType.Update },
   // Class-section surgery actions (issue #303) — all run on type=CLAS and write
   // back to /source/main (or /includes/<inc> when include= is provided). Same
   // scope + opType as plain update; admins can target each individually via
@@ -139,6 +142,7 @@ export const ACTION_POLICY: Record<string, ActionPolicy> = {
   'SAPDiagnose.syntax': { scope: 'read', opType: OperationType.Read },
   'SAPDiagnose.unittest': { scope: 'read', opType: OperationType.Test },
   'SAPDiagnose.atc': { scope: 'read', opType: OperationType.Read },
+  'SAPDiagnose.atc_variants': { scope: 'read', opType: OperationType.Read },
   'SAPDiagnose.cds_testcases': { scope: 'read', opType: OperationType.Read },
   'SAPDiagnose.dumps': { scope: 'read', opType: OperationType.Read },
   'SAPDiagnose.traces': { scope: 'read', opType: OperationType.Read },
@@ -152,6 +156,7 @@ export const ACTION_POLICY: Record<string, ActionPolicy> = {
   'SAPDiagnose.quickfix': { scope: 'read', opType: OperationType.Read },
   'SAPDiagnose.apply_quickfix': { scope: 'write', opType: OperationType.Update },
   'SAPDiagnose.odata_perf': { scope: 'data', opType: OperationType.Query },
+  'SAPDiagnose.authorization_trace': { scope: 'data', opType: OperationType.Query },
   'SAPDiagnose.cds_sql': { scope: 'read', opType: OperationType.Read },
   'SAPDiagnose.sql_trace_state': { scope: 'read', opType: OperationType.Read },
   'SAPDiagnose.set_sql_trace_state': { scope: 'write', opType: OperationType.Update },
@@ -249,6 +254,27 @@ export function getActionPolicy(tool: string, action?: string): ActionPolicy | u
     if (specific) return specific;
   }
   return ACTION_POLICY[tool];
+}
+
+/**
+ * Derive the policy key from the arguments that a handler will dispatch.
+ *
+ * Callers should normalize untrusted MCP arguments first. Keeping the SAPSearch
+ * SQL special case here prevents listing, multi-target preflight, and normal
+ * dispatch from applying different policy rules to the same invocation.
+ */
+export function invocationPolicyKey(tool: string, args: Record<string, unknown>): string | undefined {
+  if (
+    tool === 'SAPSearch' &&
+    args.searchType === 'tadir_lookup' &&
+    typeof args.source === 'string' &&
+    ['db', 'both'].includes(args.source.toLowerCase())
+  ) {
+    return `tadir_lookup_${args.source.toLowerCase()}`;
+  }
+  const value = tool === 'SAPRead' ? args.type : args.action;
+  if (value === undefined || value === null || value === '') return undefined;
+  return tool === 'SAPRead' ? String(value).toUpperCase() : String(value);
 }
 
 /** Return all keys in the policy matrix (used by validator + consistency tests). */

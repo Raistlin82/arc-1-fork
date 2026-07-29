@@ -18,7 +18,7 @@ import type {
   TransportTarget,
   TransportTask,
 } from './types.js';
-import { decodeXmlEntities, escapeXmlAttr, findDeepNodes, parseXml } from './xml-parser.js';
+import { decodeXmlEntities, escapeXmlAttr, findDeepNodes, parseNamedItems, parseXml } from './xml-parser.js';
 
 /**
  * Filter inactive objects (from `getInactiveObjects()`) down to those that belong to transport
@@ -252,42 +252,6 @@ export async function listTransportLayers(http: AdtHttpClient, safety: SafetyCon
   return parseTransportLayers(resp.body);
 }
 
-/** A parsed `nameditem:namedItem`: identifier (`name`), human text (`description`), optional structured `data`. */
-interface NamedItem {
-  name: string;
-  description: string;
-  data: string;
-}
-
-/** Parse a `nameditem:namedItemList` value-help response (shared by transport layers + targets). */
-function parseNamedItems(xml: string): NamedItem[] {
-  const parsed = parseXml(xml);
-  // The parser wraps some leaf elements (e.g. `data`) in single-element arrays; unwrap.
-  const str = (v: unknown): string => {
-    const x = Array.isArray(v) ? v[0] : v;
-    return typeof x === 'string' ? x : typeof x === 'number' ? String(x) : '';
-  };
-  // Some items carry entity-encoded markup (e.g. "&lt;p&gt;Target: &lt;b&gt;DEV&lt;/b&gt;&lt;/p&gt;").
-  // The shared parser leaves entities encoded — decode, strip tags, collapse whitespace.
-  const clean = (v: unknown): string =>
-    str(v)
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&apos;/g, "'")
-      .replace(/&#39;/g, "'")
-      .replace(/&amp;/g, '&') // decode &amp; last so encoded entities aren't double-decoded
-      .replace(/<[^>]*>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-  return findDeepNodes(parsed, 'namedItem').map((item) => {
-    const rec = item as Record<string, unknown>;
-    // `name` is an identifier passed back verbatim (only trim); `description`/`data` get cleaned.
-    return { name: str(rec.name).trim(), description: clean(rec.description), data: clean(rec.data) };
-  });
-}
-
 /** Parse a `nameditem:namedItemList` value-help response into transport layers. */
 function parseTransportLayers(xml: string): TransportLayer[] {
   return parseNamedItems(xml).map((item) => ({
@@ -403,12 +367,12 @@ export async function releaseTransport(
 /**
  * Release a transport request recursively — tasks first, then the parent request.
  *
- * The **parent request release is authoritative**: SAP only releases a request once every task is
- * released, so its report (`reports`) is the real outcome. Task releases are best-effort — an empty or
- * "unclassified" task can't be released on its own (SAP returns HTTP 200 `abortrelapifail`, verified
- * live on a4h 758), but the parent release folds it in. So a failed *task* release is NOT fatal and the
- * task is simply not listed in `released`; only the parent report decides success. `released` lists the
- * ids that released cleanly.
+ * The parent request's **refreshed state** is authoritative when SAP contradicts itself: a4h 758 can
+ * return HTTP 200 with `abortrelapifail` for an empty/unclassified recursive release even though the
+ * parent has already reached terminal status `R`. Task releases are best-effort — the parent release
+ * folds them in. A failed *task* release is therefore not fatal, and a failed parent report is
+ * reconciled with one fresh request read before it is treated as blocked. `reports` remains the raw SAP
+ * response; `released` lists ids confirmed either by a clean report or terminal request state.
  */
 export async function releaseTransportRecursive(
   http: AdtHttpClient,
@@ -437,7 +401,20 @@ export async function releaseTransportRecursive(
   }
 
   const reports = await releaseTransport(http, safety, transportId);
-  if (failedReleaseReports(reports).length === 0) released.push(transportId);
+  if (failedReleaseReports(reports).length === 0) {
+    released.push(transportId);
+  } else {
+    // SAP can report abortrelapifail after it has already committed the recursive parent release.
+    // Reconcile that contradictory HTTP-200 body against the actual request state. If the read fails
+    // or the request is still modifiable, preserve the failed report as the authoritative outcome.
+    try {
+      const refreshed = await getTransport(http, safety, transportId);
+      if (refreshed?.status === 'R') released.push(transportId);
+    } catch {
+      // The caller will surface the original release report, which is more actionable than a
+      // best-effort reconciliation-read failure.
+    }
+  }
 
   return { released, reports };
 }

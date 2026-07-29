@@ -40,6 +40,7 @@ export interface ServerConfig {
   // --- MCP Transport ---
   transport: TransportType;
   httpAddr: string;
+  serverName: string;
 
   // --- Read-only Admin UI ---
   /** Read-only inspection UI: off (default), local sidecar server, or mounted web routes on the HTTP server. */
@@ -113,9 +114,19 @@ export interface ServerConfig {
   btpServiceKeyFile?: string; // Path to service key file
   btpOAuthCallbackPort: number; // Port for OAuth browser callback (0 = auto)
 
+  // --- Experimental destination-discovered multi-target mode ---
+  /** Enable startup discovery plus pinned and aggregate multi-target endpoints. Default false. */
+  multiTargetEndpoints: boolean;
+  /** Allow explicitly marked OnPremise BasicAuthentication targets in multi-target mode. Default false. */
+  multiTargetAllowBasicAuth: boolean;
+  /** Runtime-only: internal Destination Service name for a discovered target. */
+  destinationName?: string;
+  /** Runtime-only: public immutable system-or-alias/client ID for a discovered target. */
+  targetId?: string;
+
   // --- Principal Propagation (per-user SAP auth) ---
   ppEnabled: boolean;
-  ppStrict: boolean; // If true, PP failure = error (no fallback to shared client)
+  ppStrict: boolean; // Explicit true also rejects non-JWT calls; JWT PP failures always fail closed
   /** True only when SAP_PP_STRICT / --pp-strict was explicitly provided. */
   ppStrictExplicit: boolean;
   /** Opt-in: allow shared cookie auth to coexist with PP (shared client only) */
@@ -173,14 +184,10 @@ export interface ServerConfig {
   checkBeforeWrite: boolean;
 
   // --- Cache ---
-  /** Cache mode: 'auto' (memory for stdio, sqlite for http-streamable), 'memory', 'sqlite', 'none' */
+  /** Cache mode: 'auto' (memory cache), 'memory', 'sqlite', 'none' */
   cacheMode: 'auto' | 'memory' | 'sqlite' | 'none';
   /** Path to SQLite cache file (default: .arc1-cache.db in working directory) */
   cacheFile: string;
-  /** Enable cache warmup on startup (queries TADIR + fetches all custom objects) */
-  cacheWarmup: boolean;
-  /** Package filter for warmup (supports wildcards, e.g. "Z*,Y*,/COMPANY/*") */
-  cacheWarmupPackages: string;
 
   // --- Concurrency ---
   /** Maximum concurrent SAP HTTP requests, server-wide across all users (default: 10).
@@ -191,10 +198,17 @@ export interface ServerConfig {
 
   // --- Rate limiting (Layer 1 + Layer 2) ---
   /** Per-IP cap on OAuth endpoints (`/register`, `/authorize`, `/token`, `/revoke`) in
-   *  requests per minute. `/mcp` gets `max(value × 30, 600)/min/IP` to absorb legitimate
-   *  batch traffic. Set `0` to disable Layer 1 entirely. Default: 20.
+   *  requests per minute. When the MCP override is unset, MCP traffic gets
+   *  `max(value × 30, 600)/min/IP` to absorb legitimate batch traffic. Set `0` to
+   *  disable only the OAuth bucket; disabling the MCP bucket requires an explicit
+   *  `mcpHttpRateLimit: 0`. Default: 20.
    *  See docs_page/rate-limiting.md (Layer 1). */
   authRateLimit: number;
+  /** Optional explicit per-IP cap shared by every MCP HTTP route, including
+   *  pinned/aggregate multi-target routes and Copilot JSON-RPC on `/authorize`.
+   *  Undefined preserves the historical `max(authRateLimit * 30, 600)` derivation;
+   *  `0` explicitly disables only this MCP-edge limiter. */
+  mcpHttpRateLimit?: number;
   /** Per-user cap on MCP tool calls in requests per minute. Key = authInfo.userName
    *  ?? clientId ?? '__anon__'. Stdio (no user identity) is exempt. Returns an MCP
    *  tool error with `retryAfter` (not HTTP 429). Set `>0` to enable Layer 2.
@@ -228,6 +242,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   insecure: false,
   transport: 'stdio',
   httpAddr: '0.0.0.0:8080',
+  serverName: 'arc-1',
   uiMode: 'off',
   uiAddr: '127.0.0.1:8711',
   uiOpen: false,
@@ -253,6 +268,8 @@ export const DEFAULT_CONFIG: ServerConfig = {
   allowHttpNoAuth: false,
   oauthDcrTtlSeconds: 0, // 0 = never expire; positive opts into expiry (clamped 60s..90d) — see field JSDoc
   btpOAuthCallbackPort: 0,
+  multiTargetEndpoints: false,
+  multiTargetAllowBasicAuth: false,
   ppEnabled: false,
   ppStrict: false,
   ppStrictExplicit: false,
@@ -267,10 +284,9 @@ export const DEFAULT_CONFIG: ServerConfig = {
   checkBeforeWrite: false,
   cacheMode: 'auto',
   cacheFile: '.arc1-cache.db',
-  cacheWarmup: false,
-  cacheWarmupPackages: '',
   maxConcurrent: 10,
   authRateLimit: 20,
+  mcpHttpRateLimit: undefined,
   rateLimit: 0, // Layer 2 disabled by default — operators opt in (see ADR-0004)
   allowedOrigins: [],
   logLevel: 'info',

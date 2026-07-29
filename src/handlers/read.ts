@@ -19,9 +19,9 @@ import { grepSource } from '../context/grep.js';
 import { extractMethod, formatMethodListing, listMethods } from '../context/method-surgery.js';
 import { logger } from '../server/logger.js';
 import { type CacheSecurityContext, inactiveListUserKey, invalidateInactiveList } from './cache-security.js';
-import { cachedFeatures, isBtpSystem } from './feature-cache.js';
+import { getCachedFeatures, isBtpSystem } from './feature-cache.js';
 import { inferObjectType, normalizeObjectType, objectUrlForTypeRaw } from './object-types.js';
-import { errorResult, type ToolResult, textResult } from './shared.js';
+import { errorResult, type ToolResult, textResult, toolJson } from './shared.js';
 
 const BTP_HINTS: Record<string, string> = {
   PROG: 'Executable programs (reports) are not available on BTP ABAP Environment. Use CLAS with IF_OO_ADT_CLASSRUN for console applications.',
@@ -55,7 +55,16 @@ const VERSIONED_SOURCE_READ_TYPES = new Set([
 ]);
 
 function inactiveTypeMatches(readType: string, inactiveType: string): boolean {
-  return (inactiveType.split('/')[0] ?? inactiveType).toUpperCase() === readType.toUpperCase();
+  // Includes are exposed as canonical INCL to callers but ADT reports them as
+  // PROG/I in the inactive worklist. Function-group structural includes use
+  // FUGR/I instead (live-verified on NW 7.50 and SAP_BASIS 7.58). Keep that
+  // alias local to draft resolution: globally normalizing FUGR/I to INCL would
+  // misroute search hits for a function group's main source when no group is
+  // available to build the structural-include URL.
+  if (normalizeObjectType(readType) === 'INCL' && inactiveType.trim().toUpperCase() === 'FUGR/I') return true;
+  // Normalize both sides instead of comparing only the slash prefix, which
+  // incorrectly classified standalone include drafts as PROG.
+  return normalizeObjectType(inactiveType) === normalizeObjectType(readType);
 }
 
 export async function resolveVersionAndDraftInfo(
@@ -168,19 +177,20 @@ export async function handleSAPRead(
   }
 
   // Server-driven objects (ABAP Platform 2025 / SAP_BASIS 8.16+): DESD, EVTB, DTSC, COTA, …
-  // share one AFF generic-object contract (blue:blueSource metadata + AFF JSON source), read
+  // share one AFF generic-object contract (blue:blueSource metadata + JSON or DDL-text source), read
   // via the discovery-gated generic engine instead of the per-type switch below. They bypass
   // the version/draft/cache machinery (no /source/main text; JSON output).
   if (isServerDrivenObjectType(type)) {
     if (!name) return errorResult(`"name" is required for SAPRead type=${type}.`);
     if (supportsServerDrivenObject(client.http, type) === false) {
       return errorResult(
-        `SAPRead type=${type} (server-driven object) requires SAP_BASIS 8.16+ (ABAP Platform 2025 / S/4HANA 2025). ` +
-          'This system does not expose this object type.',
+        `SAPRead type=${type} (server-driven object): this system does not advertise ADT support for it. ` +
+          'These types are discovery-gated and depend on the SAP release / support package ' +
+          '(e.g. DTSC/CSNM/EVTO need ABAP Platform 2025 / SAP_BASIS 8.16+, while DTDC/DSFD/EVTB also ship on S/4HANA 2023 / 758).',
       );
     }
     const sdo = await getServerDrivenObject(client.http, client.safety, type, name);
-    return textResult(JSON.stringify(sdo, null, 2));
+    return textResult(toolJson(sdo));
   }
 
   // Class text symbols (Textelemente): include=text_symbols reads a class's maintained text symbols
@@ -278,9 +288,8 @@ export async function handleSAPRead(
             )
           ).source;
         }
-        const abaplintVer = cachedFeatures?.abapRelease
-          ? mapSapReleaseToAbaplintVersion(cachedFeatures.abapRelease)
-          : undefined;
+        const probedAbapRelease = getCachedFeatures()?.abapRelease;
+        const abaplintVer = probedAbapRelease ? mapSapReleaseToAbaplintVersion(probedAbapRelease) : undefined;
         // MethodInfo is a structural superset of grepSource's MethodRange — pass through directly.
         const listing = listMethods(clasSource, name, abaplintVer);
         const g = grepSource(clasSource, String(args.grep), listing.success ? { methods: listing.methods } : undefined);
@@ -291,7 +300,7 @@ export async function handleSAPRead(
       // Structured format: return JSON with metadata + decomposed source
       if (args.format === 'structured') {
         const structured = await client.getClassStructured(name);
-        return textResult(JSON.stringify(structured, null, 2));
+        return textResult(toolJson(structured));
       }
       const methodParam = args.method as string | undefined;
       if (methodParam && !args.include) {
@@ -299,9 +308,8 @@ export async function handleSAPRead(
         const { source: fullSource } = await cachedGet('CLAS', name, effectiveVersion, (ifNoneMatch) =>
           client.getClass(name, undefined, { ifNoneMatch, version: effectiveVersion }),
         );
-        const abaplintVer = cachedFeatures?.abapRelease
-          ? mapSapReleaseToAbaplintVersion(cachedFeatures.abapRelease)
-          : undefined;
+        const probedAbapRelease = getCachedFeatures()?.abapRelease;
+        const abaplintVer = probedAbapRelease ? mapSapReleaseToAbaplintVersion(probedAbapRelease) : undefined;
         if (methodParam === '*') {
           const listing = listMethods(fullSource, name, abaplintVer);
           return textResult(formatMethodListing(listing));
@@ -365,7 +373,7 @@ export async function handleSAPRead(
           source,
           signature: grouped,
         };
-        return textResult(JSON.stringify(payload, null, 2));
+        return textResult(toolJson(payload));
       }
       if (args.grep) return grepText(source);
       return cachedTextResult(source, cacheHit, revalidated, versionWarning);
@@ -389,7 +397,7 @@ export async function handleSAPRead(
         return textResult(parts.join('\n\n'));
       }
       const fg = await client.getFunctionGroup(name);
-      return textResult(JSON.stringify(fg, null, 2));
+      return textResult(toolJson(fg));
     }
     case 'INCL': {
       const { source, cacheHit, revalidated } = await cachedGet('INCL', name, effectiveVersion, (ifNoneMatch) =>
@@ -501,19 +509,19 @@ export async function handleSAPRead(
     }
     case 'DOMA': {
       const domain = await client.getDomain(name);
-      return textResult(JSON.stringify(domain, null, 2));
+      return textResult(toolJson(domain));
     }
     case 'DTEL': {
       const dtel = await client.getDataElement(name);
-      return textResult(JSON.stringify(dtel, null, 2));
+      return textResult(toolJson(dtel));
     }
     case 'TTYP': {
       const ttyp = await client.getTableType(name);
-      return textResult(JSON.stringify(ttyp, null, 2));
+      return textResult(toolJson(ttyp));
     }
     case 'AUTH': {
       const authField = await client.getAuthorizationField(name);
-      return textResult(JSON.stringify(authField, null, 2));
+      return textResult(toolJson(authField));
     }
     case 'FTG2':
     case 'FEATURE_TOGGLE': {
@@ -527,11 +535,11 @@ export async function handleSAPRead(
         });
       }
       const toggle = await client.getFeatureToggle(name);
-      return textResult(JSON.stringify(toggle, null, 2));
+      return textResult(toolJson(toggle));
     }
     case 'ENHO': {
       const enhancement = await client.getEnhancementImplementation(name);
-      return textResult(JSON.stringify(enhancement, null, 2));
+      return textResult(toolJson(enhancement));
     }
     case 'VERSIONS': {
       const include = typeof args.include === 'string' ? args.include : undefined;
@@ -552,7 +560,7 @@ export async function handleSAPRead(
 
       try {
         const revisions = await client.getRevisions(objectType, name, { include, group });
-        return textResult(JSON.stringify(revisions, null, 2));
+        return textResult(toolJson(revisions));
       } catch (err) {
         if (isNotFoundError(err)) {
           return textResult(
@@ -595,7 +603,7 @@ export async function handleSAPRead(
           // SQL failed (e.g., TSTC not found on BTP) — still return metadata
         }
       }
-      return textResult(JSON.stringify(tran, null, 2));
+      return textResult(toolJson(tran));
     }
     case 'API_STATE': {
       // Determine object type for URL construction — use explicit objectType, infer from name, or error
@@ -609,12 +617,12 @@ export async function handleSAPRead(
       // Use raw URI (no name encoding) — getApiReleaseState encodes the full URI as a single path segment
       const objectUri = objectUrlForTypeRaw(inferredType, name);
       const releaseState = await client.getApiReleaseState(objectUri);
-      return textResult(JSON.stringify(releaseState, null, 2));
+      return textResult(toolJson(releaseState));
     }
     case 'TABLE_CONTENTS': {
       const maxRows = Number(args.maxRows ?? 100);
       const data = await client.getTableContents(name, maxRows, args.sqlFilter as string | undefined);
-      return textResult(JSON.stringify(data, null, 2));
+      return textResult(toolJson(data));
     }
     case 'TABLE_QUERY': {
       const maxRows = Number(args.maxRows ?? 100);
@@ -624,7 +632,7 @@ export async function handleSAPRead(
         : undefined;
       try {
         const data = await client.runTableQuery(name, { columns, where, maxRows });
-        return textResult(JSON.stringify(data, null, 2));
+        return textResult(toolJson(data));
       } catch (err) {
         // Self-correct an unknown-column error (a bad entry in `columns`/`where`) by listing the
         // table's real columns (best-effort).
@@ -678,18 +686,18 @@ export async function handleSAPRead(
       if (methods.rows.length === 0) {
         return errorResult(`No BOR methods found for object type "${name}". Verify the BOR object type name.`);
       }
-      return textResult(JSON.stringify(methods, null, 2));
+      return textResult(toolJson(methods));
     }
     case 'DEVC': {
       const maxResults = args.maxResults != null ? Number(args.maxResults) : undefined;
       const contents = await client.getPackageContents(name, maxResults);
-      return textResult(JSON.stringify(contents, null, 2));
+      return textResult(toolJson(contents));
     }
     case 'SYSTEM':
       return textResult(await client.getSystemInfo());
     case 'COMPONENTS': {
       const components = await client.getInstalledComponents();
-      return textResult(JSON.stringify(components, null, 2));
+      return textResult(toolJson(components));
     }
     case 'MESSAGES':
     case 'MSAG': {
@@ -704,7 +712,7 @@ export async function handleSAPRead(
       }
       try {
         const mcInfo = await client.getMessageClassInfo(name);
-        return textResult(JSON.stringify(mcInfo, null, 2));
+        return textResult(toolJson(mcInfo));
       } catch {
         // Fall back to legacy endpoint if messageclass endpoint unavailable
         return textResult(await client.getMessages(name));
@@ -715,7 +723,8 @@ export async function handleSAPRead(
     case 'VARIANTS':
       return textResult(await client.getVariants(name));
     case 'BSP': {
-      if (cachedFeatures?.ui5 && !cachedFeatures.ui5.available) {
+      const ui5Feature = getCachedFeatures()?.ui5;
+      if (ui5Feature && !ui5Feature.available) {
         return errorResult(
           'UI5/Fiori BSP Filestore is not available on this SAP system. Run SAPManage(action="probe") ' +
             'for the reason (often a missing S_ADT_RES authorization), or set SAP_FEATURE_UI5=on to force it on.',
@@ -725,20 +734,21 @@ export async function handleSAPRead(
       if (!name) {
         // List all BSP apps (optional search via query param not used here since name is empty)
         const apps = await client.listBspApps();
-        return textResult(JSON.stringify(apps, null, 2));
+        return textResult(toolJson(apps));
       }
       if (!include) {
         // Browse root structure of the app
-        return textResult(JSON.stringify(await client.getBspAppStructure(name), null, 2));
+        return textResult(toolJson(await client.getBspAppStructure(name)));
       }
       // If include contains a dot, treat as file read; otherwise browse subfolder
       if (include.includes('.')) {
         return textResult(await client.getBspFileContent(name, include));
       }
-      return textResult(JSON.stringify(await client.getBspAppStructure(name, `/${include}`), null, 2));
+      return textResult(toolJson(await client.getBspAppStructure(name, `/${include}`)));
     }
     case 'BSP_DEPLOY': {
-      if (cachedFeatures?.ui5repo && !cachedFeatures.ui5repo.available) {
+      const ui5repoFeature = getCachedFeatures()?.ui5repo;
+      if (ui5repoFeature && !ui5repoFeature.available) {
         return errorResult(
           'ABAP Repository OData Service is not available on this SAP system. Run SAPManage(action="probe") ' +
             'for the reason, or set SAP_FEATURE_UI5REPO=on to force it on.',
@@ -751,11 +761,11 @@ export async function handleSAPRead(
       if (!info) {
         return textResult(`App "${name}" not found in ABAP Repository.`);
       }
-      return textResult(JSON.stringify(info, null, 2));
+      return textResult(toolJson(info));
     }
     case 'INACTIVE_OBJECTS': {
       const objects = await client.getInactiveObjects();
-      return textResult(JSON.stringify({ count: objects.length, objects }, null, 2));
+      return textResult(toolJson({ count: objects.length, objects }));
     }
     default:
       return errorResult(

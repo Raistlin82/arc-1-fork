@@ -28,8 +28,8 @@ Built for organizations that need AI-assisted SAP development with guardrails. I
 - **Writes restricted to `$TMP` when enabled** — only local/throwaway objects; writing to transportable packages requires explicit `--allowed-packages`
 - **HTTP security headers (helmet) on by default** — HSTS, CSP, X-Frame-Options, CORP, X-Content-Type-Options. COOP is deliberately not set so popup-based OAuth flows (Copilot Studio) keep working. No flag to disable.
 - **Opt-in CORS for browser MCP clients** — `ARC1_ALLOWED_ORIGINS` (comma-separated, exact match). Off by default; native MCP clients don't need it
-- **Layered rate limiting** — three layers out of the box: per-IP OAuth/`/mcp` edge (Layer 1, default 20/min/IP, **on**), per-user MCP quota (Layer 2, **off by default** — multi-user deployments opt in via `ARC1_RATE_LIMIT=60`), server-wide SAP-bound semaphore (Layer 3, default 10, **on**). Honors `Retry-After` on 429/503 from SAP / BTP gateways. Two operator env vars; per-endpoint OAuth ceilings are constants in code. Closes CodeQL alert `js/missing-rate-limiting`. See the [Rate Limiting Guide](https://docs.arc-1-mcp.com/rate-limiting/)
-- **Supply-chain security** — Dependabot (npm + GitHub Actions + Docker, weekly + same-day security advisories), `npm audit --audit-level=high` PR gate, GitHub Dependency Review on every PR, CodeQL SAST, Trivy container scanning (gating on release, advisory on dev), all third-party GitHub Actions pinned to commit SHA, [`SECURITY.md`](SECURITY.md) policy with severity-tiered SLAs. Image and npm package both ship with [provenance attestations](https://docs.npmjs.com/generating-provenance-statements). See the [security guide §13](https://docs.arc-1-mcp.com/security-guide/#13-dependency--supply-chain-security)
+- **Layered rate limiting** — three layers out of the box: per-IP OAuth and shared MCP HTTP edge limits (Layer 1; MCP inherits the historical derived cap unless `ARC1_MCP_HTTP_RATE_LIMIT` overrides it), per-user MCP quota (Layer 2, **off by default** — multi-user deployments opt in via `ARC1_RATE_LIMIT=60`), and a server-wide SAP-bound semaphore (Layer 3, default 10, **on**). Honors `Retry-After` on 429/503 from SAP / BTP gateways. See the [Rate Limiting Guide](https://docs.arc-1-mcp.com/rate-limiting/)
+- **Supply-chain security** — Dependabot (npm + GitHub Actions + Docker, weekly + same-day security advisories), `npm audit --audit-level=high` PR gate, GitHub Dependency Review on every PR, CodeQL SAST, Trivy container scanning (gating on release, advisory on dev), all third-party GitHub Actions pinned to commit SHA, [`SECURITY.md`](SECURITY.md) policy with severity-tiered SLAs. Image and npm package both ship with [provenance attestations](https://docs.npmjs.com/generating-provenance-statements), and the release workflow publishes a best-effort CycloneDX SBOM for the production npm dependency graph. See the [security guide §13](https://docs.arc-1-mcp.com/security-guide/#13-dependency--supply-chain-security)
 
 ### Authentication
 
@@ -44,6 +44,10 @@ Built for organizations that need AI-assisted SAP development with guardrails. I
 Deploy ARC-1 as a Cloud Foundry app on SAP BTP with full platform integration:
 
 - **Destination Service** — connect to SAP systems via managed destinations
+- **Experimental multi-target mode** — the default-off, mutation-free BTP mode discovers
+  destinations marked `arc1.enabled=true` and exposes pinned SID/client plus aggregate endpoints
+  ([setup](docs_page/multi-target-setup.md),
+  [administration](docs_page/multi-target-administration.md))
 - **Cloud Connector** — reach on-premise systems through the connectivity proxy
 - **Per-user destinations** — user identity forwarded end-to-end via X.509 certificates for on-premise SAP, or exchanged for an ABAP bearer token for BTP ABAP Environment
 - **XSUAA OAuth proxy** — MCP clients authenticate via standard OAuth, ARC-1 handles the BTP token exchange
@@ -60,7 +64,7 @@ Deploy ARC-1 as a Cloud Foundry app on SAP BTP with full platform integration:
 - **Server-validated source caching** — every SAP object read is cached in memory (stdio) or SQLite (http-streamable). Repeated reads use `If-None-Match`/ETag conditional GET, so unchanged objects return from cache after SAP confirms `304 Not Modified`.
 - **Dependency graph caching** — `SAPContext` dep resolution keyed by source hash; unchanged objects skip all ADT calls on subsequent runs.
 - **KTD-aware context** — Knowledge Transfer Documents are cached as source entries and composed into `SAPContext(action="deps")` separately from the dependency graph, so cached dependency context can still include revalidated documentation.
-- **Pre-warmer** — start with `ARC1_CACHE_WARMUP=true` to pre-index all custom objects at startup, enabling reverse dependency lookup (`SAPContext(action="usages")`) and fast CDS impact workflows (`SAPContext(action="impact", type="DDLS")`).
+- **Live where-used** — `SAPContext(action="usages")` and CDS impact analysis query SAP's current repository index with the caller's identity; no startup repository scan is required.
 - **Active/inactive source views** — `SAPRead` accepts `version="active" | "inactive" | "auto"` and warns when the active source has an unactivated draft.
 - **Write invalidation** — when `SAPWrite` or `SAPActivate` mutates an object, both active and inactive source cache entries are dropped; next read revalidates or fetches fresh source.
 
@@ -71,7 +75,7 @@ See **[docs/caching.md](docs/caching.md)** for full documentation.
 - **3,474 unit tests** (`104` unit test files, mocked HTTP)
 - **262-test default integration profile** against live SAP systems, with explicit skip reasons when credentials or fixtures are missing
 - **141-test default E2E profile** that executes real MCP tool calls against a running ARC-1 server and live SAP system
-- **Manual slow SAP profiles** keep expensive cache warmup, broad where-used, RAP full-stack, and recursive CTS release coverage out of the PR path (`test:integration:slow`, `test:e2e:slow`, GitHub **SAP Slow Tests** workflow)
+- **Manual slow SAP profiles** keep broad where-used, RAP full-stack, and recursive CTS release coverage out of the PR path (`test:integration:slow`, `test:e2e:slow`, GitHub **SAP Slow Tests** workflow)
 - **CRUD lifecycle and BTP smoke lanes** included (`test:integration:crud`, `test:integration:btp:smoke`)
 - **CI matrix** on Node `22` and `24`; live SAP integration + E2E run on internal PRs and manual dispatch, with SAP jobs gated off for docs/chore PRs and external forks
 - **Reliability telemetry + coverage** published as informational CI signals (non-blocking)
@@ -92,7 +96,7 @@ The 12 tools are designed from real LLM interaction feedback:
 | **SAPGit** | Git-based ABAP workflows across gCTS and abapGit (list/clone/pull/push/commit/branch/unlink) with backend auto-selection and safety gating (`--allow-git-writes`) |
 | **SAPContext** | Context-first object understanding (`action="deps"`): prepends the object's KTD when available and returns compressed dependency contracts. Also supports reverse dependency lookup (`action="usages"`) and CDS upstream/downstream impact analysis (`action="impact"` for DDLS) |
 | **SAPLint** | Local ABAP lint (system/release-aware presets, auto-fix, pre-write validation) + ADT PrettyPrint (server-side formatting) |
-| **SAPDiagnose** | Syntax check, ABAP Unit tests, ATC code quality, CDS test-case suggestions, active/inactive object-state comparison, generic ADT quickfix proposals/application deltas, gateway/system message diagnostics, short dumps, and profiler traces |
+| **SAPDiagnose** | Syntax check, ABAP Unit tests, ATC code quality, CDS test-case suggestions, active/inactive object-state comparison, generic ADT quickfix proposals/application deltas, gateway/system message diagnostics, short dumps, profiler traces, and the on-prem authorization trace (`SUAUTHVALTRC`, data-preview gated) |
 | **SAPManage** | Feature probing, cache statistics, package lifecycle/change-package operations, and FLP catalog/group/tile helpers |
 
 Tool definitions automatically adapt to the target system (BTP vs on-premise), removing unavailable types and adjusting descriptions so the LLM never attempts unsupported operations.
@@ -182,6 +186,10 @@ Full documentation is available at **[docs.arc-1-mcp.com](https://docs.arc-1-mcp
 | [Install in Claude](https://docs.arc-1-mcp.com/install-in-claude/) | Desktop `.mcpb`, Claude Code plugin (server + skills), and remote BTP connector |
 | [Local Development](https://docs.arc-1-mcp.com/local-development/) | Full local dev — all install methods, MCP client configs, SSO cookie extractor |
 | [Deployment](https://docs.arc-1-mcp.com/deployment/) | Multi-user deployment — Docker, BTP Cloud Foundry, BTP ABAP |
+| [SAP BTP: Start Here](https://docs.arc-1-mcp.com/btp-overview/) | Choose the BTP topology and follow the correct deployment, auth, destination, and operations guides |
+| [BTP Cloud Foundry](https://docs.arc-1-mcp.com/btp-cloud-foundry-deployment/) | MTA deployment, topology decision, role handoffs, and safe acceptance |
+| [BTP Administration](https://docs.arc-1-mcp.com/btp-administration/) | Changes, roles, secrets, scaling, upgrades, rollback, and customer handover |
+| [Multi-System Setup](https://docs.arc-1-mcp.com/multi-target-setup/) | Experimental read-only BTP multi-target deployment, destinations, roles, and client configuration |
 | [Configuration](https://docs.arc-1-mcp.com/configuration-reference/) | Every flag and env var, one table |
 | [Updating](https://docs.arc-1-mcp.com/updating/) | Update procedures per install method |
 | [Enterprise Auth](https://docs.arc-1-mcp.com/enterprise-auth/) | Layer A / Layer B auth internals, coexistence matrix |

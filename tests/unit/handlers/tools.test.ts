@@ -219,7 +219,7 @@ describe('Tool Definitions', () => {
     const sapRead = tools.find((t) => t.name === 'SAPRead')!;
     const schema = sapRead.inputSchema as Record<string, any>;
     const typeEnum: string[] = schema.properties.type.enum;
-    for (const t of ['DESD', 'EVTB', 'EVTO', 'DTSC', 'CSNM', 'COTA']) expect(typeEnum).toContain(t);
+    for (const t of ['DESD', 'EVTB', 'EVTO', 'DTSC', 'CSNM', 'COTA', 'DSFD', 'DTDC']) expect(typeEnum).toContain(t);
     expect(schema.properties.type.description).toContain('Server-driven objects');
   });
 
@@ -228,7 +228,7 @@ describe('Tool Definitions', () => {
     const sapWrite = tools.find((t) => t.name === 'SAPWrite')!;
     const schema = sapWrite.inputSchema as Record<string, any>;
     const typeEnum: string[] = schema.properties.type.enum;
-    for (const t of ['DESD', 'EVTB', 'EVTO', 'DTSC', 'CSNM', 'COTA']) expect(typeEnum).toContain(t);
+    for (const t of ['DESD', 'EVTB', 'EVTO', 'DTSC', 'CSNM', 'COTA', 'DSFD', 'DTDC']) expect(typeEnum).toContain(t);
     expect(schema.properties.type.description).toContain('Server-driven objects');
   });
 
@@ -309,6 +309,20 @@ describe('Tool Definitions', () => {
     expect(actionEnum).toContain('edit_method_signature');
     expect(actionEnum).toContain('delete_method');
     expect(actionEnum).toContain('change_method_visibility');
+  });
+
+  it('SAPWrite exposes edit_unit only on-prem (issue #558)', () => {
+    const onPremTools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: true, systemType: 'onprem' });
+    const onPremSchema = onPremTools.find((tool) => tool.name === 'SAPWrite')!.inputSchema as Record<string, any>;
+    expect(onPremSchema.properties.action.enum).toContain('edit_unit');
+    expect(onPremSchema.properties.unit.description).toMatch(/FORM(?:\/| or )MODULE/i);
+    expect(onPremSchema.properties.source.description).toContain('edit_unit');
+
+    const btpTools = getToolDefinitions({ ...DEFAULT_CONFIG, allowWrites: true, systemType: 'btp' });
+    const btpSchema = btpTools.find((tool) => tool.name === 'SAPWrite')!.inputSchema as Record<string, any>;
+    expect(btpSchema.properties.action.enum).not.toContain('edit_unit');
+    expect(btpSchema.properties.unit).toBeUndefined();
+    expect(btpSchema.properties.source.description).not.toContain('edit_unit');
   });
 
   it('SAPWrite schema exposes visibility + abstract for add_method (issue #303)', () => {
@@ -572,6 +586,7 @@ describe('Tool Definitions', () => {
     expect(actionEnum).toContain('syntax');
     expect(actionEnum).toContain('unittest');
     expect(actionEnum).toContain('atc');
+    expect(actionEnum).toContain('atc_variants');
     expect(actionEnum).toContain('cds_testcases');
     expect(actionEnum).toContain('quickfix');
     expect(actionEnum).toContain('apply_quickfix');
@@ -580,7 +595,7 @@ describe('Tool Definitions', () => {
     expect(actionEnum).toContain('traces');
     expect(actionEnum).toContain('system_messages');
     expect(actionEnum).toContain('gateway_errors');
-    expect(sapDiagnose.description).toContain('active and inactive source versions');
+    expect(sapDiagnose.description).toContain('active vs inactive source versions');
     expect(schema.properties.source).toBeDefined();
     expect(schema.properties.sourceUri).toBeDefined();
     expect(schema.properties.line).toBeDefined();
@@ -879,7 +894,17 @@ describe('Tool Definitions', () => {
       expect(sapQuery.description).toContain('DD02L');
       expect(sapQuery.description).toContain('TADIR');
       expect(sapQuery.description).toContain('reverse-engineering');
-      expect(sapQuery.description).toContain('automatically chunks simple long literal IN lists');
+      expect(sapQuery.description).toContain('auto-chunks long literal IN-lists in plain projection SELECTs');
+      expect(sapQuery.description).toContain('alias~field');
+      expect(sapQuery.description).toContain('alias~*');
+      expect(sapQuery.description).toContain('ASCENDING/DESCENDING');
+      expect(sapQuery.description).toContain('no @/:/? parameters');
+      expect(sapQuery.description).toContain('maxRows (not TOP/LIMIT/OFFSET/FETCH)');
+      expect(sapQuery.description).toContain('CTEs');
+      expect(sapQuery.description).toContain('FULL JOIN');
+      expect(sapQuery.description).toContain('JOINs');
+      expect(sapQuery.description).not.toContain('3605050');
+      expect(sapQuery.description).not.toContain('stage multi-table');
     });
 
     it('BTP SAPTransport description mentions gCTS', () => {

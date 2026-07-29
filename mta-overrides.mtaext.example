@@ -14,10 +14,16 @@
 #   mbt build
 #   cf deploy mta_archives/arc1-mcp_<version>.mtar -e mta-overrides.mtaext
 #
-# Any property left commented uses the `mta.yaml` value unchanged. The two
-# `SAP_BTP_*_DESTINATION` properties below are the only ones that have to
-# be set — the base `mta.yaml` ships with placeholder destination names so
-# deploying without an override fails fast at startup.
+# Any property left commented uses the `mta.yaml` value unchanged. The base
+# descriptor has no fake SAP destination: configure the single-target
+# block below, or enable the experimental multi-target block and manage marked
+# destinations in the BTP Cockpit.
+#
+# IMPORTANT — an extension can ADD or OVERRIDE a property, but never remove one.
+# To turn a base-enabled feature OFF you must write the explicit off-value here;
+# commenting the line out or deleting it just falls back to the `mta.yaml` value.
+# (`SAP_FOO: ~` fails the deploy, and `cf unset-env` is undone by the next
+# `cf deploy` — an explicit value is the only durable override.)
 # ──────────────────────────────────────────────────────────────────────
 
 _schema-version: "3.1"
@@ -27,19 +33,45 @@ extends: arc1-mcp
 modules:
   - name: arc1-mcp-server
     properties:
-      # ── Destinations (REQUIRED override) ─────────────────────────────
-      # BasicAuth destination for startup (feature probing, cache warmup)
+      # ── Single-target /mcp (optional) ────────────────────────────────
+      # BasicAuth destination for startup feature probing
       # SAP_BTP_DESTINATION: "my-basic-auth-destination"
 
       # PrincipalPropagation destination for per-user requests (with JWT)
       # SAP_BTP_PP_DESTINATION: "my-pp-destination"
 
-      # ── Principal propagation behaviour ──────────────────────────────
-      # Enable per-user principal propagation (default in mta.yaml: true)
-      # SAP_PP_ENABLED: "true"
+      # ── MCP server identity ──────────────────────────────────────────
+      # Server name advertised in the MCP initialize handshake (default arc-1).
+      # Set a unique name per instance when several ARC-1 deployments target
+      # different SAP systems, so clients can derive a target-specific tool
+      # prefix without numeric collision suffixes.
+      # ARC1_SERVER_NAME: "arc1-erp-dev"
 
-      # PP failure = hard error, no fallback to shared client
-      # SAP_PP_STRICT: "true"
+      # ── Principal propagation behaviour ──────────────────────────────
+      # The base MTA keeps single-target JWT calls on PP by default. Set false only
+      # for an intentional shared-identity/API-key deployment.
+      # SAP_PP_ENABLED: "false"
+
+      # The base MTA also keeps strict PP enabled: API-key/non-JWT tool calls
+      # are rejected. Set false for supported mixed PP/API-key operation;
+      # JWT calls use PP and API-key calls use the shared destination identity.
+      # Leaving this "true" while adding ARC1_API_KEYS means those API-key
+      # clients are rejected on every tool call.
+      # SAP_PP_STRICT: "false"
+
+      # ── Experimental multi-target v1 (alternative or side-by-side) ──
+      # Discovers subaccount destinations marked arc1.enabled=true. The routes
+      # are mutation-free regardless of single-target /mcp settings.
+      # ARC1_MULTI_TARGET_ENDPOINTS: "true"
+      # ARC1_CACHE: none
+      # Optional shared BasicAuthentication targets. PP remains recommended.
+      # If enabled, keep arc1-mcp-server parameters.instances at exactly 1;
+      # the base mta.yaml already does so.
+      # ARC1_MULTI_TARGET_ALLOW_BASIC_AUTH: "true"
+      # Non-default shared-service limits for 1–5 active beta users.
+      # ARC1_AUTH_RATE_LIMIT: "30"
+      # ARC1_MCP_HTTP_RATE_LIMIT: "1000"
+      # ARC1_RATE_LIMIT: "120"
 
       # ── Safety / Authorization ───────────────────────────────────────
       # Enable object mutations (create, update, delete)
@@ -121,14 +153,6 @@ modules:
       # SAP tool, ~200 tokens — useful for token-tight clients).
       # ARC1_TOOL_MODE: "standard"
 
-      # ── Cache warmup ─────────────────────────────────────────────────
-      # Pre-warm the cache on startup via TADIR scan. Speeds up first-use
-      # latency at the cost of slower startup and a TADIR read at boot.
-      # ARC1_CACHE_WARMUP: "true"
-
-      # Filter packages for warmup, comma-separated, wildcards allowed.
-      # ARC1_CACHE_WARMUP_PACKAGES: "Z*,Y*"
-
       # ── Diagnostics ──────────────────────────────────────────────────
       # Attach full request/response bodies and headers to `http_request`
       # audit events. Sensitive headers redacted, bodies truncated at
@@ -146,10 +170,10 @@ modules:
       # SAP language
       # SAP_LANGUAGE: "EN"
 
-      # Skip TLS certificate verification (default in mta.yaml: true, for
-      # on-premise self-signed-cert landscapes). Override to "false" on
-      # landscapes with proper CA-signed certificates.
-      # SAP_INSECURE: "false"
+      # Skip TLS certificate verification (default in mta.yaml: false).
+      # Override to "true" only for on-premise landscapes with self-signed
+      # certificates that you cannot get into the trust store.
+      # SAP_INSECURE: "true"
 
     # ── Route host — pick your public URL (recommended) ──────────────
     # Base mta.yaml sets NO host, so the deploy service assigns a globally

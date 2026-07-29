@@ -7,9 +7,9 @@ import type { AdtClient } from '../adt/client.js';
 import { AdtApiError } from '../adt/errors.js';
 import { classifyTextSearchError } from '../adt/features.js';
 import type { AdtObjectLookupResult, AdtSearchResult } from '../adt/types.js';
-import { cachedFeatures } from './feature-cache.js';
+import { getCachedFeatures } from './feature-cache.js';
 import { normalizeObjectType } from './object-types.js';
-import { errorResult, type ToolResult, textResult } from './shared.js';
+import { errorResult, type ToolResult, textResult, toolJson } from './shared.js';
 
 // ─── Search Helpers ─────────────────────────────────────────────────
 
@@ -164,14 +164,15 @@ export async function handleSAPSearch(client: AdtClient, args: Record<string, un
     if (splitBrain.length > 0) payload.splitBrain = splitBrain;
     if (warnings.length > 0) payload.warnings = warnings;
 
-    return textResult(JSON.stringify(payload, null, 2));
+    return textResult(toolJson(payload));
   }
 
   if (searchType === 'source_code') {
     // Source code search: do NOT transliterate — source can contain umlauts in strings/comments
-    if (cachedFeatures?.textSearch && !cachedFeatures.textSearch.available) {
+    const textSearch = getCachedFeatures()?.textSearch;
+    if (textSearch && !textSearch.available) {
       return errorResult(
-        `Source code search is not available on this SAP system. ${cachedFeatures.textSearch.reason ?? ''}` +
+        `Source code search is not available on this SAP system. ${textSearch.reason ?? ''}` +
           `\nUse SAPSearch with searchType="object" to search by object name instead, or use SAPQuery to search metadata tables.`,
       );
     }
@@ -179,7 +180,7 @@ export async function handleSAPSearch(client: AdtClient, args: Record<string, un
     const packageName = args.packageName as string | undefined;
     try {
       const results = await client.searchSource(rawQuery, maxResults, objectType, packageName);
-      return textResult(JSON.stringify(results, null, 2));
+      return textResult(toolJson(results));
     } catch (err) {
       if (err instanceof AdtApiError) {
         const permanentCodes = [401, 403, 404, 501];
@@ -215,7 +216,7 @@ export async function handleSAPSearch(client: AdtClient, args: Record<string, un
     }
     return textResult(hint);
   }
-  return textResult(transliterationNote + JSON.stringify(results, null, 2));
+  return textResult(transliterationNote + toolJson(results));
 }
 
 function extractLookupNames(query: string, rawNames: unknown): string[] {

@@ -14,6 +14,103 @@ Lives in [docs_page/configuration-reference.md](../docs_page/configuration-refer
 CLI flags, clamps, layer interactions — the user-facing reference is the single verbose source;
 duplicating it here proved to drift). The compact per-variable table stays in AGENTS.md.
 
+## Experimental multi-target v1 — developer map
+
+Terminology: **ARC-1 multi-target** means multiple SAP system/client targets. `mta.yaml` and an MTAR
+use SAP's separate **Multi-Target Application** packaging terminology.
+
+### Read order and request flow
+
+1. Read [ADR-0006](adr/0006-experimental-read-only-multi-target.md) for the security boundary and
+   [ADR-0007](adr/0007-shared-basic-identity-for-read-only-multi-target.md) for the default-off
+   Basic shared-identity exception, then
+   the [normative implementation plan](plans/destination-discovered-multi-target-v1.md). The
+   [setup](../docs_page/multi-target-setup.md) and
+   [administration](../docs_page/multi-target-administration.md) guides are the user/operator contract.
+2. At startup, `src/server/destination-discovery.ts` projects subaccount destinations into a
+   secret-safe shape, `destination-registry.ts` validates them, and `server.ts`/`http.ts` create the
+   pinned and aggregate HTTP factories.
+3. An authenticated request selects a target from the pinned path or explicit aggregate `target`.
+   `multi-target-server.ts` performs the early policy/scope/rate checks; `server.ts` performs the
+   uncached selected-destination lookup and drift check; PP stays per-user, while Basic credentials
+   are bound behind `multi-target-shared-auth-state.ts`; `dispatch.ts` runs the normal tool pipeline.
+4. `SAPTargets` is an aggregate-only MCP tool. Readers get target/description/identity when multiple
+   targets exist; admins get secret-safe registry diagnostics and passive Basic runtime health.
+   There is no HTTP target-catalog endpoint and catalog reads never probe SAP.
+
+### Invariants
+
+- Default off; BTP CF only; XSUAA-only route auth; `ARC1_CACHE=none`; standard tool mode; UI,
+  plugins, shared cookies, writes, activation, and transport/Git mutation remain unavailable. PP
+  targets are strict per-user. Basic is a separate default-off shared identity, never fallback, and
+  requires exactly one CF instance. ATC and ABAP Unit are available as workload-producing reads;
+  operators can disable them with `SAP_DENY_ACTIONS`.
+- `/mcp` is never assigned a discovered destination. An optional single-target `/mcp` is configured
+  independently and may coexist with pinned `/<PUBLIC-SYSTEM>/<CLIENT>/mcp` and aggregate
+  `/multi/mcp` routes.
+- The public target is immutable `SYSTEM-OR-ALIAS/CLIENT`. Without `arc1.target_alias`, the public
+  system segment is the real SID. An alias is allowed only to distinguish independent systems that
+  reuse a real SID/client; it never replaces the required real `sap-sysid` or `sap-client` used by
+  SAP. Exactly one public ID is mounted per destination, and duplicate checks use that ID.
+- Destination names stay out of routes and reader output. Secret-projected Admin `SAPTargets`
+  diagnostics may expose the internal destination name and real SID/client.
+  Raw URLs, credentials, tokens, certificates, and Cloud Connector location IDs never enter the
+  registry or `SAPTargets` output.
+- Effective access is the intersection of the structural v1 ceiling, instance ceiling, destination
+  policy, XSUAA scope, and the selected propagated/shared SAP identity's authorization. No layer may
+  expand another.
+- Discovery is a startup snapshot. Non-secret destination changes require an app restart, and
+  per-request drift checks fail closed until that restart. Basic User/Password rotates hot through
+  a process-wide per-target gate: HMAC generation only, bounded queue/timeout, bounded retained
+  rejected generations, one auth attempt, and no raw secret in retained/output state.
+
+### Change these together
+
+- Destination properties/validation: `multi-target-destination-config.ts`,
+  `multi-target-identity.ts`, `destination-discovery.ts`, `destination-registry.ts`,
+  `multi-target-runtime.ts`, and their tests. Target syntax, pinned route matchers, aggregate pattern,
+  and edge-rate matching must continue to share the identity module.
+- Tool/action surface: `multi-target-tools.ts`, `multi-target-server.ts`, `src/authz/policy.ts`,
+  `src/handlers/dispatch.ts`, tool-definition budget checks, and focused policy/tool tests.
+- Routes/auth/metadata: `src/server/{http,server}.ts`, XSUAA scopes/roles, and
+  `http-multi-target-routes.test.ts` plus `multi-target-pp-retry.test.ts`.
+- Feature evidence: `multi-target-feature-state.ts`, `src/handlers/feature-cache.ts`, probe call sites,
+  and feature-cache/multi-target-server tests. A Basic credential-generation change clears successful
+  evidence.
+- Shared Basic auth: `multi-target-shared-auth-state.ts`, selected-destination request preparation,
+  centralized final/synthetic 401 classification in ADT HTTP, catalog passive health, and focused
+  lockout/rotation/secret-leak tests. Construct one guard per process, never per MCP server/transport.
+- Catalog behavior: `multi-target-catalog.ts`, the `SAPTargets` definition/handler, both user guides,
+  and `multi-target-server.test.ts`.
+- Deployment prerequisites: `src/server/{config,types}.ts`, `mta.yaml`, its extension example, setup
+  docs, `config.test.ts`, `mta-descriptor.test.ts`, and `plugin-manifest.test.ts`.
+
+### Focused verification
+
+```bash
+npx vitest run \
+  tests/unit/server/destination-discovery.test.ts \
+  tests/unit/server/destination-registry.test.ts \
+  tests/unit/server/multi-target-destination-config.test.ts \
+  tests/unit/server/multi-target-runtime.test.ts \
+  tests/unit/server/multi-target-basic-auth.test.ts \
+  tests/unit/server/multi-target-shared-auth-state.test.ts \
+  tests/unit/server/multi-target-tools.test.ts \
+  tests/unit/server/multi-target-server.test.ts \
+  tests/unit/server/multi-target-pp-retry.test.ts \
+  tests/unit/server/http-destinations.test.ts \
+  tests/unit/server/http-multi-target-routes.test.ts \
+  tests/unit/handlers/multi-target-errors.test.ts \
+  tests/unit/authz/policy.test.ts
+
+npx vitest run \
+  tests/unit/server/config.test.ts \
+  tests/unit/server/mta-descriptor.test.ts \
+  tests/unit/plugin/plugin-manifest.test.ts
+
+npm run btp:validate
+```
+
 ## Key Files for Common Tasks — full reference
 
 | Task | Files |
@@ -36,7 +133,7 @@ duplicating it here proved to drift). The compact per-variable table stays in AG
 | Modify package listing (`SAPRead type=DEVC`) | `src/adt/client.ts` (`getPackageContents` uses `informationsystem/search?packageName=...` GET, not `nodestructure` POST; `maxResults` clamps `[1,1000]`, default 200), `src/adt/xml-parser.ts`, `src/handlers/read.ts`, `src/handlers/{schemas,tools}.ts`, tests. Search omits legacy SEGW types (e.g. `IWSV`) — use `SAPSearch` for those. |
 | Add object transport history (reverse lookup) | `src/adt/transport.ts` (`getObjectTransports`), `src/adt/types.ts` (`ObjectTransportHistory`), `src/handlers/transport.ts` (`handleSAPTransport` case `history`), `src/handlers/schemas.ts`, `src/handlers/tools.ts` |
 | Modify SAPTransport.create / transport target (TR_TARGET) / layer+target discovery | `src/adt/transport.ts` (`createTransportWithTarget` sets the explicit target via `tm:root`/`newrequest` `POST /cts/transportrequests` — the only ADT path that sets it; `CreateCorrectionRequest` at `/cts/transports` ignores `<TARGET>`. `supportsExplicitTransportTarget(http)` discovery-gates it: true iff `/cts/transportrequests` advertises `transportorganizer.v1+xml` — 7.58 yes, 7.50 no. `listTransportTargets`/`listTransportLayers` value-helps), `src/handlers/transport.ts` (`handleSAPTransport` create routing + `layers`/`targets` actions), `schemas.ts`/`tools.ts` (`target`/`transportLayer` params), `src/authz/policy.ts`, `src/adt/http.ts` (discovery accessors). Verified: a4h 7.58 sets target → 201; npl 7.50 gate fail-fast. |
-| Surface SAPTransport release-check report (#433) | `src/adt/transport.ts` (`parseReleaseReports` parses `tm:releasereports > chkrun:checkReport` from the `newreleasejobs` body — `removeNSPrefix` → `checkReport`/`@_status`/`@_statusText`, nested `checkMessage` `@_type`/`@_shortText`/`@_uri`; `releaseTransport` now returns `TransportReleaseReport[]`; `failedReleaseReports` = status present & ≠`released`; `releaseTransportRecursive` releases tasks best-effort then the parent — the **parent release is authoritative**, returns `{released, reports}`), `src/adt/types.ts` (`TransportReleaseReport`/`Message`), `src/handlers/transport.ts` (`summarizeRelease`: blocked → error, clean → concise line, warnings → line+findings). **A blocked release returns HTTP 200 with `chkrun:status≠released`** (e.g. `abortrelapifail`) — the ONLY reliable failure signal; surfaced as an error, not a false success. Empty/garbage 200 body → `[]` (graceful; NW 7.5x rejects `newreleasejobs` pre-body, unchanged). No schema/policy change (output-only). Live-verified a4h 758; fixtures `tests/fixtures/xml/transport-release-report-{success,blocked}.xml`. |
+| Surface SAPTransport release-check report (#433) | `src/adt/transport.ts` (`parseReleaseReports` parses `tm:releasereports > chkrun:checkReport` from the `newreleasejobs` body — `removeNSPrefix` → `checkReport`/`@_status`/`@_statusText`, nested `checkMessage` `@_type`/`@_shortText`/`@_uri`; `releaseTransport` returns raw `TransportReleaseReport[]`; `failedReleaseReports` = status present & ≠`released`; `releaseTransportRecursive` releases tasks best-effort then the parent and returns `{released, reports}`). **A blocked release can return HTTP 200 with `chkrun:status≠released`** (e.g. `abortrelapifail`), but a4h 758 can also return that report after an empty recursive parent already reached terminal status `R`; recursive release therefore reconciles a failed parent report with one fresh state read, preserves the raw report, and treats confirmed `R` as released. Single release still treats the failed report as authoritative. `src/handlers/transport.ts` (`summarizeRelease`: blocked → error, clean → concise line, state-reconciled → success + conflict note, warnings → line+findings). Empty/garbage 200 body → `[]` (graceful; NW 7.5x rejects `newreleasejobs` pre-body, unchanged). No schema/policy change (output-only). Live-verified a4h 758; fixtures `tests/fixtures/xml/transport-release-report-{success,blocked}.xml`. |
 | Add gCTS / abapGit operation | `src/adt/gcts.ts` or `src/adt/abapgit.ts`, `src/handlers/git.ts` (`handleSAPGit`), `src/handlers/tools.ts`, `src/handlers/schemas.ts` |
 | Add RAP deterministic preflight checks | `src/adt/rap-preflight.ts`, `src/handlers/write-helpers.ts` (`runRapPreflightValidation`), `src/handlers/tools.ts`, `src/handlers/schemas.ts`, `tests/unit/adt/rap-preflight.test.ts` |
 | Add RAP behavior handler scaffolding logic | `src/adt/rap-handlers.ts`, `src/handlers/write/rap.ts` (`SAPWrite action=scaffold_rap_handlers`), `tools.ts`/`schemas.ts`, tests. `ensureRapHandlerSkeletons` writes both DEFINITION + IMPLEMENTATION to **CCIMP only** (never CCDEF) — the activator rejects `cl_abap_behavior_handler` subclasses outside Local Definitions/Implementations. |
@@ -56,16 +153,18 @@ duplicating it here proved to drift). The compact per-variable table stays in AG
 | Add CDS impact classifier / extend downstream grouping | `src/adt/cds-impact.ts`, `src/adt/codeintel.ts` (`findWhereUsed`), `tests/unit/adt/cds-impact.test.ts` |
 | Add inactive syntax-check support | `src/adt/devtools.ts` (`syntaxCheck` options.version), `src/handlers/write-helpers.ts` (`tryPostSaveSyntaxCheck`) |
 | Add method-level surgery | `src/context/method-surgery.ts`. `MethodInfo.containingClass` tracks the local class per METHOD block (CCDEF/CCIMP); `extractMethod` honors `<localclass>~<method>` specifiers; ambiguous bare-name lookups across classes error. |
+| Add/modify procedural unit surgery (`SAPWrite edit_unit`, #558) | `src/context/unit-surgery.ts`, `src/handlers/write/unit-surgery.ts`, `src/handlers/{write,schemas,tools}.ts`, `src/authz/policy.ts`, tests. FORM/MODULE only for on-prem PROG/INCL (including `INCL group=`); event blocks have no abaplint structure and stay unsupported. |
 | Add/extend SAPRead `grep` regex search | `src/context/grep.ts` (`grepSource` — `gim` regex w/ literal fallback, ±3 context, 100-match cap), `src/handlers/read.ts` (`if (args.grep)` branch per source-bearing read; CLAS uses `client.getClassInclude`; rejects `grep`+`method` together), `src/adt/client.ts` (`getClassInclude`), `schemas.ts`/`tools.ts`, tests (#313). |
 | Extend edit_method for class-local includes (CCDEF/CCIMP) | `src/handlers/write/class-surgery.ts` (`detectLocalHandlerInclude` + `edit_method` include routing), `src/handlers/schemas.ts` (`validateSapWriteInput` accepts `include`), `tools.ts`, tests. Auto-detect: `lhc_*`/`lcl_*`→implementations, `ltc_*`→testclasses, `zif_X~method`→MAIN. |
 | Add CLAS class-section surgery (`add_method`/`delete_method`/`edit_method_signature`/`change_method_visibility`/`edit_class_definition`, #303) | `src/adt/class-structure.ts` (splice/diff helpers), `src/adt/client.ts` (`getClassStructure`), `src/adt/xml-parser.ts` (`parseClassStructure` — 7.50 split + 7.58+ unified shapes), `src/handlers/write/class-surgery.ts`, `src/handlers/{schemas,tools}.ts`, `src/authz/policy.ts`, tests + `objectstructure-clas-*` fixtures. Refuse-policy diff runs client-side before PUT (adds need an IMPL stub; orphan IMPLs rejected); `include=` writes skip it. |
 | Add SAPSearch tadir_lookup `source` variants (adt/db/both) | `src/handlers/search.ts` (`handleSAPSearch` tadir_lookup branch + merge/splitBrain), `src/handlers/{schemas,tools}.ts` (`source` enum), `src/adt/client.ts` (`lookupObjectsViaDb` via `runQuery`), `src/authz/policy.ts`, `src/adt/types.ts`, tests. `db`/`both` escalate to **sql scope** (viewer-only can't piggyback); default `adt`. |
 | Add SAPWrite batch_create `activateAtEnd` | `src/handlers/write/create.ts` (`case 'batch_create'` — accumulates objects, skips inline `activate()`, fires one terminal `activateBatch`, defers cache invalidation till it succeeds), `schemas.ts`/`tools.ts`, tests. Prefer `activateAtEnd: true` for interdependent objects so the activator resolves cross-refs in one pass. |
 | Modify hyperfocused mode | `src/handlers/hyperfocused.ts`, `src/handlers/tools.ts` |
+| List ATC check variants (`SAPDiagnose action=atc_variants`) | `src/adt/devtools.ts` (`listAtcVariants` — GET `/atc/variants?name=<pattern>`, **`name` is required — a bare/empty filter returns an empty list**, so it defaults to `*`; Accept `application/vnd.sap.adt.nameditems.v1+xml`; `getAtcSystemDefaultVariant` — GET `/atc/customizing` → `systemCheckVariant`), `src/adt/xml-parser.ts` (`parseNamedItems` relocated here from `transport.ts`, `parseAtcSystemCheckVariant`), `src/handlers/diagnose.ts` (`atc_variants` case; reuses the `variant` param as the filter). Read-only; live-verified 758 (184 variants) + 816 (215). |
 | Modify ATC check run (`SAPDiagnose action=atc`) | `src/adt/devtools.ts` (`runAtcCheck`) — **three-step flow**: `POST /atc/worklists?checkVariant=<v>` (omit `checkVariant` → system default) returns the worklist id as a text/plain body → `POST /atc/runs?worklistId=<id>` runs the checks → `GET /atc/worklists/<id>` returns findings. The check variant MUST be bound at worklist creation; the run request does NOT select checks (a bare `/runs?worklistId=1` runs nothing → zero findings). ATC skips `$TMP`/local objects — test against a transportable package. `parseAtcFindings` prefers `@_location` (source `#start=`) over `@_uri` (position-less findings-catalog URI). Live-verified on a4h (S/4HANA 2023). |
 | Add CDS test-case suggestions (`SAPDiagnose action=cds_testcases`) | `src/adt/devtools.ts` (`getCdsTestCases`/`parseCdsTestCases`/`supportsCdsTestCases` — `GET /sap/bc/adt/aunit/dbtestdoubles/cds/testcases?ddlsourceName=`, Accept `…dbtestdoubles.cds.testcases.v1+xml`; parses `<cdstestcases:root>` → per-semantic `{title,testMethod,description,semanticType,calculatedField?}`), `src/handlers/diagnose.ts` (`handleSAPDiagnose` `case 'cds_testcases'` — discovery-gated via `supportsCdsTestCases`, **no object URL** (name → `?ddlsourceName=`), returns JSON + a `cl_cds_test_environment` scaffolding `hint`), `src/handlers/{schemas,tools}.ts` (action enum), `src/authz/policy.ts` (`SAPDiagnose.cds_testcases` = read). **Read-only; SAP_BASIS 8.16+ only** — discovery-gated (`discoveryAcceptFor('…/cds/testcases')`), 758 → 404 → clean skip. AI testdata/testmethod generation (Joule) NOT exposed; no probe-catalog entry (it's an endpoint, not a TypeCode). Fixtures `tests/fixtures/xml/cds-testcases-*.xml`. Live-verified: a4h-2025 (816) → 200, a4h (758) → skip. |
-| Add server-driven object (SDO) read via SAPRead (DESD/EVTB/DTSC/CSNM/EVTO/COTA — 816 generic AFF objects) | `src/adt/server-driven.ts` (`SDO_REGISTRY` code→href, `isServerDrivenObjectType`, `supportsServerDrivenObject` discovery-gate on the collection's `blues.v1+xml` accept, `getServerDrivenObject` — GET `…/{name}` (Accept `blues.v1+xml`) for metadata + GET `…/{name}/source/main` for the **AFF JSON** source), `src/adt/xml-parser.ts` (`parseBlueSource` — `<blue:blueSource>` adtcore attrs + packageRef), `src/adt/types.ts` (`ServerDrivenObjectMetadata`/`Result`), `src/handlers/read.ts` (early branch in `handleSAPRead` before the `switch`; bypasses version/draft/cache; JSON output). The `SAPREAD_TYPE_TABLE` rows DERIVE from `SDO_TYPES` (no tool-registry edit — registering the type in server-driven.ts is the only step; consumed by both schemas.ts + tools.ts). **Gate is per-type/release-adaptive** (not hardcoded 8.16): EVTB also ships on S/4HANA 2023 (758); DESD/DTSC/CSNM/COTA/EVTO need 8.16+. NO probe-catalog entry (816-only types break the recorded-fixture "zero unavailable/ambiguous" replay). Fixtures `tests/fixtures/sdo/`. Live-verified: a4h-2025 (816) reads DESD+EVTB; a4h (758) reads EVTB, skips DESD. |
-| Add server-driven object (SDO) write via SAPWrite/SAPActivate (create/update/delete + activate for DESD/EVTB/DTSC/CSNM/EVTO/COTA) | `src/adt/server-driven.ts` (`createServerDrivenObject` — POST `<href>` `blue:blueSource` body w/ `entry.createType` + `entry.blueContentType`; `updateServerDrivenObjectSource` — lock→PUT `…/source/main` **`application/json`**→unlock; `deleteServerDrivenObject` — lock→`http.delete`→unlock; `serverDrivenObjectUrl`, `buildBlueSourceXml`, `serverDrivenBlueContentType`). Registry now carries per-type `createType` (NOT uniformly `/TYP` — EVTB=`EVTB/EVB`) + `blueContentType` (NOT uniformly v1 — **EVTO=v2**; used for BOTH metadata GET Accept AND create POST). `src/handlers/write.ts` + `src/handlers/write-helpers.ts` (`handleServerDrivenObjectWrite` early branch in `handleSAPWrite` before the objectUrl block — `objectBasePath(<sdo>)` throws; SDO URL routing in `handleSAPActivate` single-activation; `enforceAllowedPackageForObjectUrl(…, accept?)` threads the blues Accept so the allowlist resolves the real package). `src/adt/client.ts` (`resolveObjectPackage(url, accept?)`). The `SAPWRITE_TYPE_TABLE` rows derive from `SDO_TYPES` like the read table (no tool-registry edit needed). Create writes JSON source + leaves the object **inactive** (→ SAPActivate); lint/RAP-preflight/CDS-guard skipped (source is AFF JSON, not ABAP). ADT **ignores `adtcore:masterLanguage`** on the SDO create body (live-verified) — master lang comes from the session `sap-language`, so `buildBlueSourceXml` omits it. Gate is per-type/release-adaptive (like read). Cross-release live-verified: a4h-2025 (816) all 6 create (DESD full create→source→activate→read→delete); a4h (758) **EVTB write works** (create/read/delete), 816-only types return the clean 8.16+ error; npl (7.50) gates all 6 (no crash). |
+| Add server-driven object (SDO) read via SAPRead (DESD/EVTB/DTSC/CSNM/EVTO/COTA/DSFD/DTDC — generic AFF objects) | `src/adt/server-driven.ts` (`SDO_REGISTRY` code→href, `isServerDrivenObjectType`, `supportsServerDrivenObject` discovery-gate on the collection's advertised accept via the per-entry `discoveryMarker` (`blues`/`dtdc`), `getServerDrivenObject` — GET `…/{name}` (Accept `entry.metadataContentType`) for metadata + GET `…/{name}/source/main` for the source (**AFF JSON or DDL text**)), `src/adt/xml-parser.ts` (`parseServerDrivenMetadata(xml, rootLocalName)` — adtcore attrs + packageRef; root is `blueSource` or `dtdcSource`), `src/adt/types.ts` (`ServerDrivenObjectMetadata`/`Result`), `src/handlers/read.ts` (early branch in `handleSAPRead` before the `switch`; bypasses version/draft/cache; JSON output). The `SAPREAD_TYPE_TABLE` rows DERIVE from `SDO_TYPES` (no tool-registry edit — registering the type in server-driven.ts is the only step; consumed by both schemas.ts + tools.ts). **Gate is per-type/release-adaptive** (not hardcoded 8.16): EVTB also ships on S/4HANA 2023 (758); DESD/DTSC/CSNM/COTA/EVTO need 8.16+. NO probe-catalog entry (816-only types break the recorded-fixture "zero unavailable/ambiguous" replay). Fixtures `tests/fixtures/sdo/`. Live-verified: a4h-2025 (816) reads DESD+EVTB; a4h (758) reads EVTB, skips DESD. |
+| Add server-driven object (SDO) write via SAPWrite/SAPActivate (create/update/delete + activate for DESD/EVTB/DTSC/CSNM/EVTO/COTA/DSFD/DTDC) | `src/adt/server-driven.ts` (`createServerDrivenObject` — POST `<href>` metadata body w/ `entry.createType` + `entry.metadataContentType`; `updateServerDrivenObjectSource` — lock→PUT `…/source/main` with the type's **`sourceFormat`** content type→unlock; `deleteServerDrivenObject` — lock→`http.delete`→unlock; `serverDrivenObjectUrl`, `buildServerDrivenMetadataXml`, `serverDrivenMetadataContentType`). **DTDC is the first NON-blue type**: its metadata root/ns/marker are per-entry (`metadataRootQName=dtdc:dtdcSource`, `metadataNamespace`, `metadataRootLocalName=dtdcSource`, `discoveryMarker=dtdc`); the blue family shares the `BLUE_METADATA` spread. Registry carries per-type `createType` (NOT uniformly `/TYP` — EVTB=`EVTB/EVB`, DTDC=`DTDC/DF`) + `metadataContentType` (blues v1, EVTO=v2, DTDC=`ddic.dtdc.v1`; used for BOTH metadata GET Accept AND create POST) + `sourceFormat` (`json` for DESD/CSNM/EVTB/EVTO/COTA, **`text` for DTSC/DSFD/DTDC** — the wrong content type is a hard 415; it also gates the client-side `JSON.parse` in `handleServerDrivenObjectWrite`). `src/handlers/write.ts` + `src/handlers/write-helpers.ts` (`handleServerDrivenObjectWrite` early branch in `handleSAPWrite` before the objectUrl block — `objectBasePath(<sdo>)` throws; SDO URL routing in `handleSAPActivate` single-activation; `enforceAllowedPackageForObjectUrl(…, accept?)` threads the metadata Accept so the allowlist resolves the real package). `src/adt/client.ts` (`resolveObjectPackage(url, accept?)`). The `SAPWRITE_TYPE_TABLE` rows derive from `SDO_TYPES` like the read table (no tool-registry edit needed). Create writes JSON source + leaves the object **inactive** (→ SAPActivate); lint/RAP-preflight/CDS-guard skipped (source is AFF JSON, not ABAP). ADT **ignores `adtcore:masterLanguage`** on the SDO create body (live-verified) — master lang comes from the session `sap-language`, so `buildServerDrivenMetadataXml` omits it. Gate is per-type/release-adaptive (like read). Cross-release live-verified: a4h-2025 (816) all types create (DESD + DTDC full create→source→activate→read→delete); a4h (758) **EVTB/DSFD/DTDC write works** (create→activate→delete), 816-only types return the clean 8.16+ error; npl (7.50) gates all (no crash). |
 | Add XML response parser | `src/adt/xml-parser.ts` |
 | Add safety check | `src/adt/safety.ts` |
 | Add/modify PrettyPrint action | `src/adt/devtools.ts`, `src/handlers/lint.ts` (handleSAPLint), `src/handlers/tools.ts`, `src/handlers/schemas.ts` |
@@ -84,12 +183,13 @@ duplicating it here proved to drift). The compact per-variable table stays in AG
 | Add/modify Dependabot config | `.github/dependabot.yml` — npm + github-actions + docker, weekly. Grouping + ignore rules in-file. |
 | Add/modify npm audit / SAST / dep review CI gate | `.github/workflows/test.yml` (`npm audit --audit-level=high`); `.github/workflows/dependency-review.yml` (license allow/deny). |
 | Add/modify container scanning | Trivy advisory in `docker.yml`, gating in `release.yml` (`publish-npm` needs `publish-docker` so a failed gate blocks the whole release, not just Docker), scheduled gate preview in `security-scan.yml` (same gate vs. current Dockerfile, Mon/Wed/Fri — catches base-image CVEs before release); SARIF via `github/codeql-action/upload-sarif@v4`. Base-image OS CVEs self-heal via `apk upgrade` in the Dockerfile runtime stage. |
+| Add/modify the release npm SBOM | `.github/workflows/release.yml` (`publish-npm-sbom`) + `tests/unit/server/release-sbom-workflow.test.ts`. This is a best-effort release asset: preserve job-level `continue-on-error: true` so generation/upload cannot fail the release. Generate from the immutable release tag with the same pinned npm as `publish-npm`: `npm sbom --package-lock-only --omit=dev --sbom-format=cyclonedx --sbom-type=application`. Validate Release Please/package/lock/SBOM versions before upload. The asset covers only the root production npm graph, not Docker OS packages, MCPB contents, or extensions. Upload retries compare GitHub's SHA-256 digest; never use `--clobber`, which deletes the existing asset first. |
 | Pin a third-party GitHub Action | `uses: <owner>/<action>@<40-char-sha>  # <tag>` (trailing comment lets Dependabot bump SHA + tag together). GitHub-owned `actions/*`/`github/*` stay tag-pinned. |
 | Update vulnerability reporting policy | `SECURITY.md` (Supported Versions, Reporting channels, Response SLAs, CVE handling, Out of Scope, Safe Harbor) |
 | Add CLI sub-command (`call`, `tools`, shortcuts) | `src/cli.ts` (Commander wiring), `src/cli-args.ts` (pure arg parsing + tests) — never duplicate Zod validation; `handleToolCall` does it. |
 | Add SAP version-quirk workaround (NW 7.50 / S/4 gating) | Prefer `extractExceptionType` in `src/adt/errors.ts` (structured XML error). Body-marker heuristics only with a release-scoped guard — see `convertHtmlConflictToProperError` in `src/adt/crud.ts` (scoped to `abapRelease < 751`). Inline-comment why the heuristic self-scopes. ADR-0002 (#199). |
 | Add activation batch quirk recovery | `src/adt/devtools.ts` (`activateBatch`, ED064 retry helper), `tests/unit/adt/devtools.test.ts`. Pure ED064 / "no next/previous object found" failures retried once as individual activations; mixed real errors must not retry. |
-| Add elicitation prompt | `src/server/elicit.ts` |
+| Add a plugin elicitation prompt (`ctx.elicit`) | `src/server/plugin-loader.ts` (`buildMcpCapabilities`) — the only live elicitation path (opt-in, for extension tools). Core tools have no interactive elicitation; destructive-op safety is the config ceiling (`allowWrites`/`allowedPackages`/`denyActions`). |
 | Add XSUAA/JWT auth | Provided by [`@arc-mcp/xsuaa-auth`](https://github.com/arc-mcp/xsuaa-auth) (`createXsuaaTokenVerifier` / `createChainedTokenVerifier`); wired in `src/server/http.ts` + `src/server/server.ts`. (Was `src/server/xsuaa.ts`, extracted in #456.) |
 | Modify OAuth DCR client store / signed-token format | Now [`@arc-mcp/xsuaa-auth`](https://github.com/arc-mcp/xsuaa-auth)'s `StatelessDcrClientStore`; ARC-1 sets `clientIdPrefix: 'arc1-'` + `dcrKdfLabel: 'arc1-dcr/v1'` in `src/server/http.ts`. Bump the kdf label to revoke issued client_ids. Audit: `oauth_client_registered`/`oauth_client_lookup_failed`/`oauth_redirect_uri_registered`. (Was `src/server/stateless-client-store.ts`, extracted in #456.) |
 | Modify scope enforcement | `src/authz/policy.ts` (`ACTION_POLICY`), `src/handlers/dispatch.ts` (runtime check), `src/server/server.ts` (tool listing filter) |
@@ -106,7 +206,7 @@ duplicating it here proved to drift). The compact per-variable table stays in AG
 | Add/modify E2E fixture | `tests/e2e/fixtures.ts` (define object), `tests/fixtures/abap/` (source file), `tests/e2e/setup.ts` (sync logic) |
 | Modify source caching / ETag revalidation | `src/cache/caching-layer.ts`, `src/cache/cache.ts`, `src/cache/memory.ts`, `src/cache/sqlite.ts`, `src/adt/client.ts` |
 | Modify inactive-draft source awareness | `src/cache/inactive-list-cache.ts`, `src/handlers/read.ts`, `src/adt/client.ts`, `src/adt/xml-parser.ts`, `src/adt/types.ts` |
-| Add cache warmup feature | `src/cache/warmup.ts`, `src/server/server.ts` |
+| Change source caching | `src/cache/caching-layer.ts`, `src/cache/{cache,memory,sqlite}.ts`; preserve ETag revalidation |
 | Add integration test | `tests/integration/adt.integration.test.ts` |
 | Add BTP ABAP integration test | `tests/integration/btp-abap.integration.test.ts` |
 | Add BTP smoke test | `tests/integration/btp-abap.smoke.integration.test.ts` |

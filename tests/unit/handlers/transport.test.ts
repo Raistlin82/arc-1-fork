@@ -91,6 +91,36 @@ describe('SAPTransport + SAPWrite transport behavior', () => {
       expect(result.content[0]?.text).toContain('DEVK900001');
     });
 
+    it('release_recursive reports success when refreshed parent state resolves a failed report', async () => {
+      const draftXml = `<tm:root xmlns:tm="http://www.sap.com/cts/transports">
+        <tm:request tm:number="A4HK906307" tm:owner="DEV" tm:desc="Test" tm:status="D" tm:type="K"/>
+      </tm:root>`;
+      const releasedXml = draftXml.replace('tm:status="D"', 'tm:status="R"');
+      let parentReads = 0;
+      mockFetch.mockImplementation((url: unknown, init?: RequestInit) => {
+        const path = String(url);
+        if (path.includes('inactiveobjects')) return Promise.resolve(mockResponse(200, '', {}));
+        if (path.includes('newreleasejobs')) {
+          return Promise.resolve(mockResponse(200, loadFixture('transport-release-report-blocked.xml'), {}));
+        }
+        if (path.includes('/transportrequests/A4HK906307') && init?.method === 'GET') {
+          parentReads += 1;
+          return Promise.resolve(mockResponse(200, parentReads === 1 ? draftXml : releasedXml, {}));
+        }
+        return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
+      });
+
+      const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
+        action: 'release_recursive',
+        id: 'A4HK906307',
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Released (recursive): A4HK906307');
+      expect(result.content[0]?.text).toContain('refreshed request state confirmed status R');
+      expect(parentReads).toBe(2);
+    });
+
     // ─── Pre-release inactive-objects check (FEAT-63) ─────────────────
     // Rich inactive-objects shape (live-verified on a4h 758): object on task DEVK900002, whose
     // parent request is DEVK900001 → releasing DEVK900001 must be blocked.
@@ -495,8 +525,9 @@ describe('SAPTransport + SAPWrite transport behavior', () => {
         status: '*',
       });
       expect(result.isError).toBeUndefined();
-      const parsed = JSON.parse(result.content[0]?.text ?? '[]');
-      expect(parsed).toHaveLength(2);
+      const parsed = JSON.parse(result.content[0]?.text ?? '{}');
+      expect(parsed.total).toBe(2);
+      expect(parsed.transports).toHaveLength(2);
     });
 
     const LIST_WITH_OBJECTS_XML = `<tm:root xmlns:tm="http://www.sap.com/cts/transports">
@@ -515,7 +546,7 @@ describe('SAPTransport + SAPWrite transport behavior', () => {
         summary: true,
       });
       expect(result.isError).toBeUndefined();
-      const parsed = JSON.parse(result.content[0]!.text);
+      const parsed = JSON.parse(result.content[0]!.text).transports;
       expect(parsed).toHaveLength(1);
       expect(parsed[0].id).toBe('DEVK900001');
       expect(parsed[0].description).toBe('Feature X');
@@ -528,16 +559,51 @@ describe('SAPTransport + SAPWrite transport behavior', () => {
       expect(parsed[0].tasks[0].objects).toBeUndefined();
     });
 
-    it('list without summary keeps full object lists (default behaviour unchanged)', async () => {
+    it('list summary=false keeps full object lists (opt-in)', async () => {
       mockFetch.mockResolvedValue(mockResponse(200, LIST_WITH_OBJECTS_XML, { 'x-csrf-token': 'T' }));
       const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
         action: 'list',
+        summary: false,
       });
       expect(result.isError).toBeUndefined();
-      const parsed = JSON.parse(result.content[0]!.text);
+      const parsed = JSON.parse(result.content[0]!.text).transports;
       expect(parsed[0].tasks[0].objects).toHaveLength(2);
       expect(result.content[0]!.text).toContain('ZCL_A');
       expect(parsed[0].objectCount).toBeUndefined(); // count is summary-only
+    });
+
+    it('list caps at 50 by default and reports the true backlog total', async () => {
+      // 108 open requests measured at 97 KB (~24k tokens) live; the payload scales with the backlog.
+      const rows = Array.from(
+        { length: 120 },
+        (_, i) =>
+          `<tm:request tm:number="DEVK9${String(i).padStart(5, '0')}" tm:owner="admin" tm:desc="R${i}" tm:status="D" tm:type="K"/>`,
+      ).join('');
+      mockFetch.mockResolvedValue(
+        mockResponse(200, `<tm:root xmlns:tm="http://www.sap.com/cts/transports">${rows}</tm:root>`, {
+          'x-csrf-token': 'T',
+        }),
+      );
+      const result = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', { action: 'list' });
+      const parsed = JSON.parse(result.content[0]!.text);
+      expect(parsed.total).toBe(120);
+      expect(parsed.shown).toBe(50);
+      expect(parsed.truncated).toBe(true);
+      expect(parsed.transports).toHaveLength(50);
+      expect(parsed.hint).toContain('maxResults');
+
+      mockFetch.mockResolvedValue(
+        mockResponse(200, `<tm:root xmlns:tm="http://www.sap.com/cts/transports">${rows}</tm:root>`, {
+          'x-csrf-token': 'T',
+        }),
+      );
+      const capped = await handleToolCall(createTransportClient(), DEFAULT_CONFIG, 'SAPTransport', {
+        action: 'list',
+        maxResults: 3,
+      });
+      const parsedCapped = JSON.parse(capped.content[0]!.text);
+      expect(parsedCapped.transports).toHaveLength(3);
+      expect(parsedCapped.total).toBe(120);
     });
 
     it('history returns object transport data as JSON', async () => {

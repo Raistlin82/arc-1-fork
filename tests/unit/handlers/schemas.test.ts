@@ -66,7 +66,7 @@ describe('SAPReadSchema', () => {
   });
 
   it('SAPWrite accepts server-driven object types (create/update/delete — 816)', () => {
-    for (const t of ['DESD', 'DTSC', 'CSNM', 'EVTB', 'EVTO', 'COTA']) {
+    for (const t of ['DESD', 'DTSC', 'CSNM', 'EVTB', 'EVTO', 'COTA', 'DSFD', 'DTDC']) {
       expect(SAPWRITE_TYPES_ONPREM).toContain(t);
       expect(SAPWRITE_TYPES_BTP).toContain(t);
       expect(SAPWriteSchema.safeParse({ action: 'create', type: t, name: 'ZARC1_SDO', package: '$TMP' }).success).toBe(
@@ -414,12 +414,13 @@ describe('SAPReadSchemaBtp', () => {
     expect(SAPReadSchemaBtp.safeParse({ type: 'ENHO' }).success).toBe(false);
   });
 
-  it('does not have expand_includes field', () => {
+  it('rejects expand_includes — the field is on-prem only', () => {
+    // The schema is strict, so an on-prem-only field is reported rather than silently dropped.
     const result = SAPReadSchemaBtp.safeParse({ type: 'CLAS', expand_includes: true });
-    // Should succeed — extra keys are ignored by default in z.object
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect('expand_includes' in result.data).toBe(false);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.code).toBe('unrecognized_keys');
+      expect((result.error.issues[0] as { keys?: string[] }).keys).toContain('expand_includes');
     }
   });
 });
@@ -751,6 +752,33 @@ describe('SAPWriteSchema', () => {
       transport: 'DEVK900001',
     });
     expect(result.success).toBe(true);
+  });
+
+  it('exposes edit_unit only for on-prem PROG/INCL writes', () => {
+    const program = SAPWriteSchema.safeParse({
+      action: 'edit_unit',
+      type: 'PROG',
+      name: 'ZUNIT_TEST',
+      unit: 'PROCESS_ORDERS',
+      source: 'FORM process_orders.\nENDFORM.',
+    });
+    const include = SAPWriteSchema.safeParse({
+      action: 'edit_unit',
+      type: 'INCL',
+      name: 'ZUNIT_INCLUDE',
+      unit: 'STATUS_0100',
+      source: 'MODULE status_0100 OUTPUT.\nENDMODULE.',
+    });
+    const btp = SAPWriteSchemaBtp.safeParse({
+      action: 'edit_unit',
+      type: 'CLAS',
+      name: 'ZCL_TEST',
+      unit: 'PROCESS_ORDERS',
+      source: 'FORM process_orders.\nENDFORM.',
+    });
+    expect(program.success).toBe(true);
+    expect(include.success).toBe(true);
+    expect(btp.success).toBe(false);
   });
 
   it('accepts preflightBeforeWrite override', () => {
@@ -1285,14 +1313,21 @@ describe('SAPActivateSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('preserves the parent group for structural include activation', () => {
+    const result = SAPActivateSchema.safeParse({ name: 'LZARC1TOP', type: 'INCL', group: 'ZARC1' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.group).toBe('ZARC1');
+  });
+
   it('accepts batch activation', () => {
     const result = SAPActivateSchema.safeParse({
       objects: [
-        { type: 'DDLS', name: 'ZI_TRAVEL' },
+        { type: 'INCL', name: 'LZARC1TOP', group: 'ZARC1' },
         { type: 'BDEF', name: 'ZI_TRAVEL' },
       ],
     });
     expect(result.success).toBe(true);
+    if (result.success) expect(result.data.objects?.[0]?.group).toBe('ZARC1');
   });
 
   it('accepts empty input (all fields optional)', () => {
@@ -1374,6 +1409,24 @@ describe('SAPLintSchema', () => {
 });
 
 describe('SAPDiagnoseSchema', () => {
+  it('accepts authorization_trace filters without inverting stringified false', () => {
+    const result = SAPDiagnoseSchema.safeParse({
+      action: 'authorization_trace',
+      user: 'AUTH_TEST',
+      authObject: '',
+      onlyFailures: 'false',
+      maxResults: '5',
+      type: 'CLAS',
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.onlyFailures).toBe(false);
+      expect(result.data.maxResults).toBe(5);
+      expect(result.data.authObject).toBe('');
+    }
+  });
+
   it('accepts syntax check', () => {
     const result = SAPDiagnoseSchema.safeParse({ action: 'syntax', name: 'ZTEST', type: 'PROG' });
     expect(result.success).toBe(true);
@@ -1728,11 +1781,11 @@ describe('SAPContextSchemaBtp', () => {
     expect(siblingControls.success).toBe(true);
   });
 
-  it('does not have group field', () => {
+  it('rejects group — the field is on-prem only', () => {
     const result = SAPContextSchemaBtp.safeParse({ name: 'Z', group: 'TEST' });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect('group' in result.data).toBe(false);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.code).toBe('unrecognized_keys');
     }
   });
 });

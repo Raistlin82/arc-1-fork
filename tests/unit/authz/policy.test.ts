@@ -7,9 +7,17 @@ import {
   expandScopes,
   getActionPolicy,
   hasRequiredScope,
+  invocationPolicyKey,
 } from '../../../src/authz/policy.js';
 
 describe('ACTION_POLICY matrix', () => {
+  it('derives one canonical policy key for dispatch and multi-target preflight', () => {
+    expect(invocationPolicyKey('SAPRead', { type: 'table_contents' })).toBe('TABLE_CONTENTS');
+    expect(invocationPolicyKey('SAPSearch', { searchType: 'tadir_lookup', source: 'DB' })).toBe('tadir_lookup_db');
+    expect(invocationPolicyKey('SAPDiagnose', { action: 'atc' })).toBe('atc');
+    expect(invocationPolicyKey('SAPQuery', {})).toBeUndefined();
+  });
+
   it('includes tool-level defaults for every top-level tool', () => {
     const tools = [
       'SAPRead',
@@ -39,6 +47,12 @@ describe('ACTION_POLICY matrix', () => {
 
   it('SAPRead default (any other type) is read', () => {
     const policy = getActionPolicy('SAPRead', 'PROG');
+    expect(policy?.scope).toBe('read');
+    expect(policy?.opType).toBe(OperationType.Read);
+  });
+
+  it('SAPDiagnose.atc_variants requires only read scope', () => {
+    const policy = getActionPolicy('SAPDiagnose', 'atc_variants');
     expect(policy?.scope).toBe('read');
     expect(policy?.opType).toBe(OperationType.Read);
   });
@@ -121,6 +135,14 @@ describe('ACTION_POLICY matrix', () => {
     expect(policy?.opType).toBe(OperationType.Update);
     expect(hasRequiredScope(['read'], policy!.scope)).toBe(false);
     expect(hasRequiredScope(['read', 'write'], policy!.scope)).toBe(true);
+  });
+
+  it('SAPDiagnose.authorization_trace requires data scope', () => {
+    const policy = getActionPolicy('SAPDiagnose', 'authorization_trace');
+    expect(policy?.scope).toBe('data');
+    expect(policy?.opType).toBe(OperationType.Query);
+    expect(hasRequiredScope(['read'], policy!.scope)).toBe(false);
+    expect(hasRequiredScope(['read', 'data'], policy!.scope)).toBe(true);
   });
 
   it('hyperfocused mixed delegators are read-scoped; concrete sub-actions enforce mutations', () => {

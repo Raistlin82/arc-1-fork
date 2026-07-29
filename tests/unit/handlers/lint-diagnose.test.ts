@@ -878,6 +878,113 @@ ENDCLASS.`;
   });
 
   describe('SAPDiagnose runtime diagnostics', () => {
+    it('returns decoded authorization trace entries and wires filters', async () => {
+      const client = createClient();
+      const runTableQuery = vi
+        .spyOn(client, 'runTableQuery')
+        .mockResolvedValueOnce({
+          columns: [],
+          rows: [
+            {
+              USERNAME: 'AUTH_TEST',
+              NAME: '',
+              TYPE: 'TR',
+              OBJECT: 'S_TCODE',
+              RC: '12',
+              FIELD1: 'SU01',
+              ABAPPROG: 'LSUSEU11',
+              ABAPLINE: '53',
+              FIRSTCALL: '20260709211048',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({ columns: [], rows: [{ OBJCT: 'S_TCODE', FIEL1: 'TCD' }] });
+
+      const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'authorization_trace',
+        user: 'AUTH_TEST',
+        authObject: 'S_TCODE',
+        onlyFailures: true,
+        maxResults: 5,
+      });
+
+      expect(result.isError).toBeUndefined();
+      const payload = JSON.parse(result.content[0]!.text);
+      expect(payload.entries[0]).toMatchObject({
+        user: 'AUTH_TEST',
+        authObject: 'S_TCODE',
+        rc: 12,
+        fields: { TCD: 'SU01' },
+      });
+      expect(payload.traceState).toMatchObject({
+        status: 'unknown',
+        parameter: 'auth/auth_user_trace',
+      });
+      expect(payload.traceState.verify).toContain('RZ11');
+      expect(payload.traceState.activation).toBeUndefined();
+      expect(runTableQuery).toHaveBeenNthCalledWith(
+        1,
+        'SUAUTHVALTRC',
+        expect.objectContaining({
+          where: [
+            { field: 'USERNAME', op: '=', value: 'AUTH_TEST' },
+            { field: 'OBJECT', op: '=', value: 'S_TCODE' },
+            { field: 'RC', op: '<>', value: '0' },
+          ],
+        }),
+      );
+    });
+
+    it('returns a focused not-available hint when SUAUTHVALTRC is absent', async () => {
+      const client = createClient();
+      vi.spyOn(client, 'runTableQuery').mockRejectedValue(
+        new AdtApiError("Cannot find 'SUAUTHVALTRC'", 400, '/sap/bc/adt/datapreview/freestyle'),
+      );
+
+      const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'authorization_trace',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('Authorization trace not available on this system');
+      expect(result.content[0]?.text).toContain('Display Authorization Trace');
+      expect(result.content[0]?.text).toContain('SAP_ALLOW_DATA_PREVIEW');
+    });
+
+    it('does not mask SAP authorization failures as backend unavailability', async () => {
+      const client = createClient();
+      vi.spyOn(client, 'runTableQuery').mockRejectedValue(
+        new AdtApiError('Forbidden', 403, '/sap/bc/adt/datapreview/freestyle'),
+      );
+
+      const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'authorization_trace',
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain('status 403');
+      expect(result.content[0]?.text).not.toContain('Authorization trace not available on this system');
+    });
+
+    it('returns the trace-state hint when no authorization rows match', async () => {
+      const client = createClient();
+      vi.spyOn(client, 'runTableQuery').mockResolvedValue({ columns: [], rows: [] });
+
+      const result = await handleToolCall(client, DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'authorization_trace',
+        onlyFailures: true,
+      });
+
+      expect(result.isError).toBeUndefined();
+      const payload = JSON.parse(result.content[0]!.text);
+      expect(payload.count).toBe(0);
+      expect(payload.note).toContain('activation guidance');
+      expect(payload.note).toContain('widen the filters');
+      expect(payload.traceState.status).toBe('unknown');
+      expect(payload.traceState.warnings).toHaveLength(2);
+      expect(payload.traceState.activation.filteredSetup).toContain('STUSERTRACE');
+    });
+
     function mockDumpDetailResponses(formattedText?: string): void {
       const xml = `<?xml version="1.0"?>
 <dump:dump xmlns:dump="http://www.sap.com/adt/categories/dump" error="STRING_OFFSET_TOO_LARGE" author="DEVELOPER" exception="CX_SY_RANGE_OUT_OF_BOUNDS" terminatedProgram="SAPLSUSR_CERTRULE" datetime="2026-03-28T20:19:14Z">
@@ -1066,6 +1173,79 @@ ENDCLASS.`;
         expect(endEvent?.resultPreview).not.toContain('SECRET_DUMP_CONTENT_SHOULD_NOT_BE_LOGGED');
       } finally {
         auditSpy.mockRestore();
+      }
+    });
+  });
+
+  describe('SAPDiagnose action=atc_variants (FEAT-68)', () => {
+    const VARIANTS = `<?xml version="1.0" encoding="utf-8"?><nameditem:namedItemList xmlns:nameditem="http://www.sap.com/adt/nameditem"><nameditem:totalItemCount>2</nameditem:totalItemCount><nameditem:namedItem><nameditem:name>ABAP_CLOUD_DEVELOPMENT_DEFAULT</nameditem:name><nameditem:description>Cloud default</nameditem:description><nameditem:data/></nameditem:namedItem><nameditem:namedItem><nameditem:name>ZABAP_CLOUD_DEVELOPMENT</nameditem:name><nameditem:description/><nameditem:data/></nameditem:namedItem></nameditem:namedItemList>`;
+    const CUSTOMIZING = `<?xml version="1.0" encoding="utf-8"?><atc:customizing xmlns:atc="http://www.sap.com/adt/atc"><properties><property name="systemCheckVariant" value="ZABAP_CLOUD_DEVELOPMENT"/></properties></atc:customizing>`;
+
+    it('returns the system default + the filtered variant list', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL) => {
+        const u = String(url);
+        if (u.includes('/atc/customizing')) return Promise.resolve(mockResponse(200, CUSTOMIZING));
+        if (u.includes('/atc/variants')) return Promise.resolve(mockResponse(200, VARIANTS));
+        return Promise.resolve(mockResponse(404, 'not found'));
+      });
+
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', {
+        action: 'atc_variants',
+        variant: 'ABAP_CLOUD*',
+      });
+
+      expect(result.isError).toBeUndefined();
+      const payload = JSON.parse(result.content[0]?.text);
+      expect(payload.systemDefault).toBe('ZABAP_CLOUD_DEVELOPMENT');
+      expect(payload.filter).toBe('ABAP_CLOUD*');
+      expect(payload.count).toBe(2);
+      expect(payload.variants.map((v: { name: string }) => v.name)).toContain('ABAP_CLOUD_DEVELOPMENT_DEFAULT');
+
+      const urls = mockFetch.mock.calls.map((c) => String(c[0]));
+      expect(urls.some((u) => u.includes('/atc/variants?name=ABAP_CLOUD*'))).toBe(true);
+      expect(urls.some((u) => u.includes('/atc/customizing'))).toBe(true);
+    });
+
+    it('defaults the filter to all variants when none is given', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL) => {
+        const u = String(url);
+        if (u.includes('/atc/customizing')) return Promise.resolve(mockResponse(200, CUSTOMIZING));
+        return Promise.resolve(mockResponse(200, VARIANTS));
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', { action: 'atc_variants' });
+      const payload = JSON.parse(result.content[0]?.text);
+      expect(payload.filter).toBe('*');
+      const urls = mockFetch.mock.calls.map((c) => String(c[0]));
+      expect(urls.some((u) => u.includes('/atc/variants?name=*'))).toBe(true);
+    });
+
+    it('degrades to null default when /atc/customizing is absent (404) — list survives', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string | URL) => {
+        const u = String(url);
+        if (u.includes('/atc/customizing')) return Promise.resolve(mockResponse(404, 'not found'));
+        return Promise.resolve(mockResponse(200, VARIANTS));
+      });
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', { action: 'atc_variants' });
+      expect(result.isError).toBeUndefined();
+      const payload = JSON.parse(result.content[0]?.text);
+      expect(payload.systemDefault).toBeNull();
+      expect(payload.count).toBe(2);
+    });
+
+    it('does NOT silently succeed when /atc/customizing fails with 403/500 — the error surfaces', async () => {
+      for (const status of [403, 500]) {
+        mockFetch.mockReset();
+        mockFetch.mockImplementation((url: string | URL) => {
+          const u = String(url);
+          if (u.includes('/atc/customizing')) return Promise.resolve(mockResponse(status, 'boom'));
+          return Promise.resolve(mockResponse(200, VARIANTS));
+        });
+        const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPDiagnose', { action: 'atc_variants' });
+        // A real customizing failure (auth/5xx) must NOT masquerade as a successful null-default listing.
+        expect(result.isError).toBe(true);
       }
     });
   });

@@ -18,6 +18,12 @@ export interface AuditEventBase {
   requestId?: string;
   user?: string;
   clientId?: string;
+  /** Multi-destination mode: the BTP destination the request was bound to. */
+  destination?: string;
+  /** Public immutable SID/client identifier for a multi-target request. */
+  target?: string;
+  /** Effective SAP identity mode for a selected multi-target request. */
+  identity?: 'per-user' | 'shared';
 }
 
 /** MCP tool call started */
@@ -80,9 +86,30 @@ export interface AuthScopeDeniedEvent extends AuditEventBase {
 /** Per-user ADT client created via principal propagation */
 export interface AuthPPCreatedEvent extends AuditEventBase {
   event: 'auth_pp_created';
-  destination: string;
   success: boolean;
   errorMessage?: string;
+}
+
+/** Shared technical-user authentication succeeded after the Basic canary. */
+export interface AuthSharedCreatedEvent extends AuditEventBase {
+  event: 'auth_shared_created';
+  tool: string;
+  identity: 'shared';
+}
+
+/** Failure at a security-relevant multi-target stage. Successful calls use the normal terminal event only. */
+export interface MultiTargetStageFailedEvent extends AuditEventBase {
+  event:
+    | 'target_resolution_failed'
+    | 'pp_exchange_failed'
+    | 'shared_auth_failed'
+    | 'cloud_connector_access_denied'
+    | 'sap_service_unavailable'
+    | 'sap_authentication_failed'
+    | 'sap_authorization_failed'
+    | 'target_policy_denied';
+  tool: string;
+  errorCode: string;
 }
 
 /** Safety system blocked an operation */
@@ -100,21 +127,6 @@ export interface ServerStartEvent extends AuditEventBase {
   allowWrites: boolean;
   url: string;
   pid?: number;
-}
-
-/** Elicitation sent to client */
-export interface ElicitationSentEvent extends AuditEventBase {
-  event: 'elicitation_sent';
-  tool: string;
-  message: string;
-  fields?: string[];
-}
-
-/** Elicitation response from client */
-export interface ElicitationResponseEvent extends AuditEventBase {
-  event: 'elicitation_response';
-  tool: string;
-  action: string;
 }
 
 /** Two-phase activation preaudit handshake completed.
@@ -228,10 +240,10 @@ export type AuditEvent =
   | HttpCsrfFetchEvent
   | AuthScopeDeniedEvent
   | AuthPPCreatedEvent
+  | AuthSharedCreatedEvent
+  | MultiTargetStageFailedEvent
   | SafetyBlockedEvent
   | ServerStartEvent
-  | ElicitationSentEvent
-  | ElicitationResponseEvent
   | ActivationPreauditEvent
   | OAuthClientRegisteredEvent
   | OAuthClientLookupFailedEvent

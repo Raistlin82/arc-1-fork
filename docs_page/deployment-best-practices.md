@@ -2,7 +2,11 @@
 
 ## One Instance Per SAP System
 
-ARC-1 follows the **one instance per SAP backend** pattern. Each ARC-1 deployment connects to exactly one SAP system. This is the same model used by Eclipse ADT, SAP Business Application Studio, and SAP GUI.
+ARC-1 follows the **one instance per SAP backend** pattern by default. This is the recommended model
+for writes and for hard security/capacity isolation, and matches Eclipse ADT, SAP Business
+Application Studio, and SAP GUI. A separate [experimental multi-target mode](multi-target-setup.md)
+offers mutation-free access to many BTP subaccount destinations when application sprawl is the
+larger operational risk.
 
 ### Why one-per-system?
 
@@ -10,7 +14,7 @@ ARC-1 follows the **one instance per SAP backend** pattern. Each ARC-1 deploymen
 |---------|---------------|----------------------|
 | **Security** | Blast radius = one system | One breach = all systems |
 | **Auth** | Clean: one auth flow per instance | N destinations + N auth flows |
-| **Safety gates** | Per-system: `allowWrites`, `allowedPackages`, `denyActions` | Can't vary per backend |
+| **Safety gates** | Per-system: `allowWrites`, `allowedPackages`, `denyActions` | Multi-target writes are unavailable; data/SQL can narrow per destination but the instance remains the ceiling |
 | **Tool descriptions** | Tailored to system type (BTP vs on-premise) | Must be generic for all |
 | **Audit trail** | Clear per-system logs | Mixed across systems |
 | **Scaling** | Scale independently | Heavy-use system affects all |
@@ -99,6 +103,8 @@ MCP client config for developers:
 
 The LLM sees separate tool sets from each server and picks the right one.
 
+> **Name each direct-connect instance:** every ARC-1 advertises the server name `arc-1` in the MCP `initialize` handshake by default. Clients such as VS Code derive tool prefixes from that announced name and add numeric suffixes when several servers announce the same value. Set a unique [`ARC1_SERVER_NAME`](configuration-reference.md#server-runtime) per instance (`arc1-ecc-dev`, `arc1-ecc-prod`, …) in each `.mtaext` so the tool prefix identifies the target system. This is the direct-connect alternative to [native multi-target mode](multi-target-setup.md), which exposes pinned and aggregate routes from one ARC-1 deployment.
+
 ---
 
 ## System Type Detection
@@ -159,8 +165,8 @@ When `SAP_SYSTEM_TYPE=btp` is set, tool definitions are adapted at server startu
 
 | Target | Auth | Config |
 |--------|------|--------|
-| On-premise SAP (via Cloud Connector) | Principal Propagation | `SAP_BTP_DESTINATION`, `SAP_PP_ENABLED=true` |
-| BTP ABAP Environment | Destination `OAuth2UserTokenExchange` | `SAP_BTP_DESTINATION`, `SAP_PP_ENABLED=true`, `SAP_SYSTEM_TYPE=btp` |
+| On-premise SAP (via Cloud Connector) | Principal Propagation | `SAP_BTP_DESTINATION`, `SAP_PP_ENABLED=true`, `SAP_PP_STRICT=true` |
+| BTP ABAP Environment | Destination `OAuth2UserTokenExchange` | `SAP_BTP_DESTINATION`, `SAP_PP_ENABLED=true`, `SAP_PP_STRICT=true`, `SAP_SYSTEM_TYPE=btp` |
 
 ### Configuration examples
 
@@ -203,6 +209,7 @@ applications:
     env:
       SAP_BTP_DESTINATION: SAP_ECC_DEV
       SAP_PP_ENABLED: true
+      SAP_PP_STRICT: true
       SAP_TRANSPORT: http-streamable
       SAP_XSUAA_AUTH: true
 ```
@@ -214,7 +221,7 @@ applications:
 1. **Use `SAP_ALLOW_WRITES=false` for production systems** — prevents object, transport, and Git mutations
 2. **Use `SAP_ALLOW_FREE_SQL=false` for sensitive systems** — blocks arbitrary SQL queries
 3. **Use `SAP_ALLOWED_PACKAGES=Z*,Y*,$TMP`** — restricts write operations to custom code packages (default is `$TMP` only — local objects)
-4. **Use `SAP_PP_ENABLED=true` for per-user deployments** — JWT principal-propagation failures fail closed by default; set `SAP_PP_STRICT=true` explicitly only when API-key / non-JWT calls must also be rejected
+4. **Choose the PP/API-key identity topology explicitly** — separate strict PP and least-privileged API-key instances are recommended; supported mixed instances set `SAP_PP_STRICT=false`
 5. **Deploy separate instances per system** — limits blast radius
 6. **Use XSUAA auth for deployed instances** — proper OAuth 2.0 with scopes (read/write/data/sql/transports/git/admin)
 7. **Set `SAP_SYSTEM_TYPE`** explicitly in production — ensures correct tool definitions from startup
@@ -239,7 +246,7 @@ If you deploy ARC-1 behind a reverse proxy (nginx, Envoy, etc.) outside of Cloud
 
 | File | Purpose | Customize? |
 |------|---------|-----------|
-| `mta.yaml` | MTA build descriptor — services, conservative `SAP_ALLOW_*` defaults, **placeholder destinations**. Tracked. Ships `SAP_INSECURE: "false"`; prefer `NODE_EXTRA_CA_CERTS` for internal CAs over disabling verification. | Rarely — use `.mtaext` for overrides |
+| `mta.yaml` | MTA build descriptor — services, conservative `SAP_ALLOW_*` defaults, and no active/fake destination. Tracked. Ships `SAP_INSECURE: "false"`; prefer `NODE_EXTRA_CA_CERTS` for internal CAs over disabling verification. | Rarely — use `.mtaext` for overrides |
 | `mta-overrides.mtaext.example` | Tracked template documenting every overridable property. | No — copy it to `mta-overrides.mtaext` (gitignored) and edit that |
 | `mta-overrides.mtaext` (or any `mta-*.mtaext`) | Per-landscape MTA extension (real destinations, safety flags). **Gitignored.** | Yes — uncomment and set values for your environment |
 | `manifest.yml` | CF deployment manifest (on-premise via Cloud Connector) | Yes — change `SAP_URL`, destination name, safety flags |

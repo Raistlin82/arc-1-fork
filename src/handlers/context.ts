@@ -5,12 +5,13 @@
 
 import {
   buildSiblingExtensionFinding,
+  type CdsImpactDownstream,
   classifyCdsImpact,
   deriveSiblingStem,
   isSiblingNameMatch,
   type SiblingExtensionCandidate,
 } from '../adt/cds-impact.js';
-import type { AdtClient, SourceReadResult } from '../adt/client.js';
+import { type AdtClient, clampSearchResults, type SourceReadResult } from '../adt/client.js';
 import { findWhereUsed } from '../adt/codeintel.js';
 import { decodeKtdText } from '../adt/ddic-xml.js';
 import { AdtApiError, isNotFoundError } from '../adt/errors.js';
@@ -21,14 +22,51 @@ import { extractCdsDependencies } from '../context/cds-deps.js';
 import { compressCdsContext, compressContext } from '../context/compressor.js';
 import { logger } from '../server/logger.js';
 import { type CacheSecurityContext, contextCacheForDependencyPayloads } from './cache-security.js';
-import { cachedFeatures } from './feature-cache.js';
+import { getCachedFeatures } from './feature-cache.js';
 import { normalizeObjectType, objectUrlForType } from './object-types.js';
-import { errorResult, type ToolResult, textResult } from './shared.js';
+import { errorResult, type ToolResult, textResult, toolJson } from './shared.js';
+import { lookupLiveUsages, resolveWhereUsedUri } from './where-used.js';
 
 // ─── SAPContext Handler ───────────────────────────────────────────────
 
 const DEFAULT_SIBLING_MAX_CANDIDATES = 4;
 const HARD_MAX_SIBLING_MAX_CANDIDATES = 10;
+
+/** Per-bucket cap for action="impact". Applied per bucket, not across the whole result, so a
+ *  crowded `abapConsumers` cannot hide a single decisive `bdefs` entry. */
+const DEFAULT_IMPACT_BUCKET = 50;
+
+/** Bucket keys of CdsImpactDownstream (everything except `summary`). */
+const IMPACT_BUCKETS = [
+  'projectionViews',
+  'bdefs',
+  'serviceDefinitions',
+  'serviceBindings',
+  'accessControls',
+  'metadataExtensions',
+  'abapConsumers',
+  'tables',
+  'documentation',
+  'other',
+] as const;
+
+/** Slice every downstream bucket to `limit`, reporting which were cut. `summary` is untouched: it
+ *  is computed pre-slice and is what makes a capped answer honest about the real blast radius. */
+function boundImpactBuckets(
+  downstream: CdsImpactDownstream,
+  limit: number,
+): { boundedDownstream: CdsImpactDownstream; truncatedBuckets: string[] } {
+  const truncatedBuckets: string[] = [];
+  const boundedDownstream = { ...downstream };
+  for (const bucket of IMPACT_BUCKETS) {
+    const entries = downstream[bucket];
+    if (entries.length > limit) {
+      truncatedBuckets.push(`${bucket} (${entries.length})`);
+      boundedDownstream[bucket] = entries.slice(0, limit);
+    }
+  }
+  return { boundedDownstream, truncatedBuckets };
+}
 
 function parseSiblingMaxCandidates(value: unknown): number {
   const parsed = Number(value ?? DEFAULT_SIBLING_MAX_CANDIDATES);
@@ -56,36 +94,66 @@ export async function handleSAPContext(
   const maxDeps = Number.isFinite(rawMaxDeps) && rawMaxDeps >= 1 ? Math.min(Math.floor(rawMaxDeps), 100) : 20;
   const depth = Math.min(Math.max(Number(args.depth ?? 1), 1), 3);
 
-  // ─── Reverse dep lookup (pre-warmer only) ─────────────────────────
+  // ─── Live reverse dependency lookup ───────────────────────────────
   if (action === 'usages') {
     if (!name) return errorResult('"name" is required for usages action.');
-    if (cacheSecurity.isPerUserClient) {
-      return errorResult(
-        'SAPContext(action="usages") is disabled under principal propagation because it reads the shared warmup index. ' +
-          `Use SAPNavigate(action="references", type="${type || 'CLAS'}", name="${name}") for a live SAP-authorized lookup.`,
+
+    let resolvedUri: string | null;
+    let resolvedObject: { type: string; name: string; uri: string };
+
+    if (type) {
+      resolvedUri = await resolveWhereUsedUri(client, type, name);
+      if (!resolvedUri) {
+        return errorResult(
+          `Cannot resolve function group for "${name}". Provide the function's group or use SAPSearch to resolve the object.`,
+        );
+      }
+      resolvedObject = { type, name: name.toUpperCase(), uri: resolvedUri };
+    } else {
+      const lookup = await client.lookupObjects([name], { maxResults: 20 });
+      const exactMatches = (lookup[0]?.matches ?? []).filter(
+        (match) => match.objectName.toUpperCase() === name.toUpperCase() && match.uri.length > 0,
       );
+      const matches = [...new Map(exactMatches.map((match) => [match.uri, match])).values()];
+      if (matches.length === 0) {
+        return textResult(`No SAP repository object named "${name.toUpperCase()}" was found.`);
+      }
+      if (matches.length > 1) {
+        return errorResult(
+          toolJson({
+            error: `Object name "${name.toUpperCase()}" is ambiguous. Retry with type.`,
+            candidates: matches.slice(0, 20).map((match) => ({
+              type: normalizeObjectType(match.objectType),
+              name: match.objectName,
+              uri: match.uri,
+            })),
+          }),
+        );
+      }
+      const match = matches[0]!;
+      resolvedUri = match.uri;
+      resolvedObject = { type: normalizeObjectType(match.objectType), name: match.objectName, uri: match.uri };
     }
-    if (!cachingLayer) {
-      return errorResult(
-        'Reverse dependency lookup requires object caching. Cache is disabled (ARC1_CACHE=none). ' +
-          'Enable caching and run cache warmup to use this feature.',
-      );
-    }
-    const usages = cachingLayer.getUsages(name);
-    if (usages === null) {
-      return errorResult(
-        `Reverse dependency lookup requires a pre-warmed cache. The cache warmup has not been run yet.\n\n` +
-          `To enable this feature:\n` +
-          `1. Start ARC-1 with --cache-warmup (or set ARC1_CACHE_WARMUP=true)\n` +
-          `2. Wait for the warmup to complete (indexes all custom objects)\n` +
-          `3. Then retry SAPContext(action="usages", name="${name}")\n\n` +
-          `Alternative: Use SAPNavigate(action="references", type="CLAS", name="${name}") for a live ADT lookup (slower, but works without warmup).`,
-      );
-    }
-    if (usages.length === 0) {
-      return textResult(`No objects found that depend on "${name}" in the cached index.`);
-    }
-    return textResult(JSON.stringify({ name, usageCount: usages.length, usages }, null, 2));
+
+    const usageMax = args.maxResults === undefined ? undefined : Number(args.maxResults);
+    const lookup = await lookupLiveUsages(client, resolvedUri, undefined, usageMax);
+    return textResult(
+      toolJson({
+        name: name.toUpperCase(),
+        resolvedObject,
+        // usageCount is the TOTAL, not the page size — a truncated page must not under-report
+        // the blast radius of a change.
+        usageCount: lookup.total,
+        shown: lookup.results.length,
+        truncated: lookup.truncated,
+        ...(lookup.truncated
+          ? { hint: `Showing ${lookup.results.length} of ${lookup.total} usages. Raise maxResults (max 1000).` }
+          : {}),
+        usages: lookup.results,
+        source: 'live',
+        fallbackUsed: lookup.fallbackUsed,
+      }),
+    );
   }
 
   if (!type || !name) {
@@ -296,22 +364,37 @@ export async function handleSAPContext(
     const upstreamCount =
       upstream.tables.length + upstream.views.length + upstream.associations.length + upstream.compositions.length;
 
+    // Bound each downstream bucket. A widely-consumed base view has a huge blast radius, and this
+    // path classifies the FULL where-used tree. `downstream.summary` is computed before slicing, so
+    // the reported total/direct/indirect stay honest — a truncated bucket must never shrink the
+    // blast radius a caller sees.
+    const impactLimit = clampSearchResults(args.maxResults as number | undefined, DEFAULT_IMPACT_BUCKET);
+    const { boundedDownstream, truncatedBuckets } = boundImpactBuckets(downstream, impactLimit);
+
     const response = {
       name,
       type: 'DDLS',
       upstream,
-      downstream,
+      downstream: boundedDownstream,
       summary: {
         upstreamCount,
         downstreamTotal: downstream.summary.total,
         downstreamDirect: downstream.summary.direct,
       },
+      ...(truncatedBuckets.length > 0
+        ? {
+            truncatedBuckets,
+            hint:
+              `Bucket(s) ${truncatedBuckets.join(', ')} were capped at ${impactLimit} entries each; ` +
+              `summary counts remain complete. Raise maxResults (max 1000) to see more.`,
+          }
+        : {}),
       ...(consistencyHints.length > 0 ? { consistencyHints } : {}),
       ...(siblingExtensionAnalysis ? { siblingExtensionAnalysis } : {}),
       ...(warnings.length > 0 ? { warnings } : {}),
     };
 
-    return textResult(JSON.stringify(response, null, 2));
+    return textResult(toolJson(response));
   }
 
   if (action === 'structure') {
@@ -320,7 +403,7 @@ export async function handleSAPContext(
     }
 
     const result = await buildStructureHierarchy(client, name);
-    return textResult(JSON.stringify(result, null, 2));
+    return textResult(toolJson(result));
   }
 
   // Get source — either provided or fetched from SAP
@@ -408,9 +491,8 @@ export async function handleSAPContext(
   }
 
   // Use detected ABAP version from probe if available, otherwise Cloud (superset)
-  const abaplintVersion = cachedFeatures?.abapRelease
-    ? mapSapReleaseToAbaplintVersion(cachedFeatures.abapRelease)
-    : undefined;
+  const probedAbapRelease = getCachedFeatures()?.abapRelease;
+  const abaplintVersion = probedAbapRelease ? mapSapReleaseToAbaplintVersion(probedAbapRelease) : undefined;
 
   const result = await compressContext(
     client,

@@ -34,8 +34,8 @@ import {
   switchBranch as gctsSwitchBranch,
 } from '../adt/gcts.js';
 import { getActionPolicy } from '../authz/policy.js';
-import { cachedFeatures } from './feature-cache.js';
-import { errorResult, type ToolResult, textResult } from './shared.js';
+import { getCachedFeatures } from './feature-cache.js';
+import { errorResult, type ToolResult, textResult, toolJson } from './shared.js';
 
 // ─── SAPGit Handler ──────────────────────────────────────────────────
 
@@ -43,8 +43,8 @@ type SapGitBackend = 'gcts' | 'abapgit';
 
 function resolveSapGitBackend(args: Record<string, unknown>): { backend?: SapGitBackend; error?: string } {
   const forced = args.backend as SapGitBackend | undefined;
-  const hasGcts = Boolean(cachedFeatures?.gcts?.available);
-  const hasAbapGit = Boolean(cachedFeatures?.abapGit?.available);
+  const hasGcts = Boolean(getCachedFeatures()?.gcts?.available);
+  const hasAbapGit = Boolean(getCachedFeatures()?.abapGit?.available);
 
   if (!hasGcts && !hasAbapGit) {
     return {
@@ -292,5 +292,5 @@ export async function handleSAPGit(
   }
 
   const payload = backend === 'gcts' || backend === 'abapgit' ? { backend, result } : result;
-  return textResult(JSON.stringify(payload, null, 2));
+  return textResult(toolJson(payload));
 }

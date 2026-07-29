@@ -315,6 +315,7 @@ env:
   SAP_TRANSPORT: http-streamable
   SAP_XSUAA_AUTH: "true"      # MCP clients authenticate via XSUAA OAuth
   SAP_PP_ENABLED: "true"      # per-user principal propagation
+  SAP_PP_STRICT: "true"       # recommended: reject API-key/non-JWT tool calls
   SAP_BTP_DESTINATION: ABAP_PP
 services:
   - arc1-xsuaa
@@ -351,7 +352,7 @@ Assign each MCP user a role collection that grants the ARC-1 scopes they need (e
 |---|---|
 | `SAP_BTP_DESTINATION` | Destination name with `Authentication=OAuth2UserTokenExchange` |
 | `SAP_PP_ENABLED=true` / `--pp-enabled` | Enables ARC-1's per-user destination path |
-| `SAP_PP_STRICT=true` / `--pp-strict` | Optional JWT-only strict mode; rejects API-key / non-JWT calls as well as PP failures |
+| `SAP_PP_STRICT=true` / `--pp-strict` | Recommended strict topology; rejects API-key / non-JWT tool calls. Set explicit `false` to support PP and API keys in one instance, where API-key calls use the shared SAP identity. |
 | `SAP_XSUAA_AUTH=true` / `--xsuaa-auth` | MCP clients authenticate through XSUAA OAuth |
 | `SAP_SYSTEM_TYPE=btp` / `--system-type btp` | Expose the BTP-adapted tool definitions from startup |
 
@@ -389,7 +390,7 @@ Without this flag, ARC-1 auto-detects the system type on the first `SAPManage pr
 
 ## Writing objects on BTP
 
-Object create/update works on the ABAP Environment (live-verified: `CLAS create → activate → read → delete`). ARC-1 emits the **cloud-correct** create body automatically when the system type is `btp` — it drops the on-prem `adtcore:masterSystem`/`adtcore:responsible` and adds `abapLanguageVersion="cloudDevelopment"`; the object owner is taken from your JWT. The same cloud-correct body covers the **RAP stack — BDEF, SRVD and SRVB create is live-verified on the ABAP Environment** (they keep their existing content types; no extra handling needed). **SRVB (service binding) `update` is also supported** — it is a full metadata replace via the binding's v2 content type that merges your changes over the existing binding (so a description-only edit keeps the bound `serviceDefinition`); live-verified create → update → re-point SRVD → delete on the ABAP Environment. The **server-driven object types (DESD, DTSC, CSNM, EVTB, EVTO, COTA)** also create cleanly — their minimal `blue:blueSource` body carries no owner/system attributes by construction (live-verified on the ABAP Environment). Two prerequisites:
+Object create/update works on the ABAP Environment (live-verified: `CLAS create → activate → read → delete`). ARC-1 emits the **cloud-correct** create body automatically when the system type is `btp` — it drops the on-prem `adtcore:masterSystem`/`adtcore:responsible` and adds `abapLanguageVersion="cloudDevelopment"`; the object owner is taken from your JWT. The same cloud-correct body covers the **RAP stack — BDEF, SRVD and SRVB create is live-verified on the ABAP Environment** (they keep their existing content types; no extra handling needed). **SRVB (service binding) `update` is also supported** — it is a full metadata replace via the binding's v2 content type that merges your changes over the existing binding (so a description-only edit keeps the bound `serviceDefinition`); live-verified create → update → re-point SRVD → delete on the ABAP Environment. The **server-driven object types (DESD, DTSC, CSNM, EVTB, EVTO, COTA)** also create cleanly — their minimal `blue:blueSource` body carries no owner/system attributes by construction (live-verified on the ABAP Environment). `DSFD` (CDS Scalar Function Definition) and `DTDC` (CDS Dynamic Cache) are registered the same way and are `btp: true` by construction, but have only been live-verified on on-prem 758 + 816 — on the ABAP Environment they are discovery-gated like every other SDO type. (DTDC uses its own `<dtdc:dtdcSource>` metadata format, not `blue:blueSource`.) Two prerequisites:
 
 1. **Enable writes** — `SAP_ALLOW_WRITES=true`.
 2. **Target a real development package** — the booster-provided `ZLOCAL` is a *structure* package that cannot contain development objects, and `$TMP` does not exist on BTP. Create a development **sub-package under `ZLOCAL`** with ARC-1 (`SAPManage create_package` — see the note below) or ADT/Eclipse (e.g. `ZARC1_DEV`, software component `ZLOCAL`), then point the allowlist at it:
@@ -559,7 +560,7 @@ Auth and connectivity failures are expected with free-tier instances. Assertion 
 
 ### Cross-subaccount principal propagation fails
 
-**Symptom:** Tool calls fail with `Principal propagation failed (SAP_PP_STRICT=true): Destination Service auth token error … Token header claim [kid] references unknown signing key` (or `Unable to map issuer: No identity provider found for issuer …`). MCP login itself works; only the SAP call fails, and the audit log shows `auth_pp_created` with `success:false`.
+**Symptom:** Tool calls fail with `Principal propagation failed: Destination Service auth token error … Token header claim [kid] references unknown signing key` (or `Unable to map issuer: No identity provider found for issuer …`). MCP login itself works; only the SAP call fails, and the audit log shows `auth_pp_created` with `success:false`.
 
 **Cause:** ARC-1 (its XSUAA) and the ABAP Environment are in **different BTP subaccounts**. `OAuth2UserTokenExchange` exchanges the MCP user's token at the ABAP env's XSUAA, but XSUAA tokens are subaccount-scoped — the ABAP env's XSUAA does not trust a signing key issued by another subaccount.
 

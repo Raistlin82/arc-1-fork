@@ -15,7 +15,7 @@ The full grouped template with inline commentary is [`.env.example`](https://git
 3. [Authentication](#authentication) — Layer B (ARC-1 → SAP) and Layer A (MCP Client → ARC-1)
 4. [Authorization and safety](#authorization-and-safety) — what tool calls are allowed
 5. [Server runtime](#server-runtime) — transport, bind address, CORS, concurrency
-6. [Caching](#caching) — source cache, warmup
+6. [Caching](#caching) — request-driven source and dependency cache
 7. [Logging and observability](#logging-and-observability) — log file, level, format, HTTP debug
 8. [ABAP feature toggles](#abap-feature-toggles) — abapGit, gCTS, RAP, AMDP, UI5, HANA, FLP
 9. [Code-quality gates](#code-quality-gates) — pre-write lint/check, abaplint config, tool/schema mode
@@ -78,7 +78,7 @@ Pick one primary method. Combining methods that conflict (e.g. basic + cookies +
 
 | Flag | Env var | Effect |
 |---|---|---|
-| `--user` | `SAP_USER` | Username sent in `Authorization: Basic` on every ADT request. With `SAP_PP_ENABLED=true`, this becomes the *fallback* technical user used only when per-user PP is unavailable. |
+| `--user` | `SAP_USER` | Username sent in `Authorization: Basic` on shared-client ADT requests. With `SAP_PP_ENABLED=true`, API-key / non-JWT requests may still use this technical user unless `SAP_PP_STRICT=true` was set explicitly. A failed JWT PP request never falls back to this identity. |
 | `--password` | `SAP_PASSWORD` | Password for the above. Redacted from all logs. |
 
 #### B2. Cookie auth (dev-only SSO bridge)
@@ -105,16 +105,18 @@ Full reference: [btp-abap-environment.md](btp-abap-environment.md).
 | Env var | Effect |
 |---|---|
 | `SAP_BTP_DESTINATION` | Name of the BTP Destination ARC-1 reads to obtain SAP URL + auth details. For BasicAuth destinations this creates the shared technical client. For BTP ABAP `OAuth2UserTokenExchange` destinations, this can also be the per-user destination used when `SAP_PP_ENABLED=true`. Bypasses `SAP_URL` / `SAP_USER` / `SAP_PASSWORD` — those are ignored when a destination is set. |
-| `SAP_BTP_PP_DESTINATION` | Optional separate per-user destination name. Use this for on-premise `PrincipalPropagation` when shared startup traffic and per-user traffic must route via different destinations. If unset, ARC-1 falls back to `SAP_BTP_DESTINATION`. |
+| `SAP_BTP_PP_DESTINATION` | Optional separate per-user destination name. Use this for on-premise `PrincipalPropagation` when shared startup traffic and per-user traffic must route via different destinations. If unset, ARC-1 falls back to `SAP_BTP_DESTINATION`. Applies only to the single-target `/mcp` route. |
+| `ARC1_MULTI_TARGET_ENDPOINTS` | Experimental, default `false`. When `true`, discovers subaccount destinations marked `arc1.enabled=true` and exposes mutation-free `/<SID>/<CLIENT>/mcp` plus `/multi/mcp`. The aggregate-only `SAPTargets` tool gives readers a compact identity-labeled catalog when more than one target is active and gives admins secret-projected exception/status diagnostics at zero, one, many, or registry failure; there is no standalone HTTP catalog. Requires BTP CF XSUAA/Destination/Connectivity bindings, HTTP transport, `ARC1_CACHE=none`, standard tool mode, and UI/plugins/cookies off. PrincipalPropagation targets force strict per-user PP. It never assigns a discovered target to `/mcp`. See [Multi-System Setup](multi-target-setup.md). |
+| `ARC1_MULTI_TARGET_ALLOW_BASIC_AUTH` | Experimental, default `false`. Separate deployment ceiling permitting marked multi-target destinations with `Authentication=BasicAuthentication`. Such targets use one shared SAP technical identity for every scoped XSUAA caller, never serve as PP fallback, and require exactly one CF app instance in v1. Destination `User`/`Password` is resolved per request, omitted from all retained/output state, and may rotate without restart; other destination changes remain restart-bound. Prefer Principal Propagation whenever per-user SAP identity is required. |
 
-Full reference: [btp-destination-setup.md](btp-destination-setup.md).
+Full reference: [btp-destination-setup.md](btp-destination-setup.md) · [multi-target-setup.md](multi-target-setup.md).
 
 #### B5. Principal Propagation
 
 | Flag | Env var | Default | Effect |
 |---|---|---|---|
 | `--pp-enabled` | `SAP_PP_ENABLED` | `false` | Enables ARC-1's per-user destination path. For on-premise SAP this resolves a `PrincipalPropagation` destination through Connectivity Service and Cloud Connector. For BTP ABAP Environment this resolves an `OAuth2UserTokenExchange` destination and uses the returned ABAP bearer token. Without it, every SAP call uses the shared technical client. |
-| `--pp-strict` | `SAP_PP_STRICT` | `true` when PP is enabled | When JWT PP fails (token mapping missing, destination unavailable), the default is to return an error to the MCP caller — no shared-client fallback. Set explicitly to `false` only when you intentionally want fallback to the shared technical client. Set explicitly to `true` only when API-key / non-JWT requests should also be rejected. |
+| `--pp-strict` | `SAP_PP_STRICT` | `true` when PP is enabled | JWT PP failures always return an error and never change to the shared identity. Explicit `true` gives the recommended strict topology and rejects API-key / non-JWT tool calls. Explicit `false` enables supported mixed operation, in which API keys use the shared client; it never enables JWT fallback. Separate instances are recommended, not required. |
 | `--pp-allow-shared-cookies` | `SAP_PP_ALLOW_SHARED_COOKIES` | `false` | Escape hatch. Without it, setting `SAP_COOKIE_FILE`/`SAP_COOKIE_STRING` together with `SAP_PP_ENABLED=true` fails at startup (cookies belong to one user, PP wants per-user). With `true`, cookies stay on the shared client only and PP traffic runs cookie-free. |
 
 Full reference: [principal-propagation-setup.md](principal-propagation-setup.md).
@@ -229,12 +231,13 @@ How ARC-1 itself listens for MCP traffic.
 | Flag | Env var | Default | Effect |
 |---|---|---|---|
 | `--transport` | `SAP_TRANSPORT` | `stdio` | `stdio` (subprocess over stdin/stdout) or `http-streamable` (long-lived HTTP server). The Docker image overrides this to `http-streamable` by default. |
+| `--server-name` | `ARC1_SERVER_NAME` | `arc-1` | Server name advertised in the MCP `initialize` handshake. Give each direct-connect instance a unique name when running several ARC-1 instances so clients can derive a target-specific tool prefix without numeric collision suffixes. |
 | `--http-addr` | `ARC1_HTTP_ADDR` / `SAP_HTTP_ADDR` | `0.0.0.0:8080` | Bind address for HTTP streamable. Use `127.0.0.1:3000` to restrict to localhost. `SAP_HTTP_ADDR` is the legacy fallback name. |
 | `--port` | `ARC1_PORT` | `8080` | Simpler alternative when only the port needs to change. Wins over `ARC1_HTTP_ADDR`'s port if both are set. Valid range `1–65535`. |
 | `--ui[=MODE]` | `ARC1_UI` | `off` | Experimental read-only browser console. `off` disables it. `local` starts a loopback sidecar UI at `ARC1_UI_ADDR` for stdio/Claude-style local use. `web` mounts `/ui` and `/ui/api/*` on the HTTP server and requires an admin API key, OIDC, or XSUAA auth. `true` maps to `local` for stdio and `web` for HTTP. |
 | `--ui-addr` / `--ui-port` | `ARC1_UI_ADDR` / `ARC1_UI_PORT` | `127.0.0.1:8711` | Bind address for `ARC1_UI=local`. Local mode must stay on loopback; use `ARC1_UI=web` with `SAP_TRANSPORT=http-streamable` for Docker or CF exposure. |
 | `--ui-open` | `ARC1_UI_OPEN` | `false` | Opens the local sidecar UI in the system browser after startup. Intended for developer machines only. |
-| `--allowed-origins` | `ARC1_ALLOWED_ORIGINS` | (empty) | Comma-separated CORS allowlist for **browser-based** MCP clients. Exact match only (no wildcards — the response sets `Access-Control-Allow-Credentials: true`). Empty disables CORS entirely. Native clients (Claude Desktop / Cursor / VS Code Copilot / Copilot Studio) don't need this. See [security-guide.md §11](security-guide.md#11-network-security). |
+| `--allowed-origins` | `ARC1_ALLOWED_ORIGINS` | (empty) | Comma-separated CORS allowlist for **browser-based** MCP clients. Exact match only (no wildcards — the response sets `Access-Control-Allow-Credentials: true`). Preflight allows the MCP protocol headers (`mcp-session-id`, `mcp-protocol-version`, `last-event-id`). Empty disables CORS entirely. Native clients (Claude Desktop / Cursor / VS Code Copilot / Copilot Studio) don't need this. See [security-guide.md §11](security-guide.md#11-network-security). |
 | — | `ARC1_PUBLIC_URL` | (auto from `VCAP_APPLICATION`, else bind host:port) | Public URL ARC-1 advertises in OAuth metadata (issuer, `authorize`/`token`/`register`/`revoke` URLs, protected-resource metadata, `WWW-Authenticate` headers). Set this when ARC-1 is reached through a reverse proxy on a different hostname or under a base-path prefix — without it, MCP clients receive metadata pointing at the underlying host and bypass the proxy. Path prefix supported (e.g. `https://gateway.example.com/arc1`); the well-known endpoints are also served at that prefix. Trailing slash stripped. |
 | `--max-concurrent` | `ARC1_MAX_CONCURRENT` | `10` | Maximum concurrent in-flight SAP HTTP requests, **server-wide across all users** (not per-client). One shared `Semaphore` gates every `AdtClient`, including per-user PP clients. Honors `Retry-After` on `429`/`503` (clamped to 60 s, single retry). Size against `rdisp/wp_no_dia`. See [Rate Limiting Guide](rate-limiting.md). |
 
@@ -244,11 +247,15 @@ ARC-1 also sets standard browser security headers (HSTS, CSP, X-Frame-Options, C
 
 ### Rate limiting
 
-Two operator-facing knobs cover all three rate-limiting layers ARC-1 ships (the third layer reuses `ARC1_MAX_CONCURRENT` above). Per-endpoint OAuth ceilings are constants in code, not env, to keep the operator surface tiny. See the [Rate Limiting Guide](rate-limiting.md) for threat model, sizing math, and audit-event reference.
+Three rate-limit knobs cover the OAuth HTTP edge, MCP HTTP edge, and per-user MCP quota.
+`ARC1_MAX_CONCURRENT` above is the separate SAP-bound concurrency control. See the
+[Rate Limiting Guide](rate-limiting.md) for the threat model, sizing math, shared multi-target profile,
+and audit-event reference.
 
 | Flag | Env var | Default | Effect |
 |---|---|---|---|
-| `--auth-rate-limit` | `ARC1_AUTH_RATE_LIMIT` | `20` | **Layer 1.** Per-IP cap on OAuth endpoints (`/register`, `/authorize`, `/token`, `/revoke`) in requests per minute. `/mcp` gets `max(value × 30, 600)/min/IP` to absorb legitimate MCP batch traffic. On hit: HTTP `429` + `Retry-After` + RFC 9331 `RateLimit-*` headers + `auth_rate_limited` audit event. Set `0` to disable Layer 1 (use only behind a rate-limiting reverse proxy). |
+| `--auth-rate-limit` | `ARC1_AUTH_RATE_LIMIT` | `20` | **Layer 1 OAuth.** Per-IP cap on `/register`, `/authorize`, `/token`, `/revoke`, and callback requests per minute. When `ARC1_MCP_HTTP_RATE_LIMIT` is unset, the MCP cap remains derived as `max(value × 30, 600)`. Set `0` to disable OAuth limiting (use only behind a rate-limiting reverse proxy). |
+| — | `ARC1_MCP_HTTP_RATE_LIMIT` | unset (derived) | **Layer 1 MCP.** One process-wide per-IP cap shared by single-target, pinned, aggregate, and Copilot JSON-RPC `/authorize` traffic. Unset preserves `max(ARC1_AUTH_RATE_LIMIT × 30, 600)`; `0` explicitly disables this MCP-edge limiter; a positive integer replaces the derivation. |
 | `--rate-limit` | `ARC1_RATE_LIMIT` | `0` (disabled) | **Layer 2.** Per-user cap on MCP tool calls in requests per minute. Default is **off** — Layer 2 ships disabled and operators with multi-user deployments opt in by setting a positive value (typical: `60` = 1 req/sec sustained per user). User key walks `userName → email → sub → preferred_username → clientId → '__anon__'` (`resolveRateLimitUserKey()`). Stdio mode (no user identity) is exempt. On hit: MCP tool error `{error:'rate_limited',retryAfter,message}` + `mcp_rate_limited` audit event — **not** HTTP 429 (preserves the agent loop's retry semantics). |
 
 ---
@@ -259,13 +266,11 @@ ARC-1 caches SAP source/metadata with ETag revalidation on every hit. See [cachi
 
 | Flag | Env var | Default | Effect |
 |---|---|---|---|
-| `--cache` | `ARC1_CACHE` | `auto` | `auto` picks `sqlite` for HTTP transport and `memory` for stdio. `memory` = in-process only, lost on restart. `sqlite` = persistent across restarts, shared across processes that point at the same file. `none` = disable caching entirely (every read hits SAP). |
-| `--cache-file` | `ARC1_CACHE_FILE` | `.arc1-cache.db` | SQLite file path when `ARC1_CACHE=sqlite` (or `auto` → sqlite). Created on first use. |
-| `--cache-warmup` | `ARC1_CACHE_WARMUP` | `false` | When `true`, ARC-1 runs a TADIR scan on startup and bulk-fetches matching object sources into the cache. Speeds up first reads at the cost of a longer startup and more SAP load. |
-| `--cache-warmup-packages` | `ARC1_CACHE_WARMUP_PACKAGES` | (empty = all custom) | Comma-separated package filter for warmup (e.g. `Z*,Y*,/COMPANY/*`). Empty matches all custom packages found in TADIR. Ignored when `ARC1_CACHE_WARMUP=false`. |
+| `--cache` | `ARC1_CACHE` | `auto` | `auto` uses the in-process memory cache for every transport. `memory` = in-process only, lost on restart. `sqlite` = persistent across restarts, shared across processes that point at the same file, and explicit opt-in because it stores source bodies at rest. `none` = disable caching entirely (every read hits SAP). |
+| `--cache-file` | `ARC1_CACHE_FILE` | `.arc1-cache.db` | SQLite file path when `ARC1_CACHE=sqlite`. Created on first use. |
 
 !!! warning "`ARC1_CACHE=sqlite` stores SAP source in cleartext at rest"
-    The SQLite cache holds full ABAP source unencrypted at `.arc1-cache.db`. ARC-1 creates and repairs the cache DB and file audit sink (`ARC1_LOG_FILE`) with owner-only file permissions (`0600`), but this is not encryption. For IP-sensitive landscapes use `ARC1_CACHE=memory` or `none`, or place persistent files on an encrypted volume with restricted access.
+    The default `ARC1_CACHE=auto` mode does not create a SQLite cache file. If you explicitly set `ARC1_CACHE=sqlite`, the cache holds full ABAP source unencrypted at `.arc1-cache.db`. ARC-1 creates and repairs the cache DB and file audit sink (`ARC1_LOG_FILE`) with owner-only file permissions (`0600`), but this is not encryption. For IP-sensitive landscapes keep `ARC1_CACHE=auto`/`memory` or `none`, or place persistent files on an encrypted volume with restricted access.
 
 ---
 
@@ -278,7 +283,7 @@ All ARC-1 logging goes to **stderr** to keep stdout clean for MCP JSON-RPC. Neve
 | `--log-file` | `ARC1_LOG_FILE` | — | Path to an additional file sink. Stderr output is unchanged; the file gets the same stream. |
 | `--log-level` | `ARC1_LOG_LEVEL` | `info` | One of `debug` / `info` / `warn` / `error`. Filters every log line, including the audit stream's structured entries. |
 | `--log-format` | `ARC1_LOG_FORMAT` | `text` | `text` (human-readable) or `json` (one JSON object per line — for shipping to ELK / Loki / CF log aggregator). |
-| `--minimal-errors` | `ARC1_MINIMAL_ERRORS` | `false` | When `true`, client-facing tool errors hide SAP diagnostic details such as lock owners, transport IDs, T100 variables, and authorization object names. Server-side audit logs retain request correlation and status data; use SAP-native logs or a trusted admin retry for full diagnostics. |
+| `--minimal-errors` | `ARC1_MINIMAL_ERRORS` | `false` for stdio, `true` for HTTP | When `true`, client-facing tool errors hide SAP diagnostic details such as lock owners, transport IDs, T100 variables, and authorization object names. HTTP deployments default to minimal errors because they are commonly shared or remotely reachable; stdio keeps detailed local diagnostics. Server-side audit logs retain request correlation and status data; use SAP-native logs or a trusted admin retry for full diagnostics. Set `ARC1_MINIMAL_ERRORS=false` only for trusted debugging sessions. |
 | `--verbose` | `SAP_VERBOSE` | `false` | Alias for `--log-level=debug`. Slightly older flag, kept for compatibility. |
 | — | `ARC1_LOG_HTTP_DEBUG` | `false` | When `"true"`, captures HTTP request/response body fields and headers on `http_request` audit events. Sensitive headers (`Authorization`, `Cookie`, CSRF tokens) are redacted immediately; payload bodies are length-capped and centrally redacted before sink writes. **Do not enable in production** — it still increases log volume and records payload-size/timing metadata. **Boolean parsing inconsistency:** unlike other booleans, this one accepts only the literal string `"true"` — `"1"` does **not** work. |
 
