@@ -99,9 +99,11 @@ For every logical unit, in this order:
 1. Can SAP standard replace it with acceptable parity?
 2. Is the unit unused?
 3. Which extension use case and touchpoints remain?
-4. Does Key User extensibility fit?
-5. Run every required fact in `aem-model.json`: do on-stack or side-by-side signals dominate, or is
-   an explicit responsibility split required?
+4. Run every required fact in `aem-model.json`: `keyUserFit` and `releasedExtensionPoint` feed the
+   key-user branch, and the on-stack/side-by-side signals decide whether one dominates or an
+   explicit responsibility split is required.
+5. Does the AEM result select Key User extensibility? Key-user fit is an AEM outcome, never a
+   pre-AEM shortcut: evidenced side-by-side drivers block that branch rather than losing to it.
 6. What are the current level and all relevant API/extension-point release states?
 7. Can a released successor or released custom API reach A?
 8. If not, is an isolated wrapper allowed and governable?
