@@ -240,7 +240,7 @@ Terse routing only — full gotchas per row in [docs/dev-guide.md](docs/dev-guid
 | BTP auth / Destination Service | `src/adt/oauth.ts` (browser OAuth) + `src/server/server.ts` (`buildAdtConfig` per-user destination) + `@arc-mcp/xsuaa-auth` dep |
 | AFF schema / validation | `src/aff/schemas/` + `src/aff/validator.ts` / `src/handlers/write/create.ts` (create/batch_create paths) |
 | CI coverage / reliability reporting | `scripts/ci/coverage-summary.mjs`, `scripts/ci/collect-test-reliability.mjs`, `.github/workflows/test.yml` |
-| Agent skill / clean-core chain | `skills/<name>/SKILL.md` + `skills/README.md`; chain: `skills/sap-erp-clean-core-refactor/{chain.json,WORKFLOW.md,runtime/}` — instructional `SAPTool(...)` refs are CI-validated against `tests/fixtures/tool-definitions` (`check:skill-refs`); changing the tool surface can fail skill-docs CI |
+| Agent skill / clean-core chain | `skills/<name>/SKILL.md` + `skills/README.md`; chain: `skills/sap-erp-clean-core-refactor/{chain.json,WORKFLOW.md,runtime/}` — instructional `SAPTool(...)` refs are CI-validated against `tests/fixtures/tool-definitions` (`check:skill-refs`); changing the tool surface can fail skill-docs CI. A NEW tool action must also be either adopted by an `action-catalog.json` operation or classified in `scripts/ci/clean-core-tool-coverage.json`, else `check:clean-core-skills` fails |
 
 ## Architecture: Request Flow
 

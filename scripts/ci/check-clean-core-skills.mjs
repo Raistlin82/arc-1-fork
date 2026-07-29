@@ -27,6 +27,7 @@ const CURATED_GRAPH = join(
   'graphify-out',
   'graph.curated.json',
 );
+const TOOL_COVERAGE = join('scripts', 'ci', 'clean-core-tool-coverage.json');
 const DECISION_MATRIX = join(CLEAN_CORE_DIR, 'DECISION_MATRIX.md');
 const README = join(CLEAN_CORE_DIR, 'README.md');
 const WORKFLOW = join(CLEAN_CORE_DIR, 'WORKFLOW.md');
@@ -573,6 +574,61 @@ if (catalog) {
       if (String(operation.exampleArgs.name).toUpperCase() !== refName.toUpperCase()) {
         fail(`operation ${id} SKTD name must match refObjectName`);
       }
+    }
+  }
+}
+
+// Tool-surface coverage: every ARC-1 action is either used by a catalog operation or declared out of
+// scope with a reason. This is what makes an upstream release that adds a capability fail loudly
+// instead of leaving the chain quietly stale — and it fails on its own staleness too, so a pattern
+// that no longer matches anything cannot sit here pretending to document something.
+const coverage = existsSync(TOOL_COVERAGE) ? readJson(TOOL_COVERAGE) : undefined;
+if (!existsSync(TOOL_COVERAGE)) fail(`${TOOL_COVERAGE} is missing`);
+if (coverage && catalog) {
+  if (coverage.version !== 1) fail(`${TOOL_COVERAGE} version must be 1`);
+  const patterns = Object.entries(coverage.outOfScope ?? {});
+  if (!patterns.length) fail(`${TOOL_COVERAGE} needs outOfScope entries`);
+
+  const surface = new Map();
+  for (const file of readdirSync(TOOL_FIXTURES).filter((name) => name.endsWith('.json'))) {
+    for (const tool of readJson(join(TOOL_FIXTURES, file)) ?? []) {
+      const actions = tool.inputSchema?.properties?.action?.enum;
+      if (!Array.isArray(actions)) continue;
+      const known = surface.get(tool.name) ?? new Set();
+      for (const action of actions) known.add(action);
+      surface.set(tool.name, known);
+    }
+  }
+
+  const usedActions = new Set();
+  for (const operation of Object.values(catalog.operations ?? {})) {
+    if (operation.exampleArgs?.action) usedActions.add(`${operation.tool}.${operation.exampleArgs.action}`);
+  }
+
+  const matches = (pattern, key) =>
+    pattern.endsWith('*') ? key.startsWith(pattern.slice(0, -1)) : pattern === key;
+  const matchedPatterns = new Set();
+  for (const [tool, actions] of surface) {
+    for (const action of actions) {
+      const key = `${tool}.${action}`;
+      const pattern = patterns.find(([candidate]) => matches(candidate, key));
+      if (usedActions.has(key)) {
+        if (pattern) fail(`${TOOL_COVERAGE}: ${pattern[0]} declares ${key} out of scope, but the catalog uses it`);
+        continue;
+      }
+      if (!pattern) {
+        fail(
+          `${key} is neither used by an action-catalog operation nor declared in ${TOOL_COVERAGE} — adopt it or record why the chain skips it`,
+        );
+        continue;
+      }
+      matchedPatterns.add(pattern[0]);
+      if (!String(pattern[1] ?? '').trim()) fail(`${TOOL_COVERAGE}: ${pattern[0]} needs a reason`);
+    }
+  }
+  for (const [pattern] of patterns) {
+    if (!matchedPatterns.has(pattern)) {
+      fail(`${TOOL_COVERAGE}: ${pattern} matches no unused action on the current tool surface — remove it`);
     }
   }
 }
