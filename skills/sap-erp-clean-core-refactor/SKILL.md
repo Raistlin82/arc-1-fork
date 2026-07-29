@@ -72,8 +72,11 @@ target-domain decision. Do not default to BTP Cloud Foundry.
 - Delegate system discovery to `bootstrap-system-context` and transport conflicts to
   `sap-transport-overview`.
 - Confirm ARC-1 with `SAPManage(action="probe")`.
+- Enumerate the system's ATC check variants and its default with operation `atc_variants`; never
+  infer variant availability from an ATC run. Older releases without the endpoint fall back to
+  named variants verified by attempting the run, recorded as degraded evidence.
 - Record landscape, release, installed components, available ADT features, write ceiling, package
-  allowlist, transport policy, ATC variants and optional MCP/skill capabilities.
+  allowlist, transport policy, confirmed ATC variants and optional MCP/skill capabilities.
 - Load the smallest relevant evidence pack from
   `knowledge/clean-core-extensibility/decision-rules.json`. Use
   `npm run clean-core:query -- <terms>` during repository development.
@@ -166,8 +169,9 @@ the plan before execution.
 - `govern` reports Clean Core Share, Technical Debt Score, Unused Code Share and Business
   Modifications, plus ATC regression, wrapper successor watch, exception expiry, unused-code
   refresh and SAP API changelog review.
-- Use `ABAP_CLOUD_READINESS` for A assessment when available. Use a governed customer copy of
-  `ABAP_CLOUD_DEVELOPMENT_DEFAULT` for development/transport blocking. Record fallbacks.
+- Use `ABAP_CLOUD_READINESS` for A assessment once `atc_variants` confirmed it on this system. Use a
+  governed customer copy of `ABAP_CLOUD_DEVELOPMENT_DEFAULT` for development/transport blocking.
+  Record fallbacks.
 - Do not create exemptions for informational Level B findings. C/D exceptions must be explicit,
   finding-level, time-bound and owned.
 

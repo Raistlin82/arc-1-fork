@@ -45,7 +45,18 @@ touchpoints. This classifier does not infer deployment location from the level.
 ### 1. Establish live context
 
 1. Read the system context produced by `bootstrap-system-context`; refresh when stale.
-2. Record system release, edition/landscape, components and feature probes. ARC-1 cannot enumerate ATC check variants: record the variants the customer NAMES (assessment `ABAP_CLOUD_READINESS`, governed copy of `ABAP_CLOUD_DEVELOPMENT_DEFAULT`) and verify each by attempting the ATC run — a missing variant fails with an explicit SAP error, which is the availability evidence.
+2. Record system release, edition/landscape, components and feature probes. Enumerate the check
+   variants the system actually has — including its default — and confirm the assessment variant
+   (`ABAP_CLOUD_READINESS`) and the governed copy of `ABAP_CLOUD_DEVELOPMENT_DEFAULT` against that
+   list before running anything:
+
+   ```text
+   SAPDiagnose(action="atc_variants", variant="*")
+   ```
+
+   If the endpoint is absent (older releases answer with an ADT error), fall back to recording the
+   variants the customer NAMES and verifying each by attempting the ATC run — a missing variant
+   fails with an explicit SAP error, which is then the availability evidence.
 3. Discover an official SAP documentation MCP exact-object capability when exposed; record its
    namespace. Otherwise use official structured SAP release data.
 
@@ -61,7 +72,7 @@ touchpoints. This classifier does not infer deployment location from the level.
 
 ### 3. Run assessment ATC
 
-Use `ABAP_CLOUD_READINESS` when available:
+Use `ABAP_CLOUD_READINESS` once step 1 confirmed it exists on this system:
 
 ```text
 SAPDiagnose(action="atc", type="CLAS", name="ZCL_EXAMPLE", variant="ABAP_CLOUD_READINESS")

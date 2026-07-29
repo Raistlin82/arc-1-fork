@@ -193,10 +193,13 @@ Build **set U** with additional `LAST_SEEN` timestamp.
 For each object in S but not in U:
 
 ```
-SAPNavigate(action="references", type="<type>", name="<name>")
+SAPNavigate(action="references", type="<type>", name="<name>", maxResults=1000)
 ```
 
 (`references` is ARC-1's where-used action — it calls SAP's where-used scope API under the hood.)
+The response caps at 100 entries unless `maxResults` is passed; `total` counts every match before
+that cap. For set W membership only `total > 0` matters, so a truncated list still classifies the
+object correctly — but report `total`, never the shown count, whenever the number itself is used.
 
 Build **set W** (statically referenced objects — someone calls them in source, even if no one ran them in the observed window).
 
@@ -253,7 +256,7 @@ A LIKELY_UNUSED object whose callers are all UNUSED is transitively deletable. O
 
 ### 6d. Follow-up options
 
-- "Want to see the static reference graph as a tree?" (→ chained `SAPNavigate(action="references", type="<type>", name="<name>")` calls)
+- "Want to see the static reference graph as a tree?" (→ chained `SAPNavigate(action="references", type="<type>", name="<name>", maxResults=1000)` calls)
 - "Want to clean-core-check the USED objects before worrying about unused ones?" (→ [sap-clean-core-atc](../sap-clean-core-atc/SKILL.md))
 - "Want documentation for the USED objects?" (→ [sap-object-documenter](../sap-object-documenter/SKILL.md))
 - "Want to turn this into a reviewed S/4HANA migration dossier with HTML/CSV/graph outputs?" (→ [sap-migration-dossier](../sap-migration-dossier/SKILL.md))

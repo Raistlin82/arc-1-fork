@@ -149,7 +149,10 @@ Use live API state, ATC and official structured SAP data.
 Use when many consumers are non-A only because a stable customer-owned interface is not released.
 
 1. Read current release state and supported contracts.
-2. Measure fan-in and compatibility obligations.
+2. Measure fan-in and compatibility obligations. Take the count from the response's `total`, not from
+   the returned rows: `find_references` caps its list (100 by default, 1000 max), so a large consumer
+   base is truncated in the list while `total` still reports it. `truncated=true` means the consumer
+   inventory is incomplete — record the fan-in as degraded and do not claim a complete rewrite scope.
 3. Review naming, semantics, authorization, error behavior and lifecycle.
 4. Obtain API-owner approval.
 5. Release the appropriate live-supported contract.
@@ -292,16 +295,19 @@ whose affected sources cannot all be reviewed and validated.
 
 ## 11. ATC
 
-Use two purposes explicitly:
+Enumerate first, then use two purposes explicitly:
 
 | Purpose | Variant policy | Result |
 |---|---|---|
-| Assessment | `ABAP_CLOUD_READINESS` when available | Evidence for Level A readiness and successors |
+| Availability | `atc_variants` lists the system's variants and its default | Variant availability becomes live evidence, not an assumption |
+| Assessment | `ABAP_CLOUD_READINESS`, confirmed present | Evidence for Level A readiness and successors |
 | Development/transport gate | Governed customer copy of `ABAP_CLOUD_DEVELOPMENT_DEFAULT` | Block configured P1/P2 findings before release |
 
 The development variant should include Usage of APIs, Allowed SAP Enhancement Technologies,
 Critical Statements, modification search and optional security checks. Record any system-specific
-fallback and reduce confidence accordingly.
+fallback and reduce confidence accordingly. Do not probe availability by launching an ATC run when
+`atc_variants` can answer it directly; ATC also skips `$TMP`, so an empty result there proves
+nothing about the variant.
 
 ## 12. Governance
 
@@ -351,6 +357,10 @@ execution.
 Apply multipliers separately for criticality, fan-in, missing tests, release uncertainty, data
 volume, UI redesign, external integrations and regulatory/security scope. Never report a single
 point estimate without assumptions and confidence.
+
+The fan-in multiplier reads `total` from `find_references`, never the number of returned rows (see
+§6). An estimate built on a truncated consumer list understates exactly the units that need the most
+work, so a `truncated` fan-in lowers estimate confidence instead of silently sizing the unit.
 
 ## 14. Scenario checks
 

@@ -33,9 +33,9 @@ connection.
 | Landscape | system, components, feature probe | `system_probe`, `read_system` | Block target decision |
 | Inventory | package read, exact TADIR lookup, source read | `inventory_package`, `exact_tadir_lookup`, `read_source` | Block package plan |
 | Impact | dependencies and where-used | `read_dependencies`, `find_references` | Mark fan-in degraded; block destructive actions/API release |
-| Classification | ATC and API state | `atc_assessment`, `read_api_state` | `ResearchRequired` for affected unit |
+| Classification | ATC variants, ATC and API state | `atc_variants`, `atc_assessment`, `read_api_state` | `ResearchRequired` for affected unit |
 | Mechanical fixes | quickfix, lint, syntax | `quickfix_preview`, `quickfix_apply`, `lint_candidate`, `format_candidate`, `syntax_check` | Keep as proposal/manual remediation |
-| ABAP execution | update/create, activation, unit tests, diff | `write_update`, `batch_create_objects`, `activate_object`, `run_unit_tests`, `read_diff` | Plan remains read-only |
+| ABAP execution | update/create, unit surgery, activation, unit tests, diff | `write_update`, `edit_unit`, `batch_create_objects`, `activate_object`, `run_unit_tests`, `read_diff` | Plan remains read-only |
 | API governance | read/set release contract | `read_api_state`, `release_api` | No release action; redesign or research |
 | Wrapper | package, class, API release, package-attached SKTD | `create_wrapper_package`, `create_wrapper_class`, `release_api`, `write_governance_document` | Wrapper path blocked |
 | Retirement | references, delete | `find_references`, `delete_object` | No deletion |

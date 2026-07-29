@@ -121,7 +121,7 @@ Standard modifications:
 - treat every standard modification as SPAU-relevant effort
 
 Cross references:
-- prefer `SAPContext(action="deps", type="<type>", name="<name>")` and `SAPNavigate(action="references", type="<type>", name="<name>")`
+- prefer `SAPContext(action="deps", type="<type>", name="<name>")` and `SAPNavigate(action="references", type="<type>", name="<name>", maxResults=1000)`
 - `CROSS` and `WBCROSSGT` are optional fallback evidence and can be stale
 
 Usage:

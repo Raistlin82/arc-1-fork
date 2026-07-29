@@ -25,9 +25,9 @@ approved chain action may invoke ARC-1 writes.
 | System and landscape | `system_probe`, `read_system` |
 | Inventory | `inventory_package`, `exact_tadir_lookup`, `read_source` |
 | Dependencies and fan-in | `read_dependencies`, `find_references` |
-| Classification | `atc_assessment`, `read_api_state` |
+| Classification | `atc_variants`, `atc_assessment`, `read_api_state` |
 | Deterministic remediation | `quickfix_preview`, `quickfix_apply`, `lint_candidate`, `format_candidate`, `syntax_check` |
-| Source mutation | `write_update`, `edit_method`, `scaffold_rap_handlers`, `activate_object`, `activate_batch` |
+| Source mutation | `write_update`, `edit_method`, `edit_unit`, `scaffold_rap_handlers`, `activate_object`, `activate_batch` |
 | On-stack creation | `batch_create_objects`, `publish_service_binding` |
 | Wrapper | `create_wrapper_package`, `create_wrapper_class`, `release_api`, `read_governance_document`, `write_governance_document` |
 | Regression proof | `run_unit_tests`, `read_diff`, `atc_assessment` |
@@ -62,10 +62,18 @@ SAPRead(type="DEVC", name="ZPKG")
 SAPSearch(searchType="tadir_lookup", names=["ZCL_EXAMPLE"], source="adt", maxResults=20)
 SAPRead(type="CLAS", name="ZCL_EXAMPLE")
 SAPContext(action="deps", type="CLAS", name="ZCL_EXAMPLE", depth=1)
-SAPNavigate(action="references", type="CLAS", name="ZCL_EXAMPLE")
+SAPNavigate(action="references", type="CLAS", name="ZCL_EXAMPLE", maxResults=1000)
+SAPDiagnose(action="atc_variants", variant="*")
 SAPDiagnose(action="atc", type="CLAS", name="ZCL_EXAMPLE", variant="ABAP_CLOUD_READINESS")
 SAPRead(type="API_STATE", name="ZIF_EXAMPLE", objectType="INTF")
 ```
+
+`atc_variants` lists the variants this system actually has plus its default, so variant availability
+is live evidence in the pre-flight step — never a guess and never an ATC run used as a probe.
+
+`references` caps at 100 entries unless `maxResults` is passed (max 1000), and `total` counts every
+match before the cap. Fan-in is decision evidence for `release_api` and an effort multiplier, so
+record `total` and treat `truncated=true` as degraded fan-in evidence.
 
 ### Deterministic remediation
 
@@ -76,6 +84,7 @@ SAPLint(action="lint_and_fix", source="<candidate_source>", name="ZCL_EXAMPLE")
 SAPLint(action="format", source="<candidate_source>")
 SAPDiagnose(action="syntax", type="CLAS", name="ZCL_EXAMPLE", source="<candidate_source>")
 SAPWrite(action="update", type="CLAS", name="ZCL_EXAMPLE", source="<candidate_source>", transport="DEVK900001")
+SAPWrite(action="edit_unit", type="PROG", name="ZEXAMPLE", unit="check_authority", source="<candidate_form>", transport="DEVK900001")
 SAPActivate(action="activate", type="CLAS", name="ZCL_EXAMPLE")
 SAPDiagnose(action="unittest", type="CLAS", name="ZCL_EXAMPLE", coverage=true)
 SAPRead(action="diff", type="CLAS", name="ZCL_EXAMPLE", from="active", to="inactive")
@@ -88,7 +97,7 @@ Apply multi-object quick fixes only when every affected source and explicit appr
 
 ```text
 SAPRead(type="API_STATE", name="ZIF_EXAMPLE", objectType="INTF")
-SAPNavigate(action="references", type="INTF", name="ZIF_EXAMPLE")
+SAPNavigate(action="references", type="INTF", name="ZIF_EXAMPLE", maxResults=1000)
 SAPManage(action="set_api_state", name="ZIF_EXAMPLE", objectType="INTF", apiState="RELEASED", contract="C1", transport="DEVK900001")
 SAPDiagnose(action="atc", type="CLAS", name="ZCL_CONSUMER", variant="ABAP_CLOUD_READINESS")
 ```
@@ -120,9 +129,9 @@ exemptions; exemption approval/creation is a manual or separately exposed govern
 ### Retirement and transport
 
 ```text
-SAPNavigate(action="references", type="CLAS", name="ZCL_UNUSED")
-SAPWrite(action="delete", type="CLAS", name="ZCL_UNUSED", transport="DEVK900001")
+SAPNavigate(action="references", type="CLAS", name="ZCL_UNUSED", maxResults=1000)
 SAPTransport(action="check", type="CLAS", name="ZCL_UNUSED", package="ZPKG")
+SAPWrite(action="delete", type="CLAS", name="ZCL_UNUSED", transport="DEVK900001")
 SAPTransport(action="create", package="ZPKG", description="Clean Core remediation")
 SAPTransport(action="release_recursive", id="DEVK900001")
 ```

@@ -83,7 +83,7 @@ Per FM / method / report:
 - `SAPRead(type="FUNC", name="<fm>", group="<fugr>", includeSignature=true)` — I/O parameters + raising classes (FUNC reads require the enclosing function group).
 - Whole-group sweep: `SAPRead(type="FUGR", name="<fugr>", expand_includes=true)` — FM bodies live in nested `LZ*U01` includes; without the flag you get only the group shell.
 - `SAPRead(type="CLAS", name="<cls>", format="structured")` — public methods + types.
-- Caller fan-in: for `DDLS` roots use `SAPContext(action="impact", type="DDLS", name="<obj>")`; for `FUGR`, `PROG`, `CLAS`, and `FUNC` use `SAPNavigate(action="references", type="<type>", name="<obj>")` (or `SAPContext(action="usages", type="<type>", name="<obj>")` for a live reverse-dependency lookup — pass `type` to skip the extra name-resolution call).
+- Caller fan-in: for `DDLS` roots use `SAPContext(action="impact", type="DDLS", name="<obj>")`; for `FUGR`, `PROG`, `CLAS`, and `FUNC` use `SAPNavigate(action="references", type="<type>", name="<obj>", maxResults=1000)` (or `SAPContext(action="usages", type="<type>", name="<obj>")` for a live reverse-dependency lookup — pass `type` to skip the extra name-resolution call). References default to 100 results: read `total` for the real fan-in and treat `truncated=true` as degraded evidence.
 
 ### Step 3 — Decide service shape
 

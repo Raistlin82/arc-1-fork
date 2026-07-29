@@ -217,7 +217,7 @@ SAPContext(action="impact", type="DDLS", name="<found_view>")
 Use generic reverse dependencies only for non-DDLS objects:
 
 ```
-SAPNavigate(action="references", type="CLAS", name="<found_class>")
+SAPNavigate(action="references", type="CLAS", name="<found_class>", maxResults=1000)
 ```
 
 ### 1d. Code Guidelines & Quality Standards

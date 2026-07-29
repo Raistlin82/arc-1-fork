@@ -44,9 +44,9 @@ Use $sap-erp-clean-core-refactor on object CLAS ZCL_ORDER_APPROVAL in discover m
 Landscape auto, domain auto, no SAP writes.
 ```
 
-The discover result must identify the live landscape and release, ARC-1 capabilities, package and
-transport constraints, logical units, touchpoints, owners and missing evidence. Correct the scope or
-ownership before continuing.
+The discover result must identify the live landscape and release, ARC-1 capabilities, the system's
+ATC check variants and default, package and transport constraints, logical units, touchpoints, owners
+and missing evidence. Correct the scope or ownership before continuing.
 
 ### 2. Size the work without choosing targets
 
@@ -264,7 +264,8 @@ prerequisites.
 
 ## Plan sequence
 
-1. `bootstrap-system-context` captures release, system type, components and ADT capabilities.
+1. `bootstrap-system-context` captures release, system type, components and ADT capabilities;
+   operation `atc_variants` confirms which check variants and default this system really has.
 2. `sap-transport-overview` identifies open-request conflicts.
 3. ARC-1 inventory operations collect package contents and exact object metadata.
 4. The orchestrator clusters compilation/logical units and maps extension touchpoints.

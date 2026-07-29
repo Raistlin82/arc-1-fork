@@ -656,6 +656,12 @@ for (const file of walkMarkdown(SKILLS_DIR)) {
     if (call.tool === 'SAPRead' && /type\s*=\s*"VERSION_SOURCE"/.test(args) && !hasArg(args, 'versionUri')) {
       fail(`${loc}: VERSION_SOURCE missing versionUri`);
     }
+    // ARC-1 caps references at 100 by default and reports the real count in "total". Fan-in is
+    // decision evidence (CUSTOM_API_RELEASE) and an effort multiplier, so an implicit cap would
+    // silently truncate it.
+    if (call.tool === 'SAPNavigate' && /action\s*=\s*"references"/.test(args) && !hasArg(args, 'maxResults')) {
+      fail(`${loc}: SAPNavigate(references) must pass maxResults — the default caps at 100 and truncates fan-in evidence`);
+    }
   }
 }
 
