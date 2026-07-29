@@ -183,6 +183,77 @@ if (chain) {
     }
   }
 
+  // Gate-to-operation closure: a MUST gate whose executor is arc-1 needs the ARC-1 operation that
+  // can prove it, in a position where it actually can. syntax_clean must run before the first
+  // source-bearing write; transport_scoped before the first mutation; atc_no_regression and
+  // tests_green after the last source-bearing write, or they only prove the pre-change state.
+  // Operations that carry no ABAP source (create_wrapper_package) and proposal-only calls
+  // (quickfix_apply, scaffold_rap_handlers) are deliberately not source writes.
+  const SOURCE_WRITE_OPS = new Set([
+    'write_update',
+    'edit_method',
+    'edit_unit',
+    'batch_create_objects',
+    'create_wrapper_class',
+  ]);
+  const MUTATING_OPS = new Set([
+    ...SOURCE_WRITE_OPS,
+    'delete_object',
+    'create_wrapper_package',
+    'release_api',
+    'write_governance_document',
+  ]);
+  const GATE_OPERATIONS = {
+    syntax_clean: { operation: 'syntax_check', position: 'before_source_write' },
+    transport_scoped: { operation: 'transport_check', position: 'before_mutation' },
+    atc_no_regression: { operation: 'atc_assessment', position: 'after_source_write' },
+    tests_green: { operation: 'run_unit_tests', position: 'after_source_write' },
+  };
+  for (const [name, action] of Object.entries(actions)) {
+    const operations = action.operationIds ?? [];
+    if (!operations.length) continue;
+    const firstSourceWrite = operations.findIndex((operation) => SOURCE_WRITE_OPS.has(operation));
+    const firstMutation = operations.findIndex((operation) => MUTATING_OPS.has(operation));
+    let lastSourceWrite = -1;
+    operations.forEach((operation, index) => {
+      if (SOURCE_WRITE_OPS.has(operation)) lastSourceWrite = index;
+    });
+    for (const [gate, { operation, position }] of Object.entries(GATE_OPERATIONS)) {
+      if (!action.gates?.includes(gate)) continue;
+      const at = operations.flatMap((candidate, index) => (candidate === operation ? [index] : []));
+      if (!at.length) {
+        fail(`action ${name} requires gate ${gate} but never runs ${operation}`);
+        continue;
+      }
+      if (position === 'before_source_write' && firstSourceWrite >= 0 && !at.some((index) => index < firstSourceWrite)) {
+        fail(`action ${name}: ${operation} must run before ${operations[firstSourceWrite]} to satisfy ${gate}`);
+      }
+      if (position === 'before_mutation' && firstMutation >= 0 && !at.some((index) => index < firstMutation)) {
+        fail(`action ${name}: ${operation} must run before ${operations[firstMutation]} to satisfy ${gate}`);
+      }
+      if (position === 'after_source_write' && lastSourceWrite >= 0 && !at.some((index) => index > lastSourceWrite)) {
+        fail(`action ${name}: ${operation} must run after ${operations[lastSourceWrite]} to satisfy ${gate}`);
+      }
+    }
+  }
+
+  // Catalog closure: an operation no action runs rots silently. Session-scope operations are driven
+  // by the protocol (SKILL.md pre-flight, operator transport handling), not by a per-unit action.
+  const SESSION_SCOPE_OPERATIONS = new Set([
+    'system_probe',
+    'read_system',
+    'atc_variants',
+    'format_candidate',
+    'transport_create',
+    'transport_release',
+  ]);
+  const operationsUsedByActions = new Set(Object.values(actions).flatMap((action) => action.operationIds ?? []));
+  for (const operation of operationNames) {
+    if (!operationsUsedByActions.has(operation) && !SESSION_SCOPE_OPERATIONS.has(operation)) {
+      fail(`operation ${operation} is used by no action — wire it into an action or declare it session-scope`);
+    }
+  }
+
   for (const decision of decisions) {
     if (!decision.id) fail('decision without id in chain.json');
     if (!Number.isInteger(decision.precedence)) fail(`decision ${decision.id} needs integer precedence`);

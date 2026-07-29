@@ -188,7 +188,7 @@
       "execution": "hybrid",
       "localSkills": ["sap-object-documenter"],
       "gates": ["standard_gap_proven", "owner_approved", "parity_approved", "transport_scoped"],
-      "operationIds": ["read_source", "find_references", "delete_object", "transport_check"]
+      "operationIds": ["read_source", "find_references", "transport_check", "delete_object"]
     },
     "replace_with_key_user_extensibility": {
       "execution": "manual_handoff",
@@ -200,7 +200,7 @@
       "execution": "arc1_guarded",
       "localSkills": ["setup-abap-mirror", "sap-object-documenter", "generate-abap-unit-test", "generate-cds-unit-test", "debug-slow-sql", "convert-ui5-to-fiori-elements"],
       "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "abap_cloud_target_proven", "transport_scoped", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
-      "operationIds": ["read_source", "read_dependencies", "write_update", "activate_object", "atc_assessment", "run_unit_tests", "read_diff"]
+      "operationIds": ["read_source", "read_dependencies", "transport_check", "lint_candidate", "syntax_check", "write_update", "edit_unit", "activate_object", "atc_assessment", "run_unit_tests", "read_diff"]
     },
     "rewrite_side_by_side_btp_abap": {
       "execution": "arc1_target_guarded",
@@ -213,7 +213,7 @@
         "accept": ["parity_approved"],
         "retire": ["source_retirement_proven"]
       },
-      "operationIds": ["read_source", "read_dependencies", "read_api_state", "batch_create_objects", "activate_batch", "publish_service_binding", "write_update", "activate_object", "atc_assessment", "run_unit_tests", "read_diff"]
+      "operationIds": ["read_source", "read_dependencies", "read_api_state", "transport_check", "lint_candidate", "syntax_check", "batch_create_objects", "activate_batch", "publish_service_binding", "write_update", "activate_object", "atc_assessment", "run_unit_tests", "read_diff"]
     },
     "keep_at_level_b": {
       "execution": "documented_exception",
@@ -225,13 +225,13 @@
       "execution": "arc1_guarded",
       "localSkills": [],
       "gates": ["plan_approved", "owner_approved", "transport_scoped", "atc_no_regression"],
-      "operationIds": ["read_api_state", "find_references", "release_api", "atc_assessment"]
+      "operationIds": ["read_api_state", "find_references", "transport_check", "release_api", "atc_assessment"]
     },
     "create_or_use_wrapper": {
       "execution": "arc1_guarded_composite",
       "localSkills": ["setup-abap-mirror", "sap-object-documenter", "generate-abap-unit-test"],
       "gates": ["plan_approved", "aem_recorded", "wrapper_isolated", "wrapper_exception_governed", "owner_approved", "transport_scoped", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
-      "operationIds": ["read_api_state", "find_references", "create_wrapper_package", "create_wrapper_class", "activate_object", "release_api", "write_update", "atc_assessment", "run_unit_tests", "write_governance_document"]
+      "operationIds": ["read_api_state", "find_references", "transport_check", "create_wrapper_package", "lint_candidate", "syntax_check", "create_wrapper_class", "activate_object", "release_api", "write_update", "atc_assessment", "run_unit_tests", "write_governance_document"]
     },
     "extract_to_side_by_side_cf": {
       "execution": "delegated_guarded",
@@ -322,7 +322,7 @@
       "execution": "arc1_guarded",
       "localSkills": ["sap-unused-code"],
       "gates": ["unused_proven", "owner_approved", "transport_scoped"],
-      "operationIds": ["find_references", "delete_object", "transport_check"]
+      "operationIds": ["find_references", "transport_check", "delete_object"]
     },
     "research_required": {
       "execution": "read_only",
@@ -334,31 +334,31 @@
       "execution": "arc1_guarded",
       "localSkills": ["migrate-custom-code"],
       "gates": ["plan_approved", "transport_scoped", "syntax_clean", "atc_no_regression", "tests_green"],
-      "operationIds": ["atc_assessment", "quickfix_preview", "quickfix_apply", "syntax_check", "write_update", "activate_object", "run_unit_tests"]
+      "operationIds": ["atc_assessment", "quickfix_preview", "quickfix_apply", "transport_check", "syntax_check", "write_update", "activate_object", "run_unit_tests", "atc_assessment"]
     },
     "migrate_segw_to_rap": {
       "execution": "delegated_guarded",
       "localSkills": ["migrate-segw-to-rap"],
       "gates": ["plan_approved", "released_touchpoints", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
-      "operationIds": ["read_source", "batch_create_objects", "activate_batch", "publish_service_binding", "atc_assessment"]
+      "operationIds": ["read_source", "syntax_check", "batch_create_objects", "activate_batch", "publish_service_binding", "atc_assessment", "run_unit_tests"]
     },
     "analytical_embedded": {
       "execution": "delegated_guarded",
       "localSkills": ["generate-analytics-star-schema", "generate-cds-analytical-query"],
       "gates": ["plan_approved", "syntax_clean", "atc_no_regression", "generative_diff_approved"],
-      "operationIds": ["batch_create_objects", "activate_batch", "atc_assessment"]
+      "operationIds": ["syntax_check", "batch_create_objects", "activate_batch", "atc_assessment"]
     },
     "rap_logic": {
       "execution": "delegated_guarded",
       "localSkills": ["generate-rap-logic"],
       "gates": ["plan_approved", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
-      "operationIds": ["scaffold_rap_handlers", "edit_method", "batch_create_objects", "activate_object", "atc_assessment", "run_unit_tests"]
+      "operationIds": ["scaffold_rap_handlers", "syntax_check", "edit_method", "batch_create_objects", "activate_object", "atc_assessment", "run_unit_tests"]
     },
     "rap_full_stack_researched": {
       "execution": "delegated_guarded",
       "localSkills": ["generate-rap-service-researched"],
       "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
-      "operationIds": ["batch_create_objects", "activate_batch", "publish_service_binding", "atc_assessment", "run_unit_tests"]
+      "operationIds": ["syntax_check", "batch_create_objects", "activate_batch", "publish_service_binding", "atc_assessment", "run_unit_tests"]
     },
     "greenfield_rap_may": {
       "execution": "may_only",

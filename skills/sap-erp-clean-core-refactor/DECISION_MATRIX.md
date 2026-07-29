@@ -88,6 +88,17 @@ Primary actions are shown in the decision rows. Specialized dispatches remain ex
   (an explicit operator prototype request with `owner_approved`).
 - **Every condition fact is documented** in `chain.json` `decisionFactCatalog` (type, allowed
   values, and which step or skill collects it); CI fails on an undocumented fact.
+- **`operationIds` is an ordered sequence, and its order carries the gates**: `syntax_check` and
+  `transport_check` precede the first write that carries ABAP source, while `atc_assessment` and
+  `run_unit_tests` follow the last one — an ATC run before the change proves the old state, not the
+  absence of regression. `migrate_custom_code` therefore lists `atc_assessment` twice: once to find
+  the findings, once to prove no regression. CI enforces this against each action's MUST gates.
+- **`write_update` and `edit_unit` are alternatives, not steps**: whole-source replacement versus
+  replacing a single FORM or MODULE in a PROG/INCL. Pick per object type; procedural units prefer
+  `edit_unit` so the rest of the report is untouched.
+- **`create_wrapper_package` and `scaffold_rap_handlers` are not source writes**: the first creates a
+  package, the second (with `autoApply=false`) returns skeletons. The syntax gate applies to the call
+  that carries source — `create_wrapper_class` and `edit_method` respectively.
 
 ## Non-negotiable evidence
 
