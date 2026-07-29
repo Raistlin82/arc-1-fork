@@ -91,11 +91,16 @@ Use operation IDs from [`action-catalog.json`](./action-catalog.json):
 | Question | Operations |
 |---|---|
 | What system and release is this? | `system_probe`, `read_system` |
+| Which ATC check variants does it actually have? | `atc_variants` (never inferred from an ATC run) |
 | What custom code exists? | `inventory_package`, `exact_tadir_lookup`, `read_source` |
-| Who depends on it? | `read_dependencies`, `find_references` |
+| Who depends on it? | `read_dependencies`, `find_references`, `read_usages`, `read_impact` (for CDS blast radius) |
 | What is the current Clean Core evidence? | `atc_assessment`, `read_api_state` |
 | Did remediation work? | `syntax_check`, `activate_object`, `atc_assessment`, `run_unit_tests`, `read_diff` |
 | Is deletion/release safe? | `find_references`, `transport_check` |
+
+Fan-in counts come from the response's `total` (`usageCount`/`summary` for `read_usages`/`read_impact`),
+never from the returned rows: these operations page, and a capped list understates the blast radius.
+`truncated=true` makes the fan-in degraded evidence.
 
 ARC-1 ATC cannot by itself prove business suitability, standard parity, Key User fit or target
 architecture. Those require the AEM evidence pack and owner decisions.

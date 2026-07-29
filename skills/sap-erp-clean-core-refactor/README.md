@@ -132,7 +132,12 @@ npm run --silent clean-core:resolve -- --facts /path/to/facts.json
 ```
 
 The first check validates the chain contract, local skill coverage, knowledge rules, operation IDs
-and every canonical operation payload against the frozen ARC-1 schemas. The second rejects stale or
-invented tool names, actions and object types across all skill documentation. The resolver derives
-the AEM domain, applies decision precedence, expands nested dispatches and reports every pending
-MUST gate; it never performs SAP writes.
+and every canonical operation payload against the frozen ARC-1 schemas. It also enforces two
+closures that keep the contract executable: each MUST gate must have the ARC-1 operation that can
+prove it, positioned where it can (syntax and transport checks before the first write that carries
+source, ATC and tests after the last one), and every ARC-1 action must be either used by an
+operation or classified in `scripts/ci/clean-core-tool-coverage.json` — so a new capability in an
+upstream release forces a deliberate adopt-or-skip decision instead of leaving the chain stale. The
+second check rejects stale or invented tool names, actions and object types across all skill
+documentation. The resolver derives the AEM domain, applies decision precedence, expands nested
+dispatches and reports every pending MUST gate; it never performs SAP writes.

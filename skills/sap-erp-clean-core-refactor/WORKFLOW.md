@@ -316,7 +316,8 @@ ownership accidentally.
 ```mermaid
 flowchart LR
     A["Approved unit"] --> B["Mirror and as-found documentation"]
-    B --> C{"Deterministic findings?"}
+    B --> T["Transport scope check"]
+    T --> C{"Deterministic findings?"}
     C -->|Yes| D["migrate-custom-code"]
     C -->|No| E["Action executor"]
     D --> E
@@ -387,6 +388,10 @@ uncontrolled commits/rollbacks or an API whose semantics cannot be stabilized.
 
 - The plan records business need, landscape, target domain and source evidence.
 - The selected action exists in `chain.json` and all operation IDs exist in `action-catalog.json`.
+- The ATC variants in use were confirmed with `atc_variants`, not assumed or probed with a full run.
+- Fan-in figures come from `total` (`usageCount`/`summary` for usages/impact); a `truncated` result is
+  recorded as degraded evidence rather than reported as a complete consumer list.
+- The transport scope was checked before the first write, not after it.
 - Manual Key User branches contain owner, implementation app/tool and acceptance criteria.
 - Every write is inside ARC-1 package, transport and authorization gates.
 - Every generated diff has explicit approval.

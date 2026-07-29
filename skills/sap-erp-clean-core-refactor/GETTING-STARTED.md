@@ -165,10 +165,11 @@ Push only ORDER_APPROVAL and ORDER_LEGACY_API, using transport DEVK900123.
 Stop after each unit and show me the diff before writing.
 ```
 
-For each unit the skill: takes a safety snapshot of the current code → generates the new version →
-checks syntax → **shows you the exact diff and waits for your yes** → writes through ARC-1 →
-activates → runs ATC and unit tests → re-checks the cleanliness level. If any check fails, that unit
-stops and the next one does **not** start. You are never more than one approval away from control.
+For each unit the skill: takes a safety snapshot of the current code → confirms which transport the
+change will land in → generates the new version → lints it and checks syntax **without saving it** →
+**shows you the exact diff and waits for your yes** → writes through ARC-1 → activates → runs ATC and
+unit tests → re-checks the cleanliness level. If any check fails, that unit stops and the next one
+does **not** start. You are never more than one approval away from control.
 
 ---
 

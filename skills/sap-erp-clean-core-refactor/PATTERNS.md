@@ -210,14 +210,18 @@ Execution sequence:
 
 1. Mirror source and capture active versions.
 2. Establish behavior tests where feasible.
-3. Delegate deterministic findings to `migrate-custom-code`.
-4. Design against released APIs/extension points and release-supported ABAP syntax.
-5. Generate a candidate without persisting it.
-6. Lint, format and run SAP syntax checks.
-7. Present the concrete diff for approval.
-8. Write and activate through ARC-1.
-9. Run ATC and applicable unit/CDS/RAP tests.
-10. Reclassify the logical unit and update the plan.
+3. Confirm the transport scope with `transport_check` before anything mutates — the write operations
+   already take the transport, so discovering the route afterwards proves nothing.
+4. Delegate deterministic findings to `migrate-custom-code`.
+5. Design against released APIs/extension points and release-supported ABAP syntax.
+6. Generate a candidate without persisting it.
+7. Lint, format and run SAP syntax checks on the candidate (`lint_candidate`, `syntax_check`).
+8. Present the concrete diff for approval.
+9. Write and activate through ARC-1 (`write_update` for a whole source, `edit_unit` for a single
+   FORM/MODULE in a PROG/INCL, `edit_method` for one class method).
+10. Run ATC and applicable unit/CDS/RAP tests, then compare against the captured baseline
+    (`read_diff`).
+11. Reclassify the logical unit and update the plan.
 
 Specialized dispatches are chosen only after the architecture action:
 

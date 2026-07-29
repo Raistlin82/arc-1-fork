@@ -32,7 +32,7 @@ connection.
 |---|---|---|---|
 | Landscape | system, components, feature probe | `system_probe`, `read_system` | Block target decision |
 | Inventory | package read, exact TADIR lookup, source read | `inventory_package`, `exact_tadir_lookup`, `read_source` | Block package plan |
-| Impact | dependencies and where-used | `read_dependencies`, `find_references` | Mark fan-in degraded; block destructive actions/API release |
+| Impact | dependencies, where-used, live usages, CDS blast radius | `read_dependencies`, `find_references`, `read_usages`, `read_impact` | Mark fan-in degraded; block destructive actions/API release |
 | Classification | ATC variants, ATC and API state | `atc_variants`, `atc_assessment`, `read_api_state` | `ResearchRequired` for affected unit |
 | Mechanical fixes | quickfix, lint, syntax | `quickfix_preview`, `quickfix_apply`, `lint_candidate`, `format_candidate`, `syntax_check` | Keep as proposal/manual remediation |
 | ABAP execution | update/create, unit surgery, activation, unit tests, diff | `write_update`, `edit_unit`, `batch_create_objects`, `activate_object`, `run_unit_tests`, `read_diff` | Plan remains read-only |

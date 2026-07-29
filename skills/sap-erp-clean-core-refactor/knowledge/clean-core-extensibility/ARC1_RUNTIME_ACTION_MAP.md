@@ -24,7 +24,7 @@ approved chain action may invoke ARC-1 writes.
 |---|---|
 | System and landscape | `system_probe`, `read_system` |
 | Inventory | `inventory_package`, `exact_tadir_lookup`, `read_source` |
-| Dependencies and fan-in | `read_dependencies`, `find_references` |
+| Dependencies and fan-in | `read_dependencies`, `find_references`, `read_usages`, `read_impact` |
 | Classification | `atc_variants`, `atc_assessment`, `read_api_state` |
 | Deterministic remediation | `quickfix_preview`, `quickfix_apply`, `lint_candidate`, `format_candidate`, `syntax_check` |
 | Source mutation | `write_update`, `edit_method`, `edit_unit`, `scaffold_rap_handlers`, `activate_object`, `activate_batch` |
@@ -160,7 +160,7 @@ Every selected action returns:
   "targetLevel": "A+C",
   "action": "create_or_use_wrapper",
   "evidenceRuleIds": ["CC-WRAPPER-OUTCOME", "CC-WRAPPER-PLACEMENT"],
-  "operationIds": ["read_api_state", "find_references", "create_wrapper_class"],
+  "operationIds": ["read_api_state", "find_references", "transport_check", "create_wrapper_package", "syntax_check", "create_wrapper_class"],
   "confidence": "medium",
   "approvals": ["owner", "wrapper_exception", "generative_diff"],
   "manualCapabilities": ["atc_exemption_governance"],
