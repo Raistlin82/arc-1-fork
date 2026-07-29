@@ -55,15 +55,28 @@ and exception expiry.
 
 ## Decision model
 
+The seven steps are the `decisionStages` of [`chain.json`](./chain.json), in order. Shading marks
+what each step does: grey collects evidence, teal decides, outlined proves.
+
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'14px','primaryColor':'#EBF0F0','primaryTextColor':'#0F1518','primaryBorderColor':'#5B7275','lineColor':'#5B7275','edgeLabelBackground':'#FFFFFF'},'flowchart':{'curve':'basis','nodeSpacing':38,'rankSpacing':46}}}%%
 flowchart LR
-    R["Requirement"] --> S["Standard-first"]
-    S --> U["Usage and ownership"]
-    U --> A["AEM and touchpoints"]
-    A --> D["Target domain"]
-    D --> L["Clean Core evidence"]
-    L --> C["Available capability"]
-    C --> P["Approved action and proof"]
+    R["Requirement"] --> S["1 · Standard-first"]
+    S --> U["2 · Usage and ownership"]
+    U --> A["3 · AEM and touchpoints"]
+    A --> D["4 · Target domain"]
+    D --> L["5 · Clean Core evidence"]
+    L --> C["6 · Available capability"]
+    C --> P["7 · Approved action and proof"]
+
+    classDef start fill:#FFFFFF,stroke:#5B7275,stroke-width:1px,color:#46565B
+    classDef gather fill:#F4F6F6,stroke:#8C9C9F,stroke-width:1px,color:#243033
+    classDef choose fill:#DDEBEA,stroke:#0B5D5D,stroke-width:1.5px,color:#08302F
+    classDef prove fill:#EBF0F0,stroke:#5B7275,stroke-width:1.5px,color:#1B2426
+    class R start
+    class S,U,A gather
+    class D,L choose
+    class C,P prove
 ```
 
 Level is a compliance dimension, not the architecture selector. Wrapper results are composite:

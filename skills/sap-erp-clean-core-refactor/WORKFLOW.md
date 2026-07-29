@@ -184,7 +184,16 @@ plan under `docs/refactor/<date>-clean-core-plan.md` and update it after every a
 
 ## End-to-end flow
 
+Two diagrams, because they answer different questions and drawing them as one produced a figure
+nobody could read. Shading is consistent across every diagram in this file: grey collects evidence,
+outlined-teal is a decision point, filled-teal is executable through ARC-1, ochre needs a human,
+brick blocks.
+
+**From requirement to a decided action.** Every branch converges on the touchpoint classification
+before an action is resolved — the runtime changes packaging, never the compliance verdict.
+
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','primaryColor':'#EBF0F0','primaryTextColor':'#0F1518','primaryBorderColor':'#5B7275','lineColor':'#5B7275','edgeLabelBackground':'#FFFFFF'},'flowchart':{'curve':'basis','nodeSpacing':30,'rankSpacing':44}}}%%
 flowchart TD
     R["Business requirement and landscape"] --> P["Pre-flight and capability probe"]
     P --> I["Logical-unit and touchpoint inventory"]
@@ -219,21 +228,27 @@ flowchart TD
     ACT --> KEEP["Keep B on Private/on-prem"]
     ACT --> MECH0["Deterministic remediation (migrate_custom_code)"]
     ACT --> RES["ResearchRequired"]
-    STD --> PLAN["Reviewed plan"]
-    DEL --> PLAN
-    KUH --> PLAN
-    NOA --> PLAN
-    REL --> PLAN
-    RW --> PLAN
-    BTPABAP --> PLAN
-    EXT --> PLAN
-    HYBX --> PLAN
-    WR --> PLAN
-    KEEP --> PLAN
-    MECH0 --> PLAN
-    SBS --> PLAN
-    HYB --> PLAN
-    RES --> PLAN
+
+    classDef gather fill:#F4F6F6,stroke:#8C9C9F,stroke-width:1px,color:#243033
+    classDef decision fill:#FFFFFF,stroke:#0B5D5D,stroke-width:1.5px,color:#0F1518
+    classDef arc1 fill:#DDEBEA,stroke:#0B5D5D,stroke-width:1px,color:#08302F
+    classDef human fill:#FAEFD6,stroke:#86660F,stroke-width:1px,color:#3D2F05
+    classDef stop fill:#F6E0D9,stroke:#9B3520,stroke-width:1px,color:#4A180C
+
+    class R,P,I,AEM,CC gather
+    class S,U,KU,DOM,RUN,ACT decision
+    class ONS,BAE,SBS,HYB,CF,KYM,RW,BTPABAP,EXT,HYBX,REL,MECH0,DEL,STD arc1
+    class KUH,KEEP,NOA,WR human
+    class RES stop
+```
+
+**From the reviewed plan to governance.** Every action above lands in the plan, and the plan is the
+human gate: nothing below it runs before per-unit approval.
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'14px','primaryColor':'#EBF0F0','primaryTextColor':'#0F1518','primaryBorderColor':'#5B7275','lineColor':'#5B7275','edgeLabelBackground':'#FFFFFF'},'flowchart':{'curve':'basis','nodeSpacing':36,'rankSpacing':50}}}%%
+flowchart LR
+    PLAN["Reviewed plan · every decided action lands here"]
     PLAN -->|Approved executable action| BASE["As-found source and documentation baseline"]
     PLAN -->|Manual capability| HAND["Owned handoff and acceptance criteria"]
     BASE --> MECH["migrate-custom-code deterministic pass"]
@@ -242,6 +257,14 @@ flowchart TD
     VERIFY --> TR["sap-transport-review"]
     TR --> GOV["KPI baseline and continuous governance"]
     HAND --> GOV
+
+    classDef human fill:#FAEFD6,stroke:#86660F,stroke-width:1.5px,color:#3D2F05
+    classDef arc1 fill:#DDEBEA,stroke:#0B5D5D,stroke-width:1px,color:#08302F
+    classDef proof fill:#EBF0F0,stroke:#5B7275,stroke-width:1.5px,color:#1B2426
+
+    class PLAN,HAND human
+    class BASE,MECH,EXEC arc1
+    class VERIFY,TR,GOV proof
 ```
 
 ## Five operator movements
@@ -282,6 +305,7 @@ prerequisites.
 ## Side-by-side Level A sequence
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','primaryColor':'#EBF0F0','primaryTextColor':'#0F1518','primaryBorderColor':'#5B7275','lineColor':'#5B7275','edgeLabelBackground':'#FFFFFF'},'flowchart':{'curve':'basis','nodeSpacing':34,'rankSpacing':46}}}%%
 flowchart TD
     A["Approved AEM side-by-side candidate"] --> B["modernize-abap-side-by-side-core"]
     B --> C{"Released ERP boundary"}
@@ -305,6 +329,18 @@ flowchart TD
     R -->|Kyma| K["deploy-cap-to-kyma"]
     CF --> Q["Parity, operations and ERP retirement proof"]
     K --> Q
+
+    classDef decision fill:#FFFFFF,stroke:#0B5D5D,stroke-width:1.5px,color:#0F1518
+    classDef skill fill:#DDEBEA,stroke:#0B5D5D,stroke-width:1px,color:#08302F
+    classDef gather fill:#F4F6F6,stroke:#8C9C9F,stroke-width:1px,color:#243033
+    classDef caution fill:#F6E0D9,stroke:#9B3520,stroke-width:1px,color:#4A180C
+    classDef proof fill:#EBF0F0,stroke:#5B7275,stroke-width:1.5px,color:#1B2426
+
+    class C,O,U,R decision
+    class B,E,P,V,FE,UI5,T,K skill
+    class A,D,S,CF gather
+    class X caution
+    class Q proof
 ```
 
 ABAP CDS and CAP CDS may both appear only for `cdsTarget=dual_boundary`: ABAP CDS/RAP exposes the
@@ -314,6 +350,7 @@ ownership accidentally.
 ## Execution sequence
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','primaryColor':'#EBF0F0','primaryTextColor':'#0F1518','primaryBorderColor':'#5B7275','lineColor':'#5B7275','edgeLabelBackground':'#FFFFFF'},'flowchart':{'curve':'basis','nodeSpacing':32,'rankSpacing':50}}}%%
 flowchart LR
     A["Approved unit"] --> B["Mirror and as-found documentation"]
     B --> T["Transport scope check"]
@@ -329,6 +366,20 @@ flowchart LR
     G --> H["ATC and tests"]
     H -->|Regression| R["Rollback from version baseline"]
     H -->|Pass| J["Reclassify and update plan"]
+
+    classDef gather fill:#F4F6F6,stroke:#8C9C9F,stroke-width:1px,color:#243033
+    classDef decision fill:#FFFFFF,stroke:#0B5D5D,stroke-width:1.5px,color:#0F1518
+    classDef arc1 fill:#DDEBEA,stroke:#0B5D5D,stroke-width:1px,color:#08302F
+    classDef human fill:#FAEFD6,stroke:#86660F,stroke-width:1.5px,color:#3D2F05
+    classDef stop fill:#F6E0D9,stroke:#9B3520,stroke-width:1.5px,color:#4A180C
+    classDef proof fill:#EBF0F0,stroke:#5B7275,stroke-width:1.5px,color:#1B2426
+
+    class A,B gather
+    class C decision
+    class T,D,E,G arc1
+    class I human
+    class STOP,R stop
+    class F,H,J proof
 ```
 
 Deterministic SAP quick fixes may reuse one explicit approval scoped to package and transport. They
@@ -357,6 +408,7 @@ and every generated redesign, require concrete diff approval.
 ## Wrapper workflow
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','primaryColor':'#EBF0F0','primaryTextColor':'#0F1518','primaryBorderColor':'#5B7275','lineColor':'#5B7275','edgeLabelBackground':'#FFFFFF'},'flowchart':{'curve':'basis','nodeSpacing':34,'rankSpacing':46}}}%%
 flowchart TD
     N["No released successor"] --> L{"Landscape permits managed B/C debt?"}
     L -->|No| X["Redesign, side-by-side or ResearchRequired"]
@@ -368,6 +420,20 @@ flowchart TD
     W --> CON["Rewrite ABAP Cloud consumer"]
     CON --> O["Outcome: consumer A plus wrapper B/C"]
     O --> G["Tests, SKTD, owner, expiry and successor watch"]
+
+    classDef gather fill:#F4F6F6,stroke:#8C9C9F,stroke-width:1px,color:#243033
+    classDef decision fill:#FFFFFF,stroke:#0B5D5D,stroke-width:1.5px,color:#0F1518
+    classDef debtB fill:#FAEFD6,stroke:#86660F,stroke-width:1.5px,color:#3D2F05
+    classDef debtC fill:#F6E0D9,stroke:#9B3520,stroke-width:1.5px,color:#4A180C
+    classDef arc1 fill:#DDEBEA,stroke:#0B5D5D,stroke-width:1px,color:#08302F
+    classDef proof fill:#EBF0F0,stroke:#5B7275,stroke-width:1.5px,color:#1B2426
+
+    class N gather
+    class L,API decision
+    class B debtB
+    class C,X debtC
+    class W,CON arc1
+    class O,G proof
 ```
 
 Never place the wrapper in the ABAP Cloud software component. Do not wrap SAP GUI technology,
