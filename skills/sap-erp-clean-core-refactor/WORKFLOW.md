@@ -171,8 +171,9 @@ package/transport approval instead of per-diff approval (PATTERNS §10).
 
 ### 7. Review transport and govern
 
-Run `sap-transport-review` before any release. Transport release remains a separate explicit
-approval. After accepted execution, request governance:
+Run `sap-transport-review` before any release, with `SAPTransport(action="diff", id="<TR>")` as the
+evidence for the whole request. Transport release remains a separate explicit approval. After
+accepted execution, request governance:
 
 ```text
 Use $sap-erp-clean-core-refactor on ZSD_CUSTOM in govern mode.
@@ -290,7 +291,9 @@ prerequisites.
 1. `bootstrap-system-context` captures release, system type, components and ADT capabilities;
    operation `atc_variants` confirms which check variants and default this system really has.
 2. `sap-transport-overview` identifies open-request conflicts.
-3. ARC-1 inventory operations collect package contents and exact object metadata.
+3. ARC-1 inventory operations collect package contents and exact object metadata. The package
+   listing is partial by construction — capped, and blind to many repository types — so an exact
+   TADIR census closes it before any unit is declared unused or the scope complete.
 4. The orchestrator clusters compilation/logical units and maps extension touchpoints.
 5. `sap-unused-code` supplies removal evidence where SQL/runtime data is available.
 6. `sap-clean-core-atc` classifies current evidence without treating unknown as D.
@@ -443,8 +446,9 @@ uncontrolled commits/rollbacks or an API whose semantics cannot be stabilized.
 
 | Control | Frequency | Output |
 |---|---|---|
-| ATC assessment | Per plan and after every unit | current classification and regression delta |
-| Development/transport ATC gate | Every changed transport | blocking P1/P2 findings under governed variant |
+| ATC assessment | Per plan and after every unit | current classification and regression delta; `atc_batch_assessment` for multi-object units |
+| Development/transport ATC gate | Every changed transport | `atc_ci_gate` over the package tree: `fail` against the `failOnSeverity` threshold under the governed variant |
+| Package unit-test gate | Every changed transport | `unittest_ci_gate`: ABAP Unit over the package tree, incomplete runs fail |
 | Wrapper successor watch | Every SAP upgrade/release review | replace/retain decision and retirement date |
 | Exception expiry | Monthly or release cycle | renew, remediate or close |
 | Unused-code refresh | Quarterly | removal candidates and Unused Code Share |
@@ -454,7 +458,11 @@ uncontrolled commits/rollbacks or an API whose semantics cannot be stabilized.
 
 - The plan records business need, landscape, target domain and source evidence.
 - The selected action exists in `chain.json` and all operation IDs exist in `action-catalog.json`.
-- The ATC variants in use were confirmed with `atc_variants`, not assumed or probed with a full run.
+- The ATC variants in use were confirmed with `atc_variants`, not assumed or probed with a full run,
+  and every ATC result relied on reports `variantSource` `requested` or `systemDefault` and
+  `complete: true`.
+- The inventory's completeness state is recorded: a package listing alone is never a complete scope.
+- Units that expose an interface carry `integrationLevel` beside `extensibilityLevel`, never merged.
 - Fan-in figures come from `total` (`usageCount`/`summary` for usages/impact); a `truncated` result is
   recorded as degraded evidence rather than reported as a complete consumer list.
 - The transport scope was checked before the first write, not after it.

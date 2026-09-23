@@ -31,17 +31,18 @@ connection.
 | Phase | Required ARC-1 capability | Canonical operation IDs | Missing behavior |
 |---|---|---|---|
 | Landscape | system, components, feature probe | `system_probe`, `read_system` | Block target decision |
-| Inventory | package read, exact TADIR lookup, source read | `inventory_package`, `exact_tadir_lookup`, `read_source` | Block package plan |
-| Impact | dependencies, where-used, live usages, CDS blast radius | `read_dependencies`, `find_references`, `read_usages`, `read_impact` | Mark fan-in degraded; block destructive actions/API release |
-| Classification | ATC variants, ATC and API state | `atc_variants`, `atc_assessment`, `read_api_state` | `ResearchRequired` for affected unit |
+| Inventory | package read, exact TADIR lookup, source read | `inventory_package`, `exact_tadir_lookup`, `read_source` | Block package plan; a package listing alone is recorded as partial (`completeness: "unknown"`) |
+| Impact | dependencies, where-used, live usages, CDS blast radius, native relations when exposed | `read_dependencies`, `find_references`, `read_usages`, `read_impact`, `read_relations` | Mark fan-in degraded; block destructive actions/API release |
+| Classification | ATC variants, per-object and batch ATC, API state | `atc_variants`, `atc_assessment`, `atc_batch_assessment`, `read_api_state` | `ResearchRequired` for affected unit |
+| Package gates | package-level ATC and ABAP Unit CI runs | `atc_ci_gate`, `unittest_ci_gate` | Degrade to per-unit `atc_assessment` / `run_unit_tests`; record the gate as degraded |
 | Mechanical fixes | quickfix, lint, syntax | `quickfix_preview`, `quickfix_apply`, `lint_candidate`, `format_candidate`, `syntax_check` | Keep as proposal/manual remediation |
 | ABAP execution | update/create, unit surgery, activation, unit tests, diff | `write_update`, `edit_unit`, `batch_create_objects`, `activate_object`, `run_unit_tests`, `read_diff` | Plan remains read-only |
 | API governance | read/set release contract | `read_api_state`, `release_api` | No release action; redesign or research |
 | Wrapper | package, class, API release, package-attached SKTD | `create_wrapper_package`, `create_wrapper_class`, `release_api`, `write_governance_document` | Wrapper path blocked |
 | Retirement | references, delete | `find_references`, `delete_object` | No deletion |
-| Transport | check, create, recursive release | `transport_check`, `transport_create`, `transport_release` | No write execution/release |
+| Transport | check, request-level diff, create, recursive release | `transport_check`, `transport_diff`, `transport_create`, `transport_release` | No write execution/release |
 
-`transport_create` and `transport_release` are workflow-level operations (WORKFLOW steps 5 and 7),
+`transport_create`, `transport_diff` and `transport_release` are workflow-level operations (WORKFLOW steps 5 and 7),
 invoked by the orchestrator outside any single action's `operationIds`: transports are approved per
 plan subset, and release always sits behind `sap-transport-review` plus an explicit approval —
 never inside an action's automatic operation sequence.
@@ -66,6 +67,10 @@ delegate's output, the orchestrator records degraded evidence — it does not si
 | `SAPContext(action="usages", type="<type>", name="<name>", maxResults=<n>)` is a live reverse-dependency lookup; passing `type` avoids an extra name-resolution round trip | any usage evidence | The cache warmup this action once relied on no longer exists; usages always hits SAP |
 | Counts from `usages` and `impact` come from `usageCount` / `summary`, not from the returned entries | `explain-abap-code`, `sap-transport-review`, `debug-slow-sql`, the CDS branches | These actions page too (`usages` defaults to 100, `impact` to 50 per downstream bucket, both max 1000) while the summary fields stay true totals. Operations `read_usages` and `read_impact` therefore carry `maxResults`; a delegate that reports the page size understates the blast radius |
 | `format="structured"` is chosen for structure, never to save tokens | any read | It is a strict superset of a plain read — measured larger in every observed class, from +10% to +1685% |
+| A released request is reviewed with `SAPTransport(action="diff", id="<TR>")`, paging with `offset` | `sap-transport-review` | The skill still diffs object by object from version history. The request-level diff follows SAP's own ADT transport-diff algorithm and sees the request as SAP recorded it; the per-object path stays the fallback when the action is unavailable |
+| An ATC result counts as evidence only with `variantSource` `requested` or `systemDefault` and `complete: true` | `sap-clean-core-atc`, `migrate-custom-code`, `sap-transport-review` | SAP runs its literal `DEFAULT` variant for an unknown name without an error, and an incomplete worklist looks like a clean one. `requestedUnverified`, `sapFallback` and incomplete runs are degraded evidence |
+| `SAPRead(type="DEVC", name="<package>", maxResults=<n>)` passes `maxResults`, and a listing is reported as partial until a TADIR census confirms it | `sap-unused-code`, `sap-migration-dossier`, `sap-clean-core-atc` | The listing defaults to 200 objects and ADT search omits many repository types, so a delegate that treats it as the scope silently drops objects from every later decision |
+| Exposed interfaces are rated on the integration axis (SAP Note 3690029) and reported as `integrationLevel` | `sap-migration-dossier` (Integration Interfaces), `sap-clean-core-atc` | The chain decides on the extensibility axis (Note 3578329); an exposed RFC, IDoc or SEGW service constrains retirement and rewrite independently, and the two A–D scales must never be merged |
 
 ## Local skill orchestration
 

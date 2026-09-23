@@ -24,15 +24,16 @@ approved chain action may invoke ARC-1 writes.
 |---|---|
 | System and landscape | `system_probe`, `read_system` |
 | Inventory | `inventory_package`, `exact_tadir_lookup`, `read_source` |
-| Dependencies and fan-in | `read_dependencies`, `find_references`, `read_usages`, `read_impact` |
-| Classification | `atc_variants`, `atc_assessment`, `read_api_state` |
+| Dependencies and fan-in | `read_dependencies`, `find_references`, `read_usages`, `read_impact`, `read_relations` (when exposed) |
+| Classification | `atc_variants`, `atc_assessment`, `atc_batch_assessment`, `read_api_state` |
+| Package gates (govern) | `atc_ci_gate`, `unittest_ci_gate` |
 | Deterministic remediation | `quickfix_preview`, `quickfix_apply`, `lint_candidate`, `format_candidate`, `syntax_check` |
 | Source mutation | `write_update`, `edit_method`, `edit_unit`, `scaffold_rap_handlers`, `activate_object`, `activate_batch` |
 | On-stack creation | `batch_create_objects`, `publish_service_binding` |
 | Wrapper | `create_wrapper_package`, `create_wrapper_class`, `release_api`, `read_governance_document`, `write_governance_document` |
 | Regression proof | `run_unit_tests`, `read_diff`, `atc_assessment` |
 | Retirement | `find_references`, `delete_object` |
-| Transport | `transport_check`, `transport_create`, `transport_release` |
+| Transport | `transport_check`, `transport_diff`, `transport_create`, `transport_release` |
 
 The runtime must copy the operation, substitute every declared `requiredInput`, and preserve the
 argument names. It must not abbreviate a call in generated executable instructions.
@@ -58,15 +59,34 @@ and action NAMES used in these snippets; the snippet argument values themselves 
 ### Inventory and evidence
 
 ```text
-SAPRead(type="DEVC", name="ZPKG")
+SAPRead(type="DEVC", name="ZPKG", maxResults=1000)
 SAPSearch(searchType="tadir_lookup", names=["ZCL_EXAMPLE"], source="adt", maxResults=20)
 SAPRead(type="CLAS", name="ZCL_EXAMPLE")
 SAPContext(action="deps", type="CLAS", name="ZCL_EXAMPLE", depth=1)
 SAPNavigate(action="references", type="CLAS", name="ZCL_EXAMPLE", maxResults=1000)
+SAPNavigate(action="relations", type="INTF", name="ZIF_EXAMPLE", direction="incoming", depth=2, maxResults=100)
 SAPDiagnose(action="atc_variants", variant="*")
 SAPDiagnose(action="atc", type="CLAS", name="ZCL_EXAMPLE", variant="ABAP_CLOUD_READINESS")
+SAPDiagnose(action="atc", objects=[{type:"CLAS", name:"ZCL_EXAMPLE"}, {type:"INTF", name:"ZIF_EXAMPLE"}], variant="ABAP_CLOUD_READINESS", resultFormat="structured")
 SAPRead(type="API_STATE", name="ZIF_EXAMPLE", objectType="INTF")
 ```
+
+A package listing is never a complete inventory. It defaults to 200 objects (max 1000), reports
+`possiblyTruncated`, and always states `completeness: "unknown"` because ADT search omits many
+repository object types — legacy SEGW artifacts among them. Build logical units from it, then close
+the gap with an exact TADIR census before a unit is declared unused or the scope complete.
+
+One ATC run covers one object; `objects` (up to 20) runs a whole logical unit — a class with its
+interface, a function group with its modules, a CDS/RAP stack — as one batch with explicit coverage.
+An incomplete batch comes back as an error, not as an empty success. For every run, trust a clean
+result only when `variantSource` is `requested` or `systemDefault` and `complete` is `true`:
+`requestedUnverified` (the variant list was unreachable) and `sapFallback` (SAP ran its literal
+`DEFAULT` variant) are degraded evidence.
+
+`relations` is discovery-gated and exists only in single-target standard mode, so it is never a
+mandatory step. When exposed it shows the *shape* of the blast radius — incoming users up to three
+native steps deep. It caps at 100 nodes, so it never replaces the `total` of `references` as the
+fan-in count.
 
 `atc_variants` lists the variants this system actually has plus its default, so variant availability
 is live evidence in the pre-flight step — never a guess and never an ATC run used as a probe.
@@ -133,10 +153,28 @@ SAPNavigate(action="references", type="CLAS", name="ZCL_UNUSED", maxResults=1000
 SAPTransport(action="check", type="CLAS", name="ZCL_UNUSED", package="ZPKG")
 SAPWrite(action="delete", type="CLAS", name="ZCL_UNUSED", transport="DEVK900001")
 SAPTransport(action="create", package="ZPKG", description="Clean Core remediation")
+SAPTransport(action="diff", id="DEVK900001", limit=40)
 SAPTransport(action="release_recursive", id="DEVK900001")
 ```
 
 Release happens only after `sap-transport-review`; ARC-1 performs its inactive-object pre-check.
+`SAPTransport(action="diff", id="<TR>")` is the review evidence for the request as a whole — it pages up to 40
+objects per call (use `offset`) and follows the same algorithm as SAP's own ADT transport-diff tool,
+instead of reconstructing the request object by object from version history.
+
+### Package gates (govern mode)
+
+```text
+SAPDiagnose(action="atc_ci", packageTrees=["ZPKG"], variant="ZCC_ABAP_CLOUD_DEVELOPMENT", failOnSeverity="error")
+SAPDiagnose(action="unittest_ci", packageTrees=["ZPKG"], resultFormat="structured")
+```
+
+These run SAP's public ATC and ABAP Unit CI APIs over whole packages (`packages` for exact packages,
+`packageTrees` including subpackages; up to 50 together). `atc_ci` computes `fail` against the
+`failOnSeverity` threshold and fails closed: a run that does not complete returns `fail: true` with
+an `incompleteReason`, never a clean pass. Both are read-scope operations, so the governance baseline
+runs without opening writes. Where the CI APIs are absent the operations say so; fall back to
+per-unit `atc_assessment` and `run_unit_tests` and record the gate as degraded.
 
 ## Capability boundaries
 

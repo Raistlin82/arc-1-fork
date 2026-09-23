@@ -96,6 +96,10 @@ Primary actions are shown in the decision rows. Specialized dispatches remain ex
 - **`write_update` and `edit_unit` are alternatives, not steps**: whole-source replacement versus
   replacing a single FORM or MODULE in a PROG/INCL. Pick per object type; procedural units prefer
   `edit_unit` so the rest of the report is untouched.
+- **Two clean core axes, one decision**: the matrix decides on the extensibility axis (SAP Note
+  3578329). Units that expose an interface also carry an integration level (Note 3690029) — same
+  letters, separate scale. It never feeds a precedence row, but it constrains an action: an exposed
+  RFC, IDoc or SEGW service is not retired or rewritten on the extensibility level alone.
 - **`create_wrapper_package` and `scaffold_rap_handlers` are not source writes**: the first creates a
   package, the second (with `autoApply=false`) returns skeletons. The syntax gate applies to the call
   that carries source — `create_wrapper_class` and `edit_method` respectively.

@@ -73,8 +73,10 @@ target-domain decision. Do not default to BTP Cloud Foundry.
   `sap-transport-overview`.
 - Confirm ARC-1 with `SAPManage(action="probe")`.
 - Enumerate the system's ATC check variants and its default with operation `atc_variants`; never
-  infer variant availability from an ATC run. Older releases without the endpoint fall back to
-  named variants verified by attempting the run, recorded as degraded evidence.
+  infer variant availability from an ATC run. SAP answers HTTP 200 for an unknown variant and
+  silently runs the Code Inspector variant literally named `DEFAULT`, so a run proves nothing about
+  the name. ARC-1 refuses unknown names; when the variant list is unreachable it runs the name as
+  given and reports `variantSource: "requestedUnverified"`, recorded as degraded evidence.
 - Record landscape, release, installed components, available ADT features, write ceiling, package
   allowlist, transport policy, confirmed ATC variants and optional MCP/skill capabilities.
 - Load the smallest relevant evidence pack from
@@ -83,12 +85,20 @@ target-domain decision. Do not default to BTP Cloud Foundry.
 
 ### 2. Inventory logical units and touchpoints
 
-- Use operation `inventory_package`; recurse into subpackages.
+- Use operation `inventory_package` with `maxResults` lifted to 1000; recurse into subpackages.
+  A package listing never proves completeness: it reports `possiblyTruncated` and always states
+  `completeness: "unknown"`, because ADT search omits many repository object types. Record the
+  inventory as partial until an exact TADIR census closes the gap.
 - Use `exact_tadir_lookup` only for known names. Detect legacy SEGW through generated classes,
   service evidence and targeted lookup because DEVC inventory may omit it.
 - Cluster PROG/includes, FUGR/FUNC/includes, CLAS/local includes and complete CDS/RAP stacks.
 - For each unit record UI, forms, reports, integrations/events, business logic/BAdIs, APIs,
   persistence, runtime use, fan-in, ownership and transport state.
+- Classify an exposed interface on its own axis. RFC-enabled function modules, IDoc types, SEGW
+  OData services and file transfers carry an `integrationLevel` under SAP Note 3690029, separate
+  from the `extensibilityLevel` (Note 3578329) that drives this decision. Take it from the
+  Integration Interfaces section of `sap-migration-dossier` and never merge the two into one score:
+  a unit can be extensibility A and still expose a Level D integration that blocks its retirement.
 - Delegate usage evidence to `sap-unused-code`, classification to `sap-clean-core-atc`, intent
   explanation to `explain-abap-code`, and dossier output when requested.
 
@@ -125,6 +135,8 @@ Write `docs/refactor/<date>-clean-core-plan.md` with:
 - business requirement, touchpoints and standard-first result;
 - one AEM record per logical unit;
 - source level, target domain, target level and action;
+- `extensibilityLevel` and, for units that expose an interface, `integrationLevel` as separate
+  fields — the inventory's completeness state beside them;
 - for embedded ABAP Cloud on-stack Level A, target package/software component and live or manually verified
   `abapLanguageVersion="cloudDevelopment"` evidence;
 - for BTP ABAP Environment, a distinct target ARC-1 connection, target package/language proof and
@@ -167,10 +179,15 @@ the plan before execution.
 ### 6. Prove and govern
 
 - Every changed unit must pass syntax, activation, ATC, applicable tests and approved diff.
-- Use `sap-transport-review` before release.
+- Use `sap-transport-review` before release, with operation `transport_diff` as the evidence for the
+  request as a whole.
 - `govern` reports Clean Core Share, Technical Debt Score, Unused Code Share and Business
   Modifications, plus ATC regression, wrapper successor watch, exception expiry, unused-code
   refresh and SAP API changelog review.
+- Run the package gates in `govern`: `atc_ci_gate` with the governed development variant and a
+  `failOnSeverity` threshold, and `unittest_ci_gate` for ABAP Unit. Both are read-scope and fail
+  closed — an incomplete run is a failure, not a pass. Where the CI APIs are absent, fall back to
+  per-unit `atc_assessment` and `run_unit_tests` and record the gate as degraded.
 - Use `ABAP_CLOUD_READINESS` for A assessment once `atc_variants` confirmed it on this system. Use a
   governed customer copy of `ABAP_CLOUD_DEVELOPMENT_DEFAULT` for development/transport blocking.
   Record fallbacks.

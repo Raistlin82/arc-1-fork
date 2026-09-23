@@ -350,7 +350,14 @@ function validateRequiredArguments(call, file, line, named) {
         cds_sql: ['name'],
         set_sql_trace_state: ['sqlOn'],
       };
-      if (requirements[action]) requireArgs(call, file, line, named, requirements[action]);
+      if (action === 'atc' && named.has('objects')) {
+        // Batch ATC (1-20 objects) replaces the single-object type/name target.
+        validateNonEmptyArray(call, file, line, named, 'objects');
+      } else if (action === 'atc_ci' || action === 'unittest_ci') {
+        if (!named.has('packages') && !named.has('packageTrees')) {
+          fail(file, line, `SAPDiagnose ${action} requires "packages" or "packageTrees"`, call.tool);
+        }
+      } else if (requirements[action]) requireArgs(call, file, line, named, requirements[action]);
       break;
     }
     case 'SAPTransport': {
@@ -365,6 +372,7 @@ function validateRequiredArguments(call, file, line, named) {
         release_recursive: ['id'],
         check: ['type', 'name', 'package'],
         history: ['type', 'name'],
+        diff: ['id'],
       };
       if (requirements[action]) requireArgs(call, file, line, named, requirements[action]);
       break;

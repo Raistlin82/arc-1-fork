@@ -15,6 +15,7 @@ Every logical unit receives an Architecture Decision Record with these fields:
 | Standard-first result | SAP standard capability considered, gap and parity decision |
 | Quality attributes | Coupling, LUW consistency, latency, data volume, availability, scaling, security, lifecycle and TCO |
 | Current evidence | A/B/C/D/Unknown per relevant touchpoint, ATC and release-state sources |
+| Integration exposure | `integrationLevel` (SAP Note 3690029) for units that expose RFC, IDoc, SEGW OData or file interfaces — a separate axis from the extensibility level above, never merged into it |
 | Target | domain, level, action and responsibility boundary |
 | Capability | executable, manual handoff, degraded or unavailable |
 | Governance | owner, gates, exception, expiry, retirement trigger and KPIs |
@@ -49,6 +50,12 @@ Classify the requirement across all tiers:
 A unit reaches Level A only when every relevant touchpoint uses an allowed technology and released
 contract/extension point. A released API does not erase a remaining classic UI or internal-table
 dependency.
+
+The Integration row is where the two clean core axes meet. An interface a unit *consumes* is a
+touchpoint on the extensibility axis; an interface it *exposes* to other systems is rated on the
+integration axis of SAP Note 3690029. Exposure changes what an action may do: an RFC-enabled
+function module called from outside cannot be retired or rewritten on the strength of the
+extensibility level alone.
 
 ## 4. Target-domain selection
 
@@ -304,14 +311,20 @@ Enumerate first, then use two purposes explicitly:
 | Purpose | Variant policy | Result |
 |---|---|---|
 | Availability | `atc_variants` lists the system's variants and its default | Variant availability becomes live evidence, not an assumption |
-| Assessment | `ABAP_CLOUD_READINESS`, confirmed present | Evidence for Level A readiness and successors |
-| Development/transport gate | Governed customer copy of `ABAP_CLOUD_DEVELOPMENT_DEFAULT` | Block configured P1/P2 findings before release |
+| Assessment | `ABAP_CLOUD_READINESS`, confirmed present; `atc_batch_assessment` runs a multi-object unit as one batch | Evidence for Level A readiness and successors |
+| Development/transport gate | Governed customer copy of `ABAP_CLOUD_DEVELOPMENT_DEFAULT`, run by `atc_ci_gate` over the package tree | Block findings at or above `failOnSeverity` before release |
 
 The development variant should include Usage of APIs, Allowed SAP Enhancement Technologies,
 Critical Statements, modification search and optional security checks. Record any system-specific
-fallback and reduce confidence accordingly. Do not probe availability by launching an ATC run when
-`atc_variants` can answer it directly; ATC also skips `$TMP`, so an empty result there proves
-nothing about the variant.
+fallback and reduce confidence accordingly. Do not probe availability by launching an ATC run:
+SAP answers an unknown variant with HTTP 200 and silently runs its literal `DEFAULT` variant.
+ATC also skips `$TMP`, so an empty result there proves nothing.
+
+A finding count is evidence only with its provenance. Accept a clean result when `variantSource`
+is `requested` or `systemDefault` and `complete` is `true`; `requestedUnverified` and `sapFallback`
+are degraded, and an incomplete run is reported with its `incompleteReasons`, never as clean. The
+package gate fails closed on its own: `atc_ci` returns `fail: true` for a run that does not
+complete.
 
 ## 12. Governance
 

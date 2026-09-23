@@ -65,6 +65,12 @@ not improvise a rule from graph proximity.
 |---|---|---|
 | `clean-core-extensibility-architects-2026-07` | *Clean Core Extensibility for Architects - SAP Cloud ERP Private*, v20.9D, July 2026 | Clean Core levels, Key User, Developer Extensibility, side-by-side, AEM, wrappers, ATC, governance, brownfield transition and KPIs |
 
+The integration axis has its own source: SAP Note 3690029 and SAP's *Clean core integration* white
+paper (sap.com/documents/1327955), which define an A–D scale for integration technologies
+separate from the extensibility levels above. It is **not** curated into this knowledge base; the
+chain consumes it through the Integration Interfaces section of `sap-migration-dossier`, and no
+rule in `decision-rules.json` cites it yet.
+
 Important curated page groups:
 
 | Topic | Pages |
@@ -92,9 +98,11 @@ Use operation IDs from [`action-catalog.json`](./action-catalog.json):
 |---|---|
 | What system and release is this? | `system_probe`, `read_system` |
 | Which ATC check variants does it actually have? | `atc_variants` (never inferred from an ATC run) |
-| What custom code exists? | `inventory_package`, `exact_tadir_lookup`, `read_source` |
-| Who depends on it? | `read_dependencies`, `find_references`, `read_usages`, `read_impact` (for CDS blast radius) |
-| What is the current Clean Core evidence? | `atc_assessment`, `read_api_state` |
+| What custom code exists? | `inventory_package`, `exact_tadir_lookup`, `read_source` — a listing is partial until a TADIR census confirms it |
+| Who depends on it? | `read_dependencies`, `find_references`, `read_usages`, `read_impact` (for CDS blast radius), `read_relations` (transitive shape, when exposed) |
+| What is the current Clean Core evidence? | `atc_assessment`, `atc_batch_assessment`, `read_api_state` |
+| Does the package still pass its gates? | `atc_ci_gate`, `unittest_ci_gate` (govern mode, fail closed) |
+| What exactly does this request change? | `transport_diff` |
 | Did remediation work? | `syntax_check`, `activate_object`, `atc_assessment`, `run_unit_tests`, `read_diff` |
 | Is deletion/release safe? | `find_references`, `transport_check` |
 

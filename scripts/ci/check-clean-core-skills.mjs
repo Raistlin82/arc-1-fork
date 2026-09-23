@@ -249,12 +249,20 @@ if (chain) {
   }
 
   // Catalog closure: an operation no action runs rots silently. Session-scope operations are driven
-  // by the protocol (SKILL.md pre-flight, operator transport handling), not by a per-unit action.
+  // by the protocol rather than by a per-unit action sequence: SKILL.md pre-flight and
+  // classification, govern-mode package gates, operator transport handling, and discovery-gated
+  // evidence that a mandatory sequence cannot rely on (read_relations exists only in single-target
+  // standard mode when the system advertises it).
   const SESSION_SCOPE_OPERATIONS = new Set([
     'system_probe',
     'read_system',
     'atc_variants',
+    'atc_batch_assessment',
+    'atc_ci_gate',
+    'unittest_ci_gate',
+    'read_relations',
     'format_candidate',
+    'transport_diff',
     'transport_create',
     'transport_release',
   ]);
@@ -798,6 +806,17 @@ for (const file of walkMarkdown(SKILLS_DIR)) {
     // silently truncate it.
     if (call.tool === 'SAPNavigate' && /action\s*=\s*"references"/.test(args) && !hasArg(args, 'maxResults')) {
       fail(`${loc}: SAPNavigate(references) must pass maxResults — the default caps at 100 and truncates fan-in evidence`);
+    }
+    // A package listing defaults to 200 objects and never proves completeness. The chain builds its
+    // logical-unit inventory from it, so its own instructions must lift the cap explicitly.
+    // Scoped to the chain: delegated skills are governed by INTEGRATIONS.md, not patched upstream.
+    if (
+      file.startsWith(CLEAN_CORE_DIR) &&
+      call.tool === 'SAPRead' &&
+      /type\s*=\s*"DEVC"/.test(args) &&
+      !hasArg(args, 'maxResults')
+    ) {
+      fail(`${loc}: SAPRead(type="DEVC") must pass maxResults — the default caps at 200 and truncates the inventory`);
     }
   }
 }
