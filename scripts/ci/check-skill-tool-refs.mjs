@@ -212,6 +212,11 @@ const CLASS_ONLY_WRITE_ACTIONS = new Set([
   'edit_text_symbols',
 ]);
 
+// ARC-1 isMetadataWriteType: an update merges metadata fields into the stored object, so it carries
+// no source but must name at least one property to change.
+const METADATA_WRITE_TYPES = new Set(['DOMA', 'DTEL', 'MSAG', 'SRVB', 'TTYP']);
+const METADATA_UPDATE_ENVELOPE = new Set(['action', 'type', 'name', 'transport', 'package']);
+
 const KTD_REF_OBJECT_TYPES = new Set([
   'BDEF/BAC',
   'BDEF/BAE',
@@ -309,7 +314,12 @@ function validateRequiredArguments(call, file, line, named) {
         scaffold_rap_handlers: ['bdefName'],
         edit_text_symbols: ['source'],
       };
-      if (requirements[action]) requireArgs(call, file, line, named, requirements[action]);
+      const metadataUpdate = action === 'update' && METADATA_WRITE_TYPES.has(String(type ?? '').toUpperCase());
+      if (metadataUpdate) {
+        if (![...named.keys()].some((key) => !METADATA_UPDATE_ENVELOPE.has(key))) {
+          fail(file, line, `SAPWrite update of ${type} must name at least one metadata property to change`, call.tool);
+        }
+      } else if (requirements[action]) requireArgs(call, file, line, named, requirements[action]);
       if (CLASS_ONLY_WRITE_ACTIONS.has(action)) validateExactType(call, file, line, named, 'CLAS', `action="${action}"`);
       if (action === 'create' && type === 'FUNC') requireArgs(call, file, line, named, ['group']);
       if (action === 'create' && ['SKTD', 'KTD'].includes(type)) validateKtdCreate(call, file, line, named);

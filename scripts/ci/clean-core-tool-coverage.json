@@ -18,7 +18,6 @@
     "SAPDiagnose.object_state": "Source-state check. The chain reads sources and runs syntax checks on candidates instead.",
     "SAPDiagnose.authorization_trace": "Authorization tracing. A candidate for a future Level A authorization-evidence step; no current gate requires it.",
     "SAPActivate.unpublish_srvb": "Unpublishing a service binding is an operator retirement step; no chain action scripts it.",
-    "SAPContext.structure": "Object outline. The chain reads sources and uses format=structured when it needs structure.",
     "SAPLint.lint": "Reporting-only lint. The chain lints candidates with lint_and_fix.",
     "SAPLint.list_rules": "Rule inventory. Lint configuration is an operator/repository concern.",
     "SAPLint.get_formatter_settings": "Formatter administration.",

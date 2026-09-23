@@ -102,7 +102,8 @@ Use operation IDs from [`action-catalog.json`](./action-catalog.json):
 | Who depends on it? | `read_dependencies`, `find_references`, `read_usages`, `read_impact` (for CDS blast radius), `read_relations` (transitive shape, when exposed) |
 | What is the current Clean Core evidence? | `atc_assessment`, `atc_batch_assessment`, `read_api_state` |
 | Does the package still pass its gates? | `atc_ci_gate`, `unittest_ci_gate` (govern mode, fail closed) |
-| What exactly does this request change? | `transport_diff` |
+| What exactly does this request change? | `transport_diff` (DDIC objects appear without a source diff) |
+| What does this DDIC change touch? | `read_source`, `read_ddic_structure`, `find_references` with `maxResults` |
 | Did remediation work? | `syntax_check`, `activate_object`, `atc_assessment`, `run_unit_tests`, `read_diff` |
 | Is deletion/release safe? | `find_references`, `transport_check` |
 
@@ -133,6 +134,9 @@ retrieval date and source URL. A name-only keyword match is not enough.
 |---|---|---|
 | SAP Help - Clean Core | https://help.sap.com/docs/btp/sap-business-technology-platform/clean-core | Clean Core concepts and extensibility guidance |
 | SAP Help - ABAP Cloud | https://help.sap.com/docs/abap-cloud | Language version, released APIs and developer extensibility |
+| SAP Help - Adjustment of Database Structures | https://help.sap.com/docs/ABAP_PLATFORM_NEW/ec1c9c8191b74de98feb94001a95dd76/cf21f1ab446011d189700000e8322d00.html | The three adjustment methods (delete and recreate, ALTER TABLE, conversion), what decides between them, and the rule against adjusting during production (PATTERNS §15) |
+| SAP Help - Typical Import Steps | https://help.sap.com/docs/ABAP_PLATFORM_NEW/4a368c163b08418890a406d413933ba7/3dad5b0c4ebc11d182bf0000e829fbfe.html | The *structure conversion* step every transport import runs, which is why development data never decides a DDIC class |
+| ABAP Keyword Documentation - DDIC table adjustment | https://help.sap.com/doc/abapdocu_latest_index_htm/latest/en-US/ABENDDIC_DATABASE_TABLES_ADJ.html | Changes that force an adjustment of existing data: client column, deleted or renamed fields, technical field properties; domain effects in `ABENDDIC_DOMAINS_TECH` |
 | SAP Business Accelerator Hub | https://api.sap.com/ | Released remote APIs and events |
 | SAP CAP documentation | https://cap.cloud.sap/docs/ | CAP side-by-side implementation |
 | CAP `cds.test` | https://cap.cloud.sap/docs/node.js/cds-test | Current CAP Node.js test API and runner guidance |

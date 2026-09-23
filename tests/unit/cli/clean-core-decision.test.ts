@@ -309,3 +309,100 @@ describe('Clean Core runtime plan resolver', () => {
     expect(plan.actions.map((action: { action: string }) => action.action)).toEqual(['research_required']);
   });
 });
+
+describe('Clean Core DDIC adjustments', () => {
+  type PlanNode = {
+    action: string;
+    execution: string;
+    writeBlocked: boolean;
+    gatePhases: Record<string, string[]>;
+    gates: { gate: string; status: string }[];
+  };
+  const contract = chain.ddicContract;
+  const onStackFacts = {
+    sourceLevel: 'D',
+    standardParity: 'gap',
+    unusedProven: false,
+    keyUserFit: false,
+    selectedDomain: 'embedded_abap_cloud_on_stack',
+    landscape: 's4_private_cloud',
+    releasedSuccessor: true,
+    abapCloudTargetPackageApproved: true,
+    abapCloudLanguageVersionProven: true,
+    ddicChangeRequired: true,
+  };
+  const planFor = (rootAction: string, facts: Record<string, unknown>): PlanNode[] =>
+    resolveExecutionPlan(chain, rootAction, facts);
+
+  it('partitions every database-impact value between the executable and the handoff route', () => {
+    const values = chain.decisionFactCatalog[contract.impactFact].values;
+
+    expect([...contract.executableImpacts, ...contract.handoffImpacts].sort()).toEqual([...values].sort());
+    expect(contract.executableImpacts.filter((value: string) => contract.handoffImpacts.includes(value))).toEqual([]);
+  });
+
+  it('executes a DDIC change in place only when no system needs a database adjustment', () => {
+    for (const impact of contract.executableImpacts) {
+      const plan = planFor('rewrite_on_stack_abap_cloud', { ...onStackFacts, ddicDbImpact: impact });
+
+      expect(plan.map((node) => node.action)).toEqual(['rewrite_on_stack_abap_cloud', 'adjust_ddic_in_place']);
+      expect(plan[1].gatePhases.accept).toEqual(['ddic_target_state_verified', 'atc_no_regression']);
+      expect(plan[1].writeBlocked).toBe(true);
+    }
+  });
+
+  it('hands every conversion, capability gap and unproven impact to an owned handoff', () => {
+    for (const impact of contract.handoffImpacts) {
+      const plan = planFor('rewrite_on_stack_abap_cloud', { ...onStackFacts, ddicDbImpact: impact });
+      const actions = plan.map((node) => node.action);
+
+      expect(actions).toEqual(['rewrite_on_stack_abap_cloud', 'ddic_database_handoff']);
+      expect(actions).not.toContain('adjust_ddic_in_place');
+      expect(plan[1].execution).toBe('manual_handoff');
+    }
+  });
+
+  it('adds no DDIC branch without an evidenced DDIC change', () => {
+    const plan = planFor('rewrite_on_stack_abap_cloud', {
+      ...onStackFacts,
+      ddicChangeRequired: false,
+      ddicDbImpact: 'db_adjustment',
+    });
+
+    expect(plan.map((node) => node.action)).toEqual(['rewrite_on_stack_abap_cloud']);
+  });
+
+  it('keeps a table retirement blocked until the database plan and the target state are proven', () => {
+    const facts = {
+      sourceLevel: 'C',
+      standardParity: 'gap',
+      unusedProven: true,
+      ddicChangeRequired: true,
+      ddicDbImpact: 'db_adjustment',
+      gates: { unused_proven: true, owner_approved: true, transport_scoped: true },
+    };
+
+    const blocked = resolveCleanCorePlan(chain, aemModel, facts);
+    const handoff = blocked.actions.find((node: PlanNode) => node.action === 'ddic_database_handoff');
+
+    expect(blocked.decision.id).toBe('ANY_TO_REMOVED');
+    expect(blocked.actions[0].writeBlocked).toBe(false);
+    expect(
+      handoff.gates
+        .filter((gate: { status: string }) => gate.status === 'pending')
+        .map((gate: { gate: string }) => gate.gate),
+    ).toEqual(['ddic_database_plan_approved', 'manual_handoff_recorded', 'ddic_target_state_verified']);
+    expect(blocked.writeBlocked).toBe(true);
+
+    const proven = resolveCleanCorePlan(chain, aemModel, {
+      ...facts,
+      gates: {
+        ...facts.gates,
+        ddic_database_plan_approved: true,
+        manual_handoff_recorded: true,
+        ddic_target_state_verified: true,
+      },
+    });
+    expect(proven.writeBlocked).toBe(false);
+  });
+});

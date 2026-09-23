@@ -16,6 +16,7 @@ Every logical unit receives an Architecture Decision Record with these fields:
 | Quality attributes | Coupling, LUW consistency, latency, data volume, availability, scaling, security, lifecycle and TCO |
 | Current evidence | A/B/C/D/Unknown per relevant touchpoint, ATC and release-state sources |
 | Integration exposure | `integrationLevel` (SAP Note 3690029) for units that expose RFC, IDoc, SEGW OData or file interfaces — a separate axis from the extensibility level above, never merged into it |
+| DDIC impact | `ddicChangeRequired`, `ddicDbImpact` and the per-object delta (§15); for a handoff, the database plan per system and its owner |
 | Target | domain, level, action and responsibility boundary |
 | Capability | executable, manual handoff, degraded or unavailable |
 | Governance | owner, gates, exception, expiry, retirement trigger and KPIs |
@@ -370,10 +371,13 @@ execution.
 | Side-by-side Kyma | 15-75+ | CF factors plus container, cluster, registry, Helm, network and operational ownership |
 | Hybrid | sum of owned parts plus 20-40% boundary overhead | consistency, events, failure handling |
 | Retirement | 0.5-5 | references, business approval and cleanup |
+| DDIC adjustment in place | 0.25-2 | objects touched, consumers to re-check with ATC |
+| DDIC database handoff | 1-10 | data volume per system, import windows, retention decisions, consumers waiting on the change |
 
 Apply multipliers separately for criticality, fan-in, missing tests, release uncertainty, data
 volume, UI redesign, external integrations and regulatory/security scope. Never report a single
-point estimate without assumptions and confidence.
+point estimate without assumptions and confidence. The two DDIC rows are initial ranges with no
+execution history behind them yet: recalibrate them after the first units.
 
 The fan-in multiplier reads `total` from `find_references`, never the number of returned rows (see
 §6). An estimate built on a truncated consumer list understates exactly the units that need the most
@@ -399,3 +403,76 @@ The decision engine must correctly handle at least:
 14. CAP-owned data dispatches CAP schema; S/4-owned data does not.
 15. A justified Kubernetes requirement selects Kyma; runtime preference alone does not.
 16. CAP Fiori Elements and freestyle UI5 are mutually exclusive dispatches.
+17. A DDIC change that only adds non-key fields or changes metadata runs through
+    `adjust_ddic_in_place`; deleting, renaming or retyping a table field, changing a key or deleting
+    a table goes to `ddic_database_handoff`.
+18. An empty development table never downgrades a database adjustment.
+19. Unknown DDIC impact fails closed to the handoff, and so does creating an append or
+    extension-include structure, even without a conversion.
+
+## 15. DDIC adjustments
+
+SAP adjusts a changed database table when it is activated in development, and again when the
+transport is imported into every later system: the import runs a *structure conversion* step for
+tables whose change requires one. Whether the development table is empty therefore decides
+nothing. What decides automation is whether the change forces an adjustment of existing data in any
+system of the landscape.
+
+Classify every DDIC change of a unit into `ddicDbImpact`. The unit takes its most severe class; to
+automate its no-adjustment part separately, record that part as its own logical unit.
+
+| Change | `ddicDbImpact` | Why |
+|---|---|---|
+| New table, structure, data element, domain or table type | `no_db_change` | Created at import; no existing data is touched |
+| Texts, labels, documentation, search help, value table, foreign keys, fixed values, enhancement category, delivery class, order of non-key fields | `no_db_change` | Dictionary metadata; SAP lets the dictionary field order differ from the database, except for key fields |
+| Data element replaced by one with the same data type, length and decimals, such as an unreleased SAP data element swapped for a released or custom one | `no_db_change` | The column keeps its technical type; `read_source` on both data elements proves it |
+| Technical change to a domain, data element, structure or table type that reaches no database table field | `no_db_change` | Only structures, table types and code are affected; a truncated `find_references` makes it `unknown` |
+| New non-key field in a custom table, or in a structure included in the non-key part of custom tables | `add_columns` | ALTER TABLE keeps the data; the import into production is scheduled knowingly |
+| Field deleted or renamed | `db_adjustment` | The import deletes that column's data in every system; a rename is a delete plus an append |
+| Type, length or decimals of an existing table field changed, directly or through its data element or domain | `db_adjustment` | Existing data must be adjusted; ALTER TABLE or conversion is chosen per database and per system |
+| Key field added, removed or reordered, client column added, null flag or table category changed | `db_adjustment` | The key or the table is rebuilt; a new client column copies the data into every client |
+| Table deleted | `db_adjustment` | The import drops the table and its data everywhere; unused code does not prove the data may go |
+| Append or extension-include structure created or edited | `capability_gap` | Creating one is an opaque ADT protocol ARC-1 cannot drive (live spike on 7.58), and editing one is unverified; use the ADT append wizard or the Custom Fields app |
+| Technical settings: data class, size category, buffering | `capability_gap` | ARC-1 has no read/write contract for technical settings |
+| Any change whose where-used or definition evidence is incomplete | `unknown` | Fails closed to the handoff |
+
+`no_db_change` speaks only about the database. Data semantics still go through the concrete diff
+approval: a removed fixed value, a changed conversion exit or a changed delivery class can break
+existing data without touching a column.
+
+Classify the extension itself as well (`CC-DDIC-CUSTOM-FIELD-LEVELS`): a custom field on an SAP table
+or CDS view is Level A through a released extension include, Level B through an extension include
+that is not released, and Level C through a classic append, monitored until an extension include
+appears. A custom Z table carries no SAP API of its own; classify its touchpoints instead, such as
+the SAP data elements it types its fields with.
+
+### Executing in place
+
+`adjust_ddic_in_place` runs only for `no_db_change` and `add_columns`:
+
+1. Capture the as-found definitions first (`read_source`, `setup-abap-mirror`). ARC-1 has no version
+   feed for TABL, DOMA or DTEL, so this capture is the only baseline for the diff and the rollback.
+2. Create new objects (`batch_create_objects`), then change metadata (`write_ddic_metadata`), then
+   table and structure sources (`write_update`), and activate them together (`activate_batch`).
+3. Re-read every object and compare it with the approved target (`ddic_target_state_verified`),
+   then run ATC over the consumers from `find_references` (`atc_batch_assessment`, 20 per batch).
+
+DDIC objects are written only through this action, never through a parent's generic
+`write_update`. Rolling back an `add_columns` change before the transport is released deletes a
+field in development only; after release, removing the field is a `db_adjustment` like any other.
+
+### Handing off
+
+`ddic_database_handoff` carries `db_adjustment`, `capability_gap` and `unknown`. The handoff records:
+
+- as-found and target definitions, with the delta per field;
+- the adjustment each system of the landscape will run, which SAP chooses per database and data;
+- data volume per system, the import window, backup and restore, supplied by Basis;
+- a retention approval whenever a field or a table disappears;
+- the owners (developer plus Basis or DBA) and the acceptance criteria: the target definition
+  verified in development, and a consistent database in every system after its import.
+
+The unit's writes wait for `ddic_target_state_verified`: code is never written against a DDIC
+definition that does not exist yet. On SAP-managed landscapes (Public Cloud, BTP ABAP Environment)
+there is no database utility; the adjustment runs under SAP's import, and the handoff records and
+verifies it.

@@ -167,12 +167,16 @@ architecture action, checks candidate syntax, presents the concrete diff for app
 through ARC-1 only after that approval, activates, runs ATC and tests, and reclassifies the
 accepted unit. A failed gate stops that unit and does not authorize work on the next one.
 Deterministic SAP quick fixes are the one exception: their batch shares one explicit
-package/transport approval instead of per-diff approval (PATTERNS §10).
+package/transport approval instead of per-diff approval (PATTERNS §10). A unit that changes DDIC
+objects runs `adjust_ddic_in_place` before its code, or waits for its `ddic_database_handoff`
+(see [DDIC adjustment sequence](#ddic-adjustment-sequence)).
 
 ### 7. Review transport and govern
 
 Run `sap-transport-review` before any release, with `SAPTransport(action="diff", id="<TR>")` as the
-evidence for the whole request. Transport release remains a separate explicit approval. After
+evidence for the whole request. Transport release remains a separate explicit approval. DDIC objects
+have no version feed, so the plan's as-found and target definitions are their review evidence, and a
+request carrying `add_columns` changes is released with the ALTER TABLE noted for each import. After
 accepted execution, request governance:
 
 ```text
@@ -294,7 +298,8 @@ prerequisites.
 3. ARC-1 inventory operations collect package contents and exact object metadata. The package
    listing is partial by construction — capped, and blind to many repository types — so an exact
    TADIR census closes it before any unit is declared unused or the scope complete.
-4. The orchestrator clusters compilation/logical units and maps extension touchpoints.
+4. The orchestrator clusters compilation/logical units, maps extension touchpoints and classifies
+   every DDIC change by database impact (PATTERNS §15).
 5. `sap-unused-code` supplies removal evidence where SQL/runtime data is available.
 6. `sap-clean-core-atc` classifies current evidence without treating unknown as D.
 7. `explain-abap-code` documents intent for every non-trivial non-A unit.
@@ -389,6 +394,43 @@ Deterministic SAP quick fixes may reuse one explicit approval scoped to package 
 still pass syntax, activation, ATC and tests. Mechanical transformations without an SAP proposal,
 and every generated redesign, require concrete diff approval.
 
+## DDIC adjustment sequence
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'13px','primaryColor':'#EBF0F0','primaryTextColor':'#0F1518','primaryBorderColor':'#5B7275','lineColor':'#5B7275','edgeLabelBackground':'#FFFFFF'},'flowchart':{'curve':'basis','nodeSpacing':32,'rankSpacing':46}}}%%
+flowchart TD
+    A["Unit with DDIC changes"] --> B["As-found definitions, include/append tree, complete where-used"]
+    B --> C{"Database impact, worst class of the unit"}
+    C -->|no_db_change or add_columns| E["adjust_ddic_in_place"]
+    C -->|db_adjustment| H["ddic_database_handoff"]
+    C -->|capability_gap| H
+    C -->|unknown| H
+    E --> E1["Create, change metadata, change sources, activate together"]
+    H --> H1["Database plan per system, retention approval, owners"]
+    H1 --> H2["Owner changes the object and schedules every import"]
+    E1 --> V["Target definition re-read and verified"]
+    H2 --> V
+    V --> Q["ATC over the consumers"]
+    Q --> W["Unit code writes continue"]
+
+    classDef gather fill:#F4F6F6,stroke:#8C9C9F,stroke-width:1px,color:#243033
+    classDef decision fill:#FFFFFF,stroke:#0B5D5D,stroke-width:1.5px,color:#0F1518
+    classDef arc1 fill:#DDEBEA,stroke:#0B5D5D,stroke-width:1px,color:#08302F
+    classDef human fill:#FAEFD6,stroke:#86660F,stroke-width:1.5px,color:#3D2F05
+    classDef proof fill:#EBF0F0,stroke:#5B7275,stroke-width:1.5px,color:#1B2426
+
+    class A,B gather
+    class C decision
+    class E,E1,W arc1
+    class H,H1,H2 human
+    class V,Q proof
+```
+
+The class comes from PATTERNS §15 and never from the data in development: every transport import
+adjusts the table again, and converts it when the change requires it. `ddicContract` in
+`chain.json` gives each `ddicDbImpact` value exactly one route. Code that uses the changed
+definitions is written only after the target definition is verified, whichever route it took.
+
 ## Action routing
 
 | Action | Primary executor | Important boundary |
@@ -406,6 +448,8 @@ and every generated redesign, require concrete diff approval.
 | `migrate_custom_code` | ARC-1 deterministic quick-fix loop | One explicit package/transport approval; syntax, activation, ATC, tests remain mandatory |
 | `keep_at_level_b` | Documentation/governance | Private/on-prem only; Level B needs no informational ATC exemption |
 | `remove_unused` | ARC-1 after evidence and owner approval | Final references check immediately before delete |
+| `adjust_ddic_in_place` | ARC-1 after the DDIC classification | Only `no_db_change` and `add_columns`; DDIC objects are never written through a parent's generic write |
+| `ddic_database_handoff` | Developer plus Basis or DBA, manual | Database plan per system and retention approval; the unit's writes wait for the verified target definition |
 | `research_required` | Read-only research | Never converted to D without evidence |
 
 ## Wrapper workflow
@@ -466,6 +510,11 @@ uncontrolled commits/rollbacks or an API whose semantics cannot be stabilized.
 - Fan-in figures come from `total` (`usageCount`/`summary` for usages/impact); a `truncated` result is
   recorded as degraded evidence rather than reported as a complete consumer list.
 - The transport scope was checked before the first write, not after it.
+- Every DDIC change carries its PATTERNS §15 class. `db_adjustment`, `capability_gap` and `unknown`
+  went to `ddic_database_handoff`, and no DDIC object was written outside `adjust_ddic_in_place`.
+- No DDIC class was derived from the data in development, and every deleted table or field carries a
+  retention approval.
+- Requests with `add_columns` changes were released with the ALTER TABLE noted for each import.
 - Manual Key User branches contain owner, implementation app/tool and acceptance criteria.
 - Every write is inside ARC-1 package, transport and authorization gates.
 - Every generated diff has explicit approval.

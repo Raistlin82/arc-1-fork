@@ -64,6 +64,9 @@ target-domain decision. Do not default to BTP Cloud Foundry.
 13. Deterministic quick fixes require one explicit package/transport approval. Generative changes
    always require approval of the concrete diff.
 14. A plan is not complete without evidence, confidence, owner, gates and rollback/retirement path.
+15. A DDIC change runs automatically only when no system of the landscape must adjust existing data
+   for it. An empty development table proves nothing: every transport import adjusts the table
+   again, and converts it when the change requires it.
 
 ## Protocol
 
@@ -99,6 +102,10 @@ target-domain decision. Do not default to BTP Cloud Foundry.
   from the `extensibilityLevel` (Note 3578329) that drives this decision. Take it from the
   Integration Interfaces section of `sap-migration-dossier` and never merge the two into one score:
   a unit can be extensibility A and still expose a Level D integration that blocks its retirement.
+- Record every DDIC object a unit changes with its as-found definition (`read_source`), its
+  include/append tree (`read_ddic_structure`) and a complete `find_references`, then classify each
+  change by database impact ([`PATTERNS.md`](./PATTERNS.md) §15) into `ddicDbImpact`. The unit
+  takes its most severe class, and incomplete evidence is `unknown`, never a guess.
 - Delegate usage evidence to `sap-unused-code`, classification to `sap-clean-core-atc`, intent
   explanation to `explain-abap-code`, and dossier output when requested.
 
@@ -145,6 +152,9 @@ Write `docs/refactor/<date>-clean-core-plan.md` with:
   all released touchpoints, ownership, consistency, transactions, identity, lifecycle, runtime fit,
   UI target and ERP retirement/boundary plan;
 - composite wrapper level where applicable;
+- `ddicChangeRequired`, `ddicDbImpact` and the per-object DDIC delta; for `ddic_database_handoff`,
+  the database plan per system (expected adjustment, data volume, import window, backup, retention
+  approval) and its owners;
 - exact operation IDs from [`action-catalog.json`](./action-catalog.json);
 - MUST/SHOULD gates, confidence, evidence, owner, effort and open questions;
 - Key User manual handoff and any unavailable CF/Kyma delivery capabilities;
@@ -174,13 +184,22 @@ the plan before execution.
   acceptance tests; do not invent an ARC-1 write.
 - For wrappers, isolate the wrapper package/component, release only the wrapper API, rewrite the
   consumers, record the exception and retirement trigger, and test after upgrades.
+- Write DDIC objects only through `adjust_ddic_in_place`, never through a parent's generic
+  `write_update`, and only for `no_db_change` or `add_columns`. ARC-1 keeps no version history for
+  TABL, DOMA or DTEL, so the as-found capture comes first; then create, change metadata, change
+  sources, activate together, re-read the target definitions and run ATC over the consumers.
+- A pending `ddic_database_handoff` holds the unit's writes until `ddic_target_state_verified`
+  proves the target definition in development. Code is never written against a DDIC definition
+  that does not exist yet.
 - Reclassify after every accepted unit. One released dependency does not prove the whole consumer A.
 
 ### 6. Prove and govern
 
 - Every changed unit must pass syntax, activation, ATC, applicable tests and approved diff.
 - Use `sap-transport-review` before release, with operation `transport_diff` as the evidence for the
-  request as a whole.
+  request as a whole. DDIC objects have no version feed, so their review evidence is the plan's
+  as-found and target definitions. A request that carries `add_columns` changes is released with
+  the ALTER TABLE noted for each target system's import.
 - `govern` reports Clean Core Share, Technical Debt Score, Unused Code Share and Business
   Modifications, plus ATC regression, wrapper successor watch, exception expiry, unused-code
   refresh and SAP API changelog review.
@@ -216,5 +235,6 @@ the plan before execution.
 
 Stop or return `research_required` when the landscape is unknown, the business owner or parity
 decision is missing, a target capability is unavailable, a released successor is unproven, BTP
-ownership/boundary/runtime evidence is incomplete, a wrapper cannot be isolated, a required gate
-is degraded without accepted fallback, or a change would bypass ARC-1 safety controls.
+ownership/boundary/runtime evidence is incomplete, a wrapper cannot be isolated, a DDIC change has
+an unproven database impact, a required gate is degraded without accepted fallback, or a change
+would bypass ARC-1 safety controls.

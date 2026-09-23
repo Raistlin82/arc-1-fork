@@ -73,6 +73,8 @@ Primary actions are shown in the decision rows. Specialized dispatches remain ex
 | `scaffold_cap_fiori_elements` | Builds Fiori Elements only for `uiTarget=cap_fiori_elements` |
 | `modernize_side_by_side_ui5` | Modernizes freestyle UI5 only for `uiTarget=ui5_freestyle` |
 | `verify_cap_solution` | Compiles and tests CAP contracts, authorization, events and parity; unresolved 501/TODO handlers fail |
+| `adjust_ddic_in_place` | Executes a unit's DDIC change through ARC-1 only when it needs no database adjustment in any system: `ddicDbImpact` `no_db_change` or `add_columns` |
+| `ddic_database_handoff` | Owned handoff for a DDIC change that needs a database adjustment, exceeds ARC-1 or is unproven; the unit's writes wait until the target definition is verified |
 
 ## Contract notes
 
@@ -100,6 +102,13 @@ Primary actions are shown in the decision rows. Specialized dispatches remain ex
   3578329). Units that expose an interface also carry an integration level (Note 3690029) — same
   letters, separate scale. It never feeds a precedence row, but it constrains an action: an exposed
   RFC, IDoc or SEGW service is not retired or rewritten on the extensibility level alone.
+- **DDIC changes split on database impact, not on the data in development**: SAP adjusts a changed
+  table again at every transport import, and converts it there when the change requires it, so an
+  empty development table proves nothing about QAS or production (PATTERNS §15). `ddicContract`
+  partitions `ddicDbImpact` between `adjust_ddic_in_place` and `ddic_database_handoff`; CI fails on
+  a value that neither or both cover, and on a parent that could execute a DDIC change but not hand
+  one off. Deleting a table or a field is a database adjustment even when no conversion runs: the
+  import drops that data in every system. The unit's most severe class decides.
 - **`create_wrapper_package` and `scaffold_rap_handlers` are not source writes**: the first creates a
   package, the second (with `autoApply=false`) returns skeletons. The syntax gate applies to the call
   that carries source — `create_wrapper_class` and `edit_method` respectively.

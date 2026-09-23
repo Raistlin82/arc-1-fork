@@ -526,6 +526,117 @@
     "keyUserFit": false
    },
    "expectedDecision": "ANY_TO_RESEARCH"
+  },
+  {
+   "id": "ddic_add_columns_on_stack",
+   "facts": {
+    "sourceLevel": "D",
+    "standardParity": "gap",
+    "unusedProven": false,
+    "keyUserFit": false,
+    "selectedDomain": "embedded_abap_cloud_on_stack",
+    "landscape": "s4_private_cloud",
+    "releasedSuccessor": true,
+    "abapCloudTargetPackageApproved": true,
+    "abapCloudLanguageVersionProven": true,
+    "ddicChangeRequired": true,
+    "ddicDbImpact": "add_columns"
+   },
+   "expectedDecision": "ON_STACK_LEVEL_A",
+   "expectedDispatches": ["adjust_ddic_in_place"],
+   "expectedActionPlan": ["rewrite_on_stack_abap_cloud", "adjust_ddic_in_place"]
+  },
+  {
+   "id": "ddic_conversion_on_stack",
+   "facts": {
+    "sourceLevel": "D",
+    "standardParity": "gap",
+    "unusedProven": false,
+    "keyUserFit": false,
+    "selectedDomain": "embedded_abap_cloud_on_stack",
+    "landscape": "s4_private_cloud",
+    "releasedSuccessor": true,
+    "abapCloudTargetPackageApproved": true,
+    "abapCloudLanguageVersionProven": true,
+    "ddicChangeRequired": true,
+    "ddicDbImpact": "db_adjustment"
+   },
+   "expectedDecision": "ON_STACK_LEVEL_A",
+   "expectedDispatches": ["ddic_database_handoff"],
+   "expectedActionPlan": ["rewrite_on_stack_abap_cloud", "ddic_database_handoff"]
+  },
+  {
+   "id": "ddic_extension_structure_on_stack",
+   "facts": {
+    "sourceLevel": "C",
+    "standardParity": "gap",
+    "unusedProven": false,
+    "keyUserFit": false,
+    "selectedDomain": "embedded_abap_cloud_on_stack",
+    "landscape": "s4_on_premise",
+    "releasedSuccessor": true,
+    "abapCloudTargetPackageApproved": true,
+    "abapCloudLanguageVersionProven": true,
+    "ddicChangeRequired": true,
+    "ddicDbImpact": "capability_gap"
+   },
+   "expectedDecision": "ON_STACK_LEVEL_A",
+   "expectedDispatches": ["ddic_database_handoff"]
+  },
+  {
+   "id": "ddic_metadata_mechanical",
+   "facts": {
+    "sourceLevel": "B",
+    "standardParity": "gap",
+    "unusedProven": false,
+    "keyUserFit": false,
+    "selectedDomain": "embedded_abap_cloud_on_stack",
+    "releasedSuccessor": false,
+    "deterministicFindingsOnly": true,
+    "ddicChangeRequired": true,
+    "ddicDbImpact": "no_db_change"
+   },
+   "expectedDecision": "MECHANICAL_REMEDIATION",
+   "expectedDispatches": ["adjust_ddic_in_place"]
+  },
+  {
+   "id": "ddic_unknown_impact_fails_closed",
+   "facts": {
+    "sourceLevel": "B",
+    "standardParity": "gap",
+    "unusedProven": false,
+    "keyUserFit": false,
+    "selectedDomain": "embedded_abap_cloud_on_stack",
+    "releasedSuccessor": false,
+    "deterministicFindingsOnly": true,
+    "ddicChangeRequired": true,
+    "ddicDbImpact": "unknown"
+   },
+   "expectedDecision": "MECHANICAL_REMEDIATION",
+   "expectedDispatches": ["ddic_database_handoff"]
+  },
+  {
+   "id": "ddic_table_retirement",
+   "facts": {
+    "sourceLevel": "C",
+    "standardParity": "gap",
+    "unusedProven": true,
+    "ddicChangeRequired": true,
+    "ddicDbImpact": "db_adjustment"
+   },
+   "expectedDecision": "ANY_TO_REMOVED",
+   "expectedDispatches": ["ddic_database_handoff"]
+  },
+  {
+   "id": "ddic_standard_replacement_retires_tables",
+   "facts": {
+    "sourceLevel": "D",
+    "standardParity": "acceptable",
+    "ddicChangeRequired": true,
+    "ddicDbImpact": "db_adjustment"
+   },
+   "expectedDecision": "STANDARD_FIRST",
+   "expectedDispatches": ["ddic_database_handoff"]
   }
  ],
  "runtimeScenarios": [

@@ -33,6 +33,7 @@ approved chain action may invoke ARC-1 writes.
 | Wrapper | `create_wrapper_package`, `create_wrapper_class`, `release_api`, `read_governance_document`, `write_governance_document` |
 | Regression proof | `run_unit_tests`, `read_diff`, `atc_assessment` |
 | Retirement | `find_references`, `delete_object` |
+| DDIC adjustment | `read_source`, `read_ddic_structure`, `find_references`, `batch_create_objects`, `write_ddic_metadata`, `write_update`, `activate_batch` |
 | Transport | `transport_check`, `transport_diff`, `transport_create`, `transport_release` |
 
 The runtime must copy the operation, substitute every declared `requiredInput`, and preserve the
@@ -162,6 +163,29 @@ Release happens only after `sap-transport-review`; ARC-1 performs its inactive-o
 objects per call (use `offset`) and follows the same algorithm as SAP's own ADT transport-diff tool,
 instead of reconstructing the request object by object from version history.
 
+### DDIC adjustment (no database adjustment only)
+
+```text
+SAPRead(type="TABL", name="ZCC_ORDERS")
+SAPContext(action="structure", type="TABL", name="ZCC_ORDERS")
+SAPRead(type="DTEL", name="ZCC_ORDER_STATUS")
+SAPNavigate(action="references", type="DTEL", name="ZCC_ORDER_STATUS", maxResults=1000)
+SAPTransport(action="check", type="TABL", name="ZCC_ORDERS", package="ZCC_TARGET")
+SAPWrite(action="update", type="DTEL", name="ZCC_ORDER_STATUS", mediumLabel="Order status", transport="DEVK900001")
+SAPWrite(action="update", type="TABL", name="ZCC_ORDERS", source="<approved table definition>", transport="DEVK900001")
+SAPActivate(action="activate", objects=[{type:"DTEL", name:"ZCC_ORDER_STATUS"}, {type:"TABL", name:"ZCC_ORDERS"}])
+SAPRead(type="TABL", name="ZCC_ORDERS")
+SAPDiagnose(action="atc", objects=[{type:"CLAS", name:"ZCL_CC_ORDER_SERVICE"}], variant="ABAP_CLOUD_READINESS", resultFormat="structured")
+```
+
+These calls run only for `ddicDbImpact` `no_db_change` or `add_columns` (PATTERNS §15). A DOMA or
+DTEL update merges the named fields into the stored metadata, so it carries no source and leaves
+every other field as it is. ARC-1 keeps no version feed for TABL, DOMA or DTEL: the first reads are
+the only baseline for the diff and the rollback, and the last read proves the target definition.
+`structure` returns the include and append tree of a table, confirming each append from its own
+`extend type` source. Nothing here adjusts a database: that happens at activation and at every
+import, and a change that needs one belongs to `ddic_database_handoff`.
+
 ### Package gates (govern mode)
 
 ```text
@@ -186,6 +210,16 @@ per-unit `atc_assessment` and `run_unit_tests` and record the gate as degraded.
 | Key User | Planning and handoff | Record SAP app/tool, extension point, owner and acceptance tests; no invented ARC-1 mutation |
 | Kyma CAP | Executable preparation through the same CAP chain plus official CAP Kyma/Helm tooling | Require a concrete Kubernetes need and actual cluster/registry approval; never claim an unexecuted deployment |
 | ATC exemption creation | Manual/external | Record owner, finding, rationale and expiry; do not invent a tool action |
+| DDIC change without database adjustment (`no_db_change`, `add_columns`) | Executable through ARC-1 in `adjust_ddic_in_place` | Capture as-found definitions, write, activate together, re-read the target, ATC the consumers |
+| DDIC database adjustment (field deleted, renamed or retyped, key change, table deleted) | Owned manual handoff | Record the plan per system, retention approval and owners; ARC-1 has no database utility operation |
+| Append or extension-include structure creation | Manual (ADT append wizard, Custom Fields app) | The ADT create protocol is opaque to ARC-1 (live spike on 7.58, `docs/research/2026-06-04-tabl-append-create-spike-a4h.md`); record it as `capability_gap` |
+| Table technical settings (data class, size category, buffering) | Manual | ARC-1 has no read/write contract for them (ARC-1 roadmap FEAT-70); record it as `capability_gap` |
+| DDIC activation log | Unavailable | ARC-1 cannot read it (ARC-1 roadmap FEAT-71), so a DDIC change is classified before the write, never inferred from activation |
+
+These three gaps are object types or diagnostics, not tool actions, so the coverage register in
+`scripts/ci/clean-core-tool-coverage.json` will not flag the release that closes them. Re-check them
+at every upstream merge and move the matching `capability_gap` cases to `adjust_ddic_in_place` only
+after a live verification.
 
 ## Runtime result contract
 

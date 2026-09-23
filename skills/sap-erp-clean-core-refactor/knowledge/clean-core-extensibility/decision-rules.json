@@ -312,6 +312,21 @@
         572
       ],
       "confidence": "authoritative"
+    },
+    {
+      "id": "CC-DDIC-CUSTOM-FIELD-LEVELS",
+      "topics": [
+        "ddic",
+        "custom-fields",
+        "extension-include",
+        "append-structure",
+        "classification"
+      ],
+      "statement": "A custom field on an SAP database table or CDS view is Level A through a released extension include, Level B through an extension include that has not been released, and Level C through a classic append structure; a classic append is monitored until an extension include becomes available and then adapted.",
+      "sourcePages": [
+        63
+      ],
+      "confidence": "authoritative"
     }
   ]
 }

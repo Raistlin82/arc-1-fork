@@ -186,7 +186,7 @@ Releasing the transport is a **separate, explicit** step — it never happens au
 
 ---
 
-## The 8 golden rules (read these once)
+## The 9 golden rules (read these once)
 
 1. **ARC-1 is the only thing that writes to SAP.** Skills and MCP servers only advise or research.
 2. **Nothing is written before you approve the plan**, per unit.
@@ -198,6 +198,10 @@ Releasing the transport is a **separate, explicit** step — it never happens au
 7. **A wrapper is honest about its debt:** the result is reported as "A consumer + B wrapper" (or
    "+ C"), never as pure A.
 8. **Start small, one landscape, one package, one unit at a time.**
+9. **A dictionary change runs automatically only when no system has to adjust its data.** New
+   fields and changed texts run through ARC-1; deleting, renaming or retyping a table field, or
+   deleting a table, goes to a person with a plan for every system. An empty table in development
+   proves nothing, because every transport import adjusts the table again.
 
 ---
 
@@ -218,6 +222,7 @@ Releasing the transport is a **separate, explicit** step — it never happens au
 | **Gate** | A must-pass check (e.g. tests green, ATC clean, human approval). A failed MUST gate blocks the write. |
 | **Logical unit** | One thing to decide about as a whole — e.g. a class with its local + test includes — not each individual file. |
 | **Transport** | The SAP change container your edits are recorded in, to be moved between systems. |
+| **DDIC conversion** | SAP rebuilding a database table so its existing data fits a changed definition. It runs again at every transport import, which is why such changes go to a person with a database plan. |
 
 ---
 
@@ -230,6 +235,7 @@ Releasing the transport is a **separate, explicit** step — it never happens au
 | Execute won't write | Check `SAP_ALLOW_WRITES=true` and that your target package matches `SAP_ALLOWED_PACKAGES`. For transport creation/release you also need `SAP_ALLOW_TRANSPORT_WRITES=true`. |
 | It asks about BTP data ownership / identity / retirement | Any side-by-side Level A target must prove these. There is no shortcut — the runtime choice (CF/Kyma) alone never proves cleanliness. |
 | I want to push a Level B unit up to A | Use `--push-to-a` with the specific unit names, after an architecture review. |
+| A dictionary change became a handoff instead of running | Its database impact is `db_adjustment`, `capability_gap` or `unknown` (PATTERNS §15): a table field is deleted, renamed or retyped, an append structure must be created, or the where-used evidence is incomplete. Supply the missing evidence, or record the part that needs no adjustment as its own unit. |
 
 ---
 

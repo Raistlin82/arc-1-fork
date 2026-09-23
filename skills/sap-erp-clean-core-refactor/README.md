@@ -20,6 +20,7 @@ For each logical unit, the orchestrator answers:
 6. Which action is executable now, which is a manual handoff, and which needs research?
 7. Which proof and governance controls make the result acceptable?
 8. For BTP, who owns the data, which released boundary is used, and why BTP ABAP Environment, CF or Kyma fits?
+9. Does a dictionary change force a database adjustment in any system, or can ARC-1 apply it directly?
 
 The answer to question 4 is derived from the versioned questionnaire in [`aem-model.json`](./aem-model.json),
 not accepted as an unexplained domain preference. Incomplete or conflicting facts resolve to
@@ -96,6 +97,8 @@ Level is a compliance dimension, not the architecture selector. Wrapper results 
 | Cloud Foundry side-by-side | Executable through the evidence-gated common CAP chain and CF packaging |
 | Kyma side-by-side | CAP build and official Kyma/Helm preparation are executable; deployment needs cluster/registry approval |
 | ATC exemption creation | Manual/external; ARC-1 has no such operation |
+| DDIC change without database adjustment | Executable through ARC-1 (`adjust_ddic_in_place`) for metadata changes, new objects and new non-key fields |
+| DDIC database adjustment, append creation, technical settings | Owned manual handoff (`ddic_database_handoff`); an empty development table never downgrades it |
 
 ## Safety model
 

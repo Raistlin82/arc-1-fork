@@ -207,57 +207,63 @@ if (chain) {
     'batch_create_objects',
     'create_wrapper_class',
   ]);
+  // DDIC metadata writes (DOMA/DTEL) carry no source, so no syntax check precedes them, but they
+  // change what every consumer compiles against: they are mutations, and a proof that must follow
+  // the last write must follow them too.
+  const DEFINITION_WRITE_OPS = new Set(['write_ddic_metadata']);
   const MUTATING_OPS = new Set([
     ...SOURCE_WRITE_OPS,
+    ...DEFINITION_WRITE_OPS,
     'delete_object',
     'create_wrapper_package',
     'release_api',
     'write_governance_document',
   ]);
   const GATE_OPERATIONS = {
-    syntax_clean: { operation: 'syntax_check', position: 'before_source_write' },
-    transport_scoped: { operation: 'transport_check', position: 'before_mutation' },
-    atc_no_regression: { operation: 'atc_assessment', position: 'after_source_write' },
-    tests_green: { operation: 'run_unit_tests', position: 'after_source_write' },
+    syntax_clean: { proofs: ['syntax_check'], position: 'before_source_write' },
+    transport_scoped: { proofs: ['transport_check'], position: 'before_mutation' },
+    atc_no_regression: { proofs: ['atc_assessment', 'atc_batch_assessment'], position: 'after_source_write' },
+    tests_green: { proofs: ['run_unit_tests'], position: 'after_source_write' },
+    ddic_target_state_verified: { proofs: ['read_source'], position: 'after_source_write' },
   };
   for (const [name, action] of Object.entries(actions)) {
     const operations = action.operationIds ?? [];
     if (!operations.length) continue;
     const firstSourceWrite = operations.findIndex((operation) => SOURCE_WRITE_OPS.has(operation));
     const firstMutation = operations.findIndex((operation) => MUTATING_OPS.has(operation));
-    let lastSourceWrite = -1;
+    let lastWrite = -1;
     operations.forEach((operation, index) => {
-      if (SOURCE_WRITE_OPS.has(operation)) lastSourceWrite = index;
+      if (SOURCE_WRITE_OPS.has(operation) || DEFINITION_WRITE_OPS.has(operation)) lastWrite = index;
     });
-    for (const [gate, { operation, position }] of Object.entries(GATE_OPERATIONS)) {
+    for (const [gate, { proofs, position }] of Object.entries(GATE_OPERATIONS)) {
       if (!action.gates?.includes(gate)) continue;
-      const at = operations.flatMap((candidate, index) => (candidate === operation ? [index] : []));
+      const label = proofs.join(' or ');
+      const at = operations.flatMap((candidate, index) => (proofs.includes(candidate) ? [index] : []));
       if (!at.length) {
-        fail(`action ${name} requires gate ${gate} but never runs ${operation}`);
+        fail(`action ${name} requires gate ${gate} but never runs ${label}`);
         continue;
       }
       if (position === 'before_source_write' && firstSourceWrite >= 0 && !at.some((index) => index < firstSourceWrite)) {
-        fail(`action ${name}: ${operation} must run before ${operations[firstSourceWrite]} to satisfy ${gate}`);
+        fail(`action ${name}: ${label} must run before ${operations[firstSourceWrite]} to satisfy ${gate}`);
       }
       if (position === 'before_mutation' && firstMutation >= 0 && !at.some((index) => index < firstMutation)) {
-        fail(`action ${name}: ${operation} must run before ${operations[firstMutation]} to satisfy ${gate}`);
+        fail(`action ${name}: ${label} must run before ${operations[firstMutation]} to satisfy ${gate}`);
       }
-      if (position === 'after_source_write' && lastSourceWrite >= 0 && !at.some((index) => index > lastSourceWrite)) {
-        fail(`action ${name}: ${operation} must run after ${operations[lastSourceWrite]} to satisfy ${gate}`);
+      if (position === 'after_source_write' && lastWrite >= 0 && !at.some((index) => index > lastWrite)) {
+        fail(`action ${name}: ${label} must run after ${operations[lastWrite]} to satisfy ${gate}`);
       }
     }
   }
 
   // Catalog closure: an operation no action runs rots silently. Session-scope operations are driven
-  // by the protocol rather than by a per-unit action sequence: SKILL.md pre-flight and
-  // classification, govern-mode package gates, operator transport handling, and discovery-gated
-  // evidence that a mandatory sequence cannot rely on (read_relations exists only in single-target
-  // standard mode when the system advertises it).
+  // by the protocol rather than by a per-unit action sequence: SKILL.md pre-flight, govern-mode
+  // package gates, operator transport handling, and discovery-gated evidence that a mandatory
+  // sequence cannot rely on (read_relations exists only in single-target standard mode when the
+  // system advertises it).
   const SESSION_SCOPE_OPERATIONS = new Set([
     'system_probe',
     'read_system',
     'atc_variants',
-    'atc_batch_assessment',
     'atc_ci_gate',
     'unittest_ci_gate',
     'read_relations',
@@ -319,6 +325,66 @@ if (chain) {
         (typeof condition.fact === 'string' &&
           (Object.hasOwn(condition, 'equals') || Object.hasOwn(condition, 'notEquals') || Array.isArray(condition.in)));
       if (!supported) fail(`dispatch ${dispatch.condition} has unsupported condition ${JSON.stringify(condition)}`);
+    }
+  }
+
+  // DDIC contract: the executable and the handoff dispatch must partition the database-impact
+  // vocabulary exactly. A value covered by neither would let a DDIC change fall through to a
+  // parent's generic write; a value covered by both would run a conversion automatically. Every
+  // parent that may execute a DDIC change must also be able to hand one off.
+  const ddic = chain.ddicContract;
+  if (!ddic || typeof ddic !== 'object') {
+    fail('chain.json needs a ddicContract that partitions DDIC changes by database impact');
+  } else {
+    const factCatalogEntries = chain.decisionFactCatalog ?? {};
+    const impactValues = factCatalogEntries[ddic.impactFact]?.type === 'enum' ? factCatalogEntries[ddic.impactFact].values : [];
+    if (!impactValues.length) fail(`ddicContract.impactFact ${ddic.impactFact} must be an enum in decisionFactCatalog`);
+    if (factCatalogEntries[ddic.changeFact]?.type !== 'boolean') {
+      fail(`ddicContract.changeFact ${ddic.changeFact} must be a boolean in decisionFactCatalog`);
+    }
+    const executableImpacts = Array.isArray(ddic.executableImpacts) ? ddic.executableImpacts : [];
+    const handoffImpacts = Array.isArray(ddic.handoffImpacts) ? ddic.handoffImpacts : [];
+    for (const value of executableImpacts.filter((candidate) => handoffImpacts.includes(candidate))) {
+      fail(`ddicContract makes ${ddic.impactFact}=${value} both executable and a handoff`);
+    }
+    for (const value of impactValues) {
+      if (!executableImpacts.includes(value) && !handoffImpacts.includes(value)) {
+        fail(`ddicContract leaves ${ddic.impactFact}=${value} without an executable or handoff route`);
+      }
+    }
+    for (const value of [...executableImpacts, ...handoffImpacts]) {
+      if (!impactValues.includes(value)) fail(`ddicContract names unknown ${ddic.impactFact} value ${value}`);
+    }
+    const sameValues = (left, right) => left.length === right.length && left.every((value) => right.includes(value));
+    const routeTo = (actionName, impacts) => {
+      const routes = dispatches.filter((dispatch) => dispatch.action === actionName && dispatch.mode !== 'mayOnly');
+      if (routes.length !== 1) {
+        fail(`ddicContract needs exactly one dispatch to ${actionName}, found ${routes.length}`);
+        return undefined;
+      }
+      const conditions = routes[0].conditions ?? [];
+      if (!conditions.some((condition) => condition.fact === ddic.changeFact && condition.equals === true)) {
+        fail(`the dispatch to ${actionName} must require ${ddic.changeFact}=true`);
+      }
+      const impact = conditions.find((condition) => condition.fact === ddic.impactFact);
+      if (!Array.isArray(impact?.in) || !sameValues(impact.in, impacts)) {
+        fail(`the dispatch to ${actionName} must match ${ddic.impactFact} in ${JSON.stringify(impacts)} exactly`);
+      }
+      return routes[0];
+    };
+    const executableRoute = routeTo(ddic.executableAction, executableImpacts);
+    const handoffRoute = routeTo(ddic.handoffAction, handoffImpacts);
+    for (const parent of executableRoute?.parentActions ?? []) {
+      if (handoffRoute && !(handoffRoute.parentActions ?? []).includes(parent)) {
+        fail(`${parent} can execute a DDIC change but cannot hand one off; add it to the ${ddic.handoffAction} dispatch`);
+      }
+    }
+    if (actions[ddic.handoffAction]?.execution !== 'manual_handoff') fail(`${ddic.handoffAction} must be a manual_handoff action`);
+    for (const gate of ['ddic_change_classified', 'ddic_target_state_verified']) {
+      if (!actions[ddic.executableAction]?.gates?.includes(gate)) fail(`${ddic.executableAction} must require ${gate}`);
+    }
+    for (const gate of ['ddic_database_plan_approved', 'ddic_target_state_verified']) {
+      if (!actions[ddic.handoffAction]?.gates?.includes(gate)) fail(`${ddic.handoffAction} must require ${gate}`);
     }
   }
 
@@ -795,8 +861,13 @@ for (const file of walkMarkdown(SKILLS_DIR)) {
     if (call.tool === 'SAPTransport' && /action\s*=\s*"create"/.test(args) && !hasArg(args, 'package')) {
       fail(`${loc}: transport create missing package`);
     }
+    // DOMA/DTEL/MSAG/SRVB/TTYP updates merge metadata fields into the stored object and carry no
+    // source (ARC-1 isMetadataWriteType); every other update replaces the source.
     if (call.tool === 'SAPWrite' && /action\s*=\s*"update"/.test(args)) {
-      for (const arg of ['type', 'name', 'source']) if (!hasArg(args, arg)) fail(`${loc}: SAPWrite update missing ${arg}`);
+      const metadataUpdate = /type\s*=\s*"(DOMA|DTEL|MSAG|SRVB|TTYP)"/.test(args);
+      for (const arg of metadataUpdate ? ['type', 'name'] : ['type', 'name', 'source']) {
+        if (!hasArg(args, arg)) fail(`${loc}: SAPWrite update missing ${arg}`);
+      }
     }
     if (call.tool === 'SAPRead' && /type\s*=\s*"VERSION_SOURCE"/.test(args) && !hasArg(args, 'versionUri')) {
       fail(`${loc}: VERSION_SOURCE missing versionUri`);

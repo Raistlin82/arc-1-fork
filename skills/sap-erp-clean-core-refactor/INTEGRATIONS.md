@@ -37,6 +37,7 @@ connection.
 | Package gates | package-level ATC and ABAP Unit CI runs | `atc_ci_gate`, `unittest_ci_gate` | Degrade to per-unit `atc_assessment` / `run_unit_tests`; record the gate as degraded |
 | Mechanical fixes | quickfix, lint, syntax | `quickfix_preview`, `quickfix_apply`, `lint_candidate`, `format_candidate`, `syntax_check` | Keep as proposal/manual remediation |
 | ABAP execution | update/create, unit surgery, activation, unit tests, diff | `write_update`, `edit_unit`, `batch_create_objects`, `activate_object`, `run_unit_tests`, `read_diff` | Plan remains read-only |
+| DDIC adjustment | definition read, include/append tree, where-used, metadata and source writes, joint activation | `read_source`, `read_ddic_structure`, `find_references`, `batch_create_objects`, `write_ddic_metadata`, `write_update`, `activate_batch` | Route the change to `ddic_database_handoff`; database adjustments, append creation and technical settings are never ARC-1 writes |
 | API governance | read/set release contract | `read_api_state`, `release_api` | No release action; redesign or research |
 | Wrapper | package, class, API release, package-attached SKTD | `create_wrapper_package`, `create_wrapper_class`, `release_api`, `write_governance_document` | Wrapper path blocked |
 | Retirement | references, delete | `find_references`, `delete_object` | No deletion |
@@ -71,6 +72,9 @@ delegate's output, the orchestrator records degraded evidence — it does not si
 | An ATC result counts as evidence only with `variantSource` `requested` or `systemDefault` and `complete: true` | `sap-clean-core-atc`, `migrate-custom-code`, `sap-transport-review` | SAP runs its literal `DEFAULT` variant for an unknown name without an error, and an incomplete worklist looks like a clean one. `requestedUnverified`, `sapFallback` and incomplete runs are degraded evidence |
 | `SAPRead(type="DEVC", name="<package>", maxResults=<n>)` passes `maxResults`, and a listing is reported as partial until a TADIR census confirms it | `sap-unused-code`, `sap-migration-dossier`, `sap-clean-core-atc` | The listing defaults to 200 objects and ADT search omits many repository types, so a delegate that treats it as the scope silently drops objects from every later decision |
 | Exposed interfaces are rated on the integration axis (SAP Note 3690029) and reported as `integrationLevel` | `sap-migration-dossier` (Integration Interfaces), `sap-clean-core-atc` | The chain decides on the extensibility axis (Note 3578329); an exposed RFC, IDoc or SEGW service constrains retirement and rewrite independently, and the two A–D scales must never be merged |
+| A finding whose fix changes a DDIC object is reported to the chain, not fixed inside the quick-fix loop | `migrate-custom-code` | Findings such as field-length extensions change table fields, which is a database adjustment in every system of the landscape; the loop cannot see the landscape, so PATTERNS §15 classifies the change and routes it |
+| DDIC objects in a request are reviewed against the plan's as-found and target definitions | `sap-transport-review` | ARC-1 has no version feed for TABL, DOMA or DTEL: `transport_diff` lists them as inventory rows with no source diff, so an empty diff there proves nothing |
+| Custom fields on SAP tables are classified A through a released extension include, B through an unreleased one and C through a classic append (`CC-DDIC-CUSTOM-FIELD-LEVELS`) | `sap-clean-core-atc`, `sap-migration-dossier` | An append is a DDIC extension, not code: a touchpoint list that skips it reports the unit cleaner than it is |
 
 ## Local skill orchestration
 
@@ -82,8 +86,8 @@ delegate's output, the orchestrator records degraded evidence — it does not si
 | `sap-unused-code` | SHOULD; MUST for removal | SQL/runtime evidence available | Usage evidence and removal candidates |
 | `explain-abap-code` | MUST for non-trivial non-A | Intent is not obvious | Business/technical understanding |
 | `sap-migration-dossier` | Optional | `--report=dossier` or large program | Reviewable HTML/JSON/CSV artifacts |
-| `setup-abap-mirror` | MUST before writes | Any executable source change | As-found source/rollback baseline |
-| `sap-object-documenter` | MUST for decisions/exceptions | Standard replacement, Key User, wrapper, keep B | As-is/to-be and governance record |
+| `setup-abap-mirror` | MUST before writes | Any executable source change, and every DDIC change run in place | As-found source/rollback baseline; for TABL, DOMA and DTEL the only baseline, since ARC-1 keeps no version feed for them |
+| `sap-object-documenter` | MUST for decisions/exceptions | Standard replacement, Key User, wrapper, keep B, DDIC database handoff | As-is/to-be and governance record |
 | `migrate-custom-code` | MUST for deterministic findings | Quickfixable/mechanical ATC set | Canonical quickfix executor |
 | `generate-abap-unit-test` | SHOULD; MUST for wrapper/high-risk logic | ABAP behavior needs regression protection | Test baseline and generated tests |
 | `generate-cds-unit-test` | SHOULD; MUST for semantic ABAP CDS change | ABAP CDS behavior/filter/aggregation changes — in S/4 or in the target BTP ABAP Environment (dual-context rule applies) | ABAP CDS Test Double regression tests |

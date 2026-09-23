@@ -67,6 +67,14 @@
     "serviceBoundaryValues": ["existing_released_api", "custom_rap", "released_event", "unavailable"],
     "uiTargetValues": ["none", "cap_fiori_elements", "ui5_freestyle", "external"]
   },
+  "ddicContract": {
+    "changeFact": "ddicChangeRequired",
+    "impactFact": "ddicDbImpact",
+    "executableImpacts": ["no_db_change", "add_columns"],
+    "handoffImpacts": ["db_adjustment", "capability_gap", "unknown"],
+    "executableAction": "adjust_ddic_in_place",
+    "handoffAction": "ddic_database_handoff"
+  },
   "decisionFactCatalog": {
     "standardParity": { "type": "enum", "values": ["acceptable", "gap"], "collectedBy": "standard-first review (protocol step 3.1) with business-owner parity decision" },
     "unusedProven": { "type": "boolean", "collectedBy": "sap-unused-code runtime and static evidence" },
@@ -110,7 +118,9 @@
     "embeddedAnalyticsTarget": { "type": "boolean", "collectedBy": "analytical requirement triage (aggregate/read-only reporting)" },
     "rapBehaviorGap": { "type": "boolean", "collectedBy": "RAP behavior implementation gap analysis" },
     "fullProductionRapTarget": { "type": "boolean", "collectedBy": "approved full production RAP stack decision" },
-    "prototypeRequested": { "type": "boolean", "collectedBy": "explicit operator prototype request (MAY-only, never a production default)" }
+    "prototypeRequested": { "type": "boolean", "collectedBy": "explicit operator prototype request (MAY-only, never a production default)" },
+    "ddicChangeRequired": { "type": "boolean", "collectedBy": "delta between the as-found definitions (read_source on TABL, structures, DOMA, DTEL, TTYP) and the approved target of the unit" },
+    "ddicDbImpact": { "type": "enum", "values": ["no_db_change", "add_columns", "db_adjustment", "capability_gap", "unknown"], "collectedBy": "PATTERNS §15 classification of every DDIC change in the unit from read_source, read_ddic_structure and a complete find_references; the most severe class wins and incomplete evidence is unknown" }
   },
   "skillCoverage": {
     "self": ["sap-erp-clean-core-refactor"],
@@ -175,6 +185,9 @@
     "btp_delivery_scoped": { "severity": "must", "executor": "human", "fallback": "block" },
     "cap_solution_verified": { "severity": "must", "executor": "agent", "fallback": "block" },
     "source_retirement_proven": { "severity": "must", "executor": "human", "fallback": "block" },
+    "ddic_change_classified": { "severity": "must", "executor": "agent", "fallback": "research" },
+    "ddic_database_plan_approved": { "severity": "must", "executor": "human", "fallback": "block" },
+    "ddic_target_state_verified": { "severity": "must", "executor": "arc-1", "fallback": "block" },
     "governance_baseline": { "severity": "should", "executor": "agent", "fallback": "degraded" }
   },
   "actions": {
@@ -365,6 +378,27 @@
       "localSkills": ["generate-rap-service"],
       "gates": ["owner_approved"],
       "operationIds": ["batch_create_objects", "activate_batch", "publish_service_binding"]
+    },
+    "adjust_ddic_in_place": {
+      "execution": "arc1_guarded",
+      "localSkills": ["setup-abap-mirror"],
+      "gates": ["plan_approved", "ddic_change_classified", "transport_scoped", "generative_diff_approved", "ddic_target_state_verified", "atc_no_regression"],
+      "gatePhases": {
+        "plan": ["plan_approved", "ddic_change_classified"],
+        "build": ["transport_scoped", "generative_diff_approved"],
+        "accept": ["ddic_target_state_verified", "atc_no_regression"]
+      },
+      "operationIds": ["read_source", "read_ddic_structure", "find_references", "transport_check", "batch_create_objects", "write_ddic_metadata", "write_update", "activate_batch", "read_source", "atc_batch_assessment"]
+    },
+    "ddic_database_handoff": {
+      "execution": "manual_handoff",
+      "localSkills": ["sap-object-documenter"],
+      "gates": ["owner_approved", "ddic_database_plan_approved", "manual_handoff_recorded", "ddic_target_state_verified"],
+      "gatePhases": {
+        "plan": ["owner_approved", "ddic_database_plan_approved", "manual_handoff_recorded"],
+        "accept": ["ddic_target_state_verified"]
+      },
+      "operationIds": ["read_source", "read_ddic_structure", "find_references"]
     }
   },
   "decisions": [
@@ -592,6 +626,8 @@
     }
   ],
   "specializedDispatches": [
+    { "condition": "DDIC change that needs no database adjustment", "conditions": [{ "fact": "ddicChangeRequired", "equals": true }, { "fact": "ddicDbImpact", "in": ["no_db_change", "add_columns"] }], "parentActions": ["rewrite_on_stack_abap_cloud", "migrate_custom_code"], "action": "adjust_ddic_in_place" },
+    { "condition": "DDIC change that needs a database adjustment, exceeds ARC-1 or is unproven", "conditions": [{ "fact": "ddicChangeRequired", "equals": true }, { "fact": "ddicDbImpact", "in": ["db_adjustment", "capability_gap", "unknown"] }], "parentActions": ["rewrite_on_stack_abap_cloud", "migrate_custom_code", "remove_unused", "replace_with_standard"], "action": "ddic_database_handoff" },
     { "condition": "SEGW OData V2 service", "conditions": [{ "fact": "hasSegwService", "equals": true }], "parentActions": ["rewrite_on_stack_abap_cloud", "extract_to_side_by_side_cf", "extract_to_side_by_side_kyma", "hybrid_extension"], "action": "migrate_segw_to_rap" },
     { "condition": "custom released S/4 RAP boundary", "conditions": [{ "fact": "serviceBoundary", "equals": "custom_rap" }, { "fact": "hasSegwService", "notEquals": true }], "parentActions": ["rewrite_side_by_side_btp_abap", "extract_to_side_by_side_cf", "extract_to_side_by_side_kyma", "hybrid_extension"], "action": "rap_full_stack_researched" },
     { "condition": "CAP-owned or replicated persistence", "conditions": [{ "fact": "dataOwnership", "in": ["cap", "replicated"] }], "parentActions": ["extract_to_side_by_side_cf", "extract_to_side_by_side_kyma"], "action": "model_cap_persistence" },
