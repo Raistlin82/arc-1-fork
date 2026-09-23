@@ -32,6 +32,8 @@ export interface ServerConfig {
   client: string;
   language: string;
   insecure: boolean;
+  /** Gzip non-empty ADT data-preview POST bodies for approved WAF compatibility. */
+  gzipDataPreviewBody: boolean;
 
   // --- Cookie Authentication ---
   cookieFile?: string;
@@ -41,6 +43,8 @@ export interface ServerConfig {
   transport: TransportType;
   httpAddr: string;
   serverName: string;
+  /** Human-readable single-target label prepended to model-facing MCP instructions. */
+  systemLabel: string;
 
   // --- Read-only Admin UI ---
   /** Read-only inspection UI: off (default), local sidecar server, or mounted web routes on the HTTP server. */
@@ -56,6 +60,8 @@ export interface ServerConfig {
   allowFreeSQL: boolean;
   allowTransportWrites: boolean;
   allowGitWrites: boolean;
+  /** Experimental exact-name denylist applied to every SQL/data-preview source and live CDS lineage. */
+  blockedDataSources: string[];
   allowedPackages: string[];
   allowedTransports: string[];
   /** Resolved deny-action patterns from SAP_DENY_ACTIONS (parsed + validated at startup). */
@@ -85,6 +91,15 @@ export interface ServerConfig {
   oidcAudience?: string;
   /** Clock tolerance in seconds for JWT exp/nbf validation (default: 0 — no tolerance) */
   oidcClockTolerance?: number;
+  /**
+   * Serve RFC 9728 protected-resource metadata in OIDC mode (default: true).
+   * Set false for IdPs that reject the RFC 8707 `resource` parameter MCP clients
+   * send once metadata exists — Microsoft Entra answers `AADSTS9010010`. */
+  oidcDiscovery: boolean;
+  /**
+   * Scopes advertised as `scopes_supported`. IdP-specific (Entra:
+   * `api://<client-id>/access_as_user`), so it cannot be derived; omitted when unset. */
+  oidcScopes?: string[];
   xsuaaAuth: boolean;
   /** Explicit unsafe opt-in for HTTP `/mcp` without API-key, OIDC, or XSUAA auth. */
   allowHttpNoAuth: boolean;
@@ -153,10 +168,11 @@ export interface ServerConfig {
   /** Absolute paths to extension plugins to load at startup (from ARC1_PLUGINS, CSV). Each contributes
    *  `Custom_*` tools via the ToolRegistry. Empty (default) = no plugins. NOT npm package names. */
   plugins: string[];
-  /** Opt-in: allow plugin tools to EXECUTE ABAP console classes (`ctx.run.classRun`, IF_OO_ADT_CLASSRUN).
-   *  Default false. Running arbitrary ABAP is a mutation vector, so it ALSO requires `allowWrites=true`
-   *  and the tool must declare `write` scope. A dedicated switch (not implied by `allowWrites`) so
-   *  enabling built-in writes never silently grants plugins code execution. */
+  /** Opt-in: allow plugin tools to EXECUTE ABAP console classes and reports
+   *  (`ctx.run.classRun` / `ctx.run.programRun`). Default false. Running arbitrary ABAP is a mutation
+   *  vector, so it ALSO requires `allowWrites=true` and the tool must declare `write` scope. A
+   *  dedicated switch (not implied by `allowWrites`) means enabling built-in writes never silently
+   *  grants plugins code execution. */
   allowPluginExecute: boolean;
   /** Opt-in: allow plugin tools to make low-level WRITE calls (`ctx.http.post`/`put`/`delete`) to
    *  **non-ADT** SAP paths (OData `/sap/opu/odata/…`, custom ICF `/sap/bc/http/…`). Default false.
@@ -195,6 +211,10 @@ export interface ServerConfig {
    *  enforces the cap across all per-user clients — not `maxConcurrent` per user.
    *  See docs/adr/0004-layered-rate-limiting.md (Layer 3). */
   maxConcurrent: number;
+  /** Cumulative decompressed data-preview response bytes per MCP tool call (default: 2 MiB). */
+  maxDataPreviewResponseBytes: number;
+  /** Concurrent admitted data-result calls across all users and targets (default: 2). */
+  maxConcurrentDataResults: number;
 
   // --- Rate limiting (Layer 1 + Layer 2) ---
   /** Per-IP cap on OAuth endpoints (`/register`, `/authorize`, `/token`, `/revoke`) in
@@ -240,9 +260,11 @@ export const DEFAULT_CONFIG: ServerConfig = {
   client: '100',
   language: 'EN',
   insecure: false,
+  gzipDataPreviewBody: false,
   transport: 'stdio',
   httpAddr: '0.0.0.0:8080',
   serverName: 'arc-1',
+  systemLabel: '',
   uiMode: 'off',
   uiAddr: '127.0.0.1:8711',
   uiOpen: false,
@@ -251,6 +273,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   allowFreeSQL: false,
   allowTransportWrites: false,
   allowGitWrites: false,
+  blockedDataSources: [],
   allowedPackages: ['$TMP'],
   allowedTransports: [],
   denyActions: [],
@@ -266,6 +289,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   systemType: 'auto',
   xsuaaAuth: false,
   allowHttpNoAuth: false,
+  oidcDiscovery: true,
   oauthDcrTtlSeconds: 0, // 0 = never expire; positive opts into expiry (clamped 60s..90d) — see field JSDoc
   btpOAuthCallbackPort: 0,
   multiTargetEndpoints: false,
@@ -285,6 +309,8 @@ export const DEFAULT_CONFIG: ServerConfig = {
   cacheMode: 'auto',
   cacheFile: '.arc1-cache.db',
   maxConcurrent: 10,
+  maxDataPreviewResponseBytes: 2 * 1024 * 1024,
+  maxConcurrentDataResults: 2,
   authRateLimit: 20,
   mcpHttpRateLimit: undefined,
   rateLimit: 0, // Layer 2 disabled by default — operators opt in (see ADR-0004)

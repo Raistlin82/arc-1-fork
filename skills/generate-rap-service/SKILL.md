@@ -853,7 +853,7 @@ Next steps:
   - Register in FLP launchpad (use SAPManage flp_create_catalog, flp_create_tile, flp_create_group)
   - Create proper DOMA/DTEL for reusable typing (use SAPWrite with type=DOMA/DTEL)
   - Attach SKTD documentation to the service or BDEF (optional)
-  - Review later iterations with `SAPTransport(action="history", type="<type>", name="<name>")` + `SAPRead(type="VERSIONS", objectType="<type>", name="<name>")`
+  - Review later iterations with `SAPTransport(action="history", type="<type>", name="<name>")` for current lock/assignment status plus `SAPRead(type="VERSIONS", objectType="<type>", name="<name>")` for actual revision history
 ```
 
 ## Error Handling

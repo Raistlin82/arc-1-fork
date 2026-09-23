@@ -61,6 +61,7 @@ _Last updated: 2026-07-17._
 | Op allowlist/blocklist | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Package restrictions | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Block free SQL | ✅ | N/A (no free SQL) | ✅ | ❌ | ❌ | N/A | ❌ | ❌ | ❌ | ❌ |
+| Table/CDS source policy | ✅ (experimental exact blocklist + live transitive CDS lineage) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Transport gating | ✅ | ⚠️ (human-in-the-loop selection) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Dry-run mode | ⚠️ (RAP handler preview, `generate_behavior_implementation dryRun`, and syntax/check-before-write previews; no universal write dry-run) | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Audit logging | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ (CloudWatch) | ❌ | ❌ | ❌ | ❌ |
@@ -202,12 +203,12 @@ The npm-graph CycloneDX quick win is now shipped. Remaining Tier 2 work (image/M
 | Feature | ARC-1 | SAP ABAP MCP | vibing-steampunk | mcp-abap-abap-adt-api | mcp-abap-adt (mario) | AWS Accelerator | fr0ster | btp-odata-mcp | dassian-adt / abap-mcpb | sapcli |
 |---------|-------|---|-----------------|----------------------|---------------------|-----------------|---------|---------------|------------------------|--------|
 | List transports | ✅ | ✅ (abap_transport-get) | ✅ | ✅ | ❌ | ✅ | ✅ | N/A | ✅ | ✅ (-r/-rr/-rrr detail) |
-| Create transport | ✅ (K/W/T) | ✅ (abap_transport-create) | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ (5 types: K/W/T/S/R) |
+| Create transport | ✅ (Workbench K) | ✅ (abap_transport-create) | ✅ | ✅ | ❌ | ❌ | ✅ | N/A | ✅ | ✅ (5 types: K/W/T/S/R) |
 | Release transport | ✅ | ❌ (IDE human-in-the-loop) | ✅ | ✅ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (recursive) |
 | Recursive release | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ✅ (recursive) |
 | Delete transport | ✅ (recursive) | ❌ | ❌ | ❌ | ��� | ❌ | ❌ | N/A | ❌ | ✅ |
 | Transport contents | ⚠️ (forward lookup: `SAPTransport get`) | ⚠️ (abap_transport-get) | ❌ | ✅ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (-rrr objects) |
-| Object → transport reverse lookup | ✅ (history action) | ❌ | ❌ | ⚠️ (URI resolve only) | ❌ | ❌ | ❌ | N/A | ⚠️ (URI resolve only) | ❌ |
+| Current object transport lock / assignment candidates | ✅ (`history` legacy action name; not complete history) | ❌ | ❌ | ⚠️ (URI resolve only) | ❌ | ❌ | ❌ | N/A | ⚠️ (URI resolve only) | ❌ |
 | Transport assign | ✅ (reassign owner) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ✅ | ✅ (reassign owner) |
 | Transport gating | ✅ | ⚠️ (human-in-the-loop selection) | ✅ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ |
 | Inactive objects list | ✅ (rich user/deleted/transport metadata + flat fallback) | ⚠️ (IDE-side) | ✅ | ��� | ❌ | ❌ | ✅ | N/A | ❌ | ✅ |

@@ -58,6 +58,17 @@ If the requested variant is unavailable, stop for target-relevant findings unles
 explicitly accepts a named degraded fallback. No findings is not success until checked-object
 coverage is proven.
 
+SAP itself never rejects an unknown variant: it answers HTTP 200 and silently runs the Code
+Inspector variant literally named `DEFAULT`. ARC-1 therefore validates the name and refuses an
+unknown one, and omitting `variant` binds the system's `systemCheckVariant` explicitly. Read the
+evidence from the result before trusting a finding count:
+
+| Field | Accept as evidence when |
+|---|---|
+| `variantSource` | `requested` or `systemDefault`; `requestedUnverified` (the variant list was unreachable) and `sapFallback` (SAP ran `DEFAULT`) are degraded |
+| `complete` | `true`; otherwise report `incompleteReasons` and do not claim a clean result |
+| `objectSetIsComplete` / `processedObjectCount` | the object set covers every object the unit claims to have checked |
+
 ### 2. Group findings
 
 Group by exact source unit and line. For classes, preserve main/definitions/implementations/macros/

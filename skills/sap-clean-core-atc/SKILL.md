@@ -40,6 +40,13 @@ logical unit is incomplete.
 Level A may be Key User on-stack, Developer Extensibility on-stack or side-by-side through released
 touchpoints. This classifier does not infer deployment location from the level.
 
+These are the **extensibility** levels of SAP Note 3578329 — which SAP APIs and extension
+technologies the code relies on. SAP Note 3690029 defines a separate A–D scale for **integration**
+technologies (RFC, IDoc, SEGW OData, file transfer), which complements this one without overlapping
+it. Same letters, different axis: never merge the two into one score. Emit the level here as
+`extensibilityLevel` and take the integration axis from the Integration Interfaces section of
+[`../sap-migration-dossier/SKILL.md`](../sap-migration-dossier/SKILL.md).
+
 ## Protocol
 
 ### 1. Establish live context
@@ -48,8 +55,11 @@ touchpoints. This classifier does not infer deployment location from the level.
 2. Record system release, edition/landscape, components and feature probes. Enumerate the system's
    check variants and its default with `SAPDiagnose(action="atc_variants", variant="*")`, and confirm
    `ABAP_CLOUD_READINESS` and the governed copy of `ABAP_CLOUD_DEVELOPMENT_DEFAULT` against that list
-   before running anything. Where the endpoint is absent, fall back to the variants the customer
-   NAMES, each verified by attempting the run.
+   before running anything. Never probe a variant by attempting a run: SAP answers HTTP 200 for an
+   unknown name and silently runs the Code Inspector variant literally named `DEFAULT`. ARC-1 checks
+   the name first and refuses an unknown one. Where the variant list is unreachable ARC-1 still runs
+   the named variant but reports `variantSource: "requestedUnverified"` — degraded evidence, recorded
+   as such.
 3. Discover an official SAP documentation MCP exact-object capability when exposed; record its
    namespace. Otherwise use official structured SAP release data.
 

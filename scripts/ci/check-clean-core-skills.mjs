@@ -52,6 +52,16 @@ function readJson(file) {
   }
 }
 
+// A tool-definition fixture is normally an array of tools, but single-tool snapshots (such as the
+// live-relations SAPNavigate variant) are stored as one bare definition object.
+function readToolFixture(file) {
+  const json = readJson(file);
+  if (Array.isArray(json)) return json;
+  if (json && typeof json === 'object' && typeof json.name === 'string') return [json];
+  if (json !== undefined) fail(`${file} is neither a tool-definition array nor a single tool definition`);
+  return [];
+}
+
 function walkMarkdown(dir) {
   const out = [];
   for (const name of readdirSync(dir)) {
@@ -516,7 +526,7 @@ if (catalog) {
   if (catalog.version !== 1) fail('action-catalog.json version must be 1');
   const schemas = new Map();
   for (const file of readdirSync(TOOL_FIXTURES).filter((name) => name.endsWith('.json'))) {
-    for (const tool of readJson(join(TOOL_FIXTURES, file)) ?? []) {
+    for (const tool of readToolFixture(join(TOOL_FIXTURES, file))) {
       const entries = schemas.get(tool.name) ?? [];
       entries.push({ file, schema: tool.inputSchema });
       schemas.set(tool.name, entries);
@@ -591,7 +601,7 @@ if (coverage && catalog) {
 
   const surface = new Map();
   for (const file of readdirSync(TOOL_FIXTURES).filter((name) => name.endsWith('.json'))) {
-    for (const tool of readJson(join(TOOL_FIXTURES, file)) ?? []) {
+    for (const tool of readToolFixture(join(TOOL_FIXTURES, file))) {
       const actions = tool.inputSchema?.properties?.action?.enum;
       if (!Array.isArray(actions)) continue;
       const known = surface.get(tool.name) ?? new Set();
