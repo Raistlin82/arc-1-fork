@@ -103,6 +103,9 @@ For **each** logical unit the plan answers, in this order:
    BTP ABAP Environment, Cloud Foundry, Kyma, or a hybrid split. It never just "defaults to BTP".
 4. What is the **cleanliness level** (A/B/C/D) of every touchpoint, and which concrete **action**
    is executable now versus needs a manual handoff or more research.
+5. Does a change to a **table, structure, data element or domain** force SAP to adjust existing data
+   in any system? If not, ARC-1 can apply it; if it does, it becomes a handoff with a database plan
+   (golden rule 9).
 
 > **You do not have to fill the questionnaire by hand.** The agent gathers the facts from the live
 > system and its own questions. If you are curious how the decision is computed, there is a
@@ -127,12 +130,14 @@ Approve this plan subset:
 - ORDER_APPROVAL: rewrite on-stack ABAP Cloud, target package ZSD_CC
 - ORDER_LEGACY_API: wrapper, outcome A + B, wrapper package ZSD_CC_WRAPPERS
 - ORDER_OLD_REPORT: remove (unused)
+- ORDER_STATUS_TABLE: dictionary handoff, owners DEV team and Basis, database plan attached
 
 Transport: DEVK900123
 Leave ORDER_EXTERNAL_SYNC as research_required. Do not touch anything not listed.
 ```
 
-Approve one small batch first. You can always come back for more.
+A dictionary handoff approves the database plan and the people who carry it out; ARC-1 does not
+make that change. Approve one small batch first. You can always come back for more.
 
 ---
 
@@ -170,6 +175,10 @@ change will land in → generates the new version → lints it and checks syntax
 **shows you the exact diff and waits for your yes** → writes through ARC-1 → activates → runs ATC and
 unit tests → re-checks the cleanliness level. If any check fails, that unit stops and the next one
 does **not** start. You are never more than one approval away from control.
+
+When a unit changes dictionary objects, those come first: ARC-1 applies the kinds that need no
+database adjustment and re-reads them before touching the code. A unit waiting on a dictionary
+handoff does not start until its owners have made the change and ARC-1 has confirmed it.
 
 ---
 

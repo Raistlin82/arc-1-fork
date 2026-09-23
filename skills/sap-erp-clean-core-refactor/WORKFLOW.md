@@ -71,6 +71,16 @@ the questionnaire. For every logical unit, review the business owner, source lev
 domain, target level, exact action, operation IDs, evidence, confidence, gates, effort, rollback or
 retirement path, target package and transport.
 
+For a unit that changes DDIC objects, the plan must also record:
+
+- every changed table, structure, data element, domain or table type with its as-found definition,
+  include/append tree and a complete where-used;
+- the `ddicDbImpact` class of each change (PATTERNS §15) and the unit's most severe class;
+- for `ddic_database_handoff`, the database plan per system, the retention approval for any deleted
+  table or field, and the owners.
+
+An empty development table is not evidence for any class.
+
 Run the deterministic resolver from the ARC-1 repository/package:
 
 ```bash
@@ -124,12 +134,15 @@ Approve this plan subset:
 - ORDER_APPROVAL: rewrite_on_stack_abap_cloud, target package ZSD_CC
 - ORDER_LEGACY_API: create_or_use_wrapper, outcome A+B, wrapper package ZSD_CC_WRAPPERS
 - ORDER_OLD_REPORT: remove_unused
+- ORDER_STATUS_TABLE: ddic_database_handoff, owners DEV team and Basis, database plan attached
 
 Transport: DEVK900123
 Keep ORDER_EXTERNAL_SYNC as research_required. Do not execute unlisted units.
 ```
 
-Key User decisions approve a manual handoff, not an invented ARC-1 write. Kyma deployment approval
+Key User decisions approve a manual handoff, not an invented ARC-1 write. A DDIC database handoff
+approves the database plan and its owners; the owners make the change, and ARC-1 only verifies the
+target definition afterwards. Kyma deployment approval
 is separate from architecture approval and requires a real cluster, registry, namespace and
 delivery owner. Wrapper approval must include owner, exception class, isolated package, successor
 watch and retirement trigger.
@@ -201,7 +214,7 @@ before an action is resolved — the runtime changes packaging, never the compli
 %%{init: {'theme':'base','themeVariables':{'fontSize':'13px','primaryColor':'#EBF0F0','primaryTextColor':'#0F1518','primaryBorderColor':'#5B7275','lineColor':'#5B7275','edgeLabelBackground':'#FFFFFF'},'flowchart':{'curve':'basis','nodeSpacing':30,'rankSpacing':44}}}%%
 flowchart TD
     R["Business requirement and landscape"] --> P["Pre-flight and capability probe"]
-    P --> I["Logical-unit and touchpoint inventory"]
+    P --> I["Logical-unit, touchpoint and DDIC-impact inventory"]
     I --> S{"SAP standard covers the need?"}
     S -->|Yes| STD["Replace with standard and retire custom code"]
     S -->|No| U{"Unused?"}
@@ -261,6 +274,7 @@ flowchart LR
     EXEC --> VERIFY["Syntax, activation, ATC, tests, diff approval"]
     VERIFY --> TR["sap-transport-review"]
     TR --> GOV["KPI baseline and continuous governance"]
+    HAND -->|DDIC target verified| EXEC
     HAND --> GOV
 
     classDef human fill:#FAEFD6,stroke:#86660F,stroke-width:1.5px,color:#3D2F05
@@ -337,18 +351,21 @@ flowchart TD
     R -->|Kyma| K["deploy-cap-to-kyma"]
     CF --> Q["Parity, operations and ERP retirement proof"]
     K --> Q
+    Q -->|S/4 tables retired| RT["ddic_database_handoff with retention approval"]
 
     classDef decision fill:#FFFFFF,stroke:#0B5D5D,stroke-width:1.5px,color:#0F1518
     classDef skill fill:#DDEBEA,stroke:#0B5D5D,stroke-width:1px,color:#08302F
     classDef gather fill:#F4F6F6,stroke:#8C9C9F,stroke-width:1px,color:#243033
     classDef caution fill:#F6E0D9,stroke:#9B3520,stroke-width:1px,color:#4A180C
     classDef proof fill:#EBF0F0,stroke:#5B7275,stroke-width:1.5px,color:#1B2426
+    classDef human fill:#FAEFD6,stroke:#86660F,stroke-width:1.5px,color:#3D2F05
 
     class C,O,U,R decision
     class B,E,P,V,FE,UI5,T,K skill
     class A,D,S,CF gather
     class X caution
     class Q proof
+    class RT human
 ```
 
 ABAP CDS and CAP CDS may both appear only for `cdsTarget=dual_boundary`: ABAP CDS/RAP exposes the
@@ -362,7 +379,12 @@ ownership accidentally.
 flowchart LR
     A["Approved unit"] --> B["Mirror and as-found documentation"]
     B --> T["Transport scope check"]
-    T --> C{"Deterministic findings?"}
+    T --> K{"DDIC changes?"}
+    K -->|None| C{"Deterministic findings?"}
+    K -->|No database adjustment| DD["adjust_ddic_in_place"]
+    K -->|Adjustment, gap or unknown| DH["ddic_database_handoff until the target is verified"]
+    DD --> C
+    DH --> C
     C -->|Yes| D["migrate-custom-code"]
     C -->|No| E["Action executor"]
     D --> E
@@ -383,9 +405,9 @@ flowchart LR
     classDef proof fill:#EBF0F0,stroke:#5B7275,stroke-width:1.5px,color:#1B2426
 
     class A,B gather
-    class C decision
-    class T,D,E,G arc1
-    class I human
+    class C,K decision
+    class T,D,E,G,DD arc1
+    class I,DH human
     class STOP,R stop
     class F,H,J proof
 ```

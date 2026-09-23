@@ -16,7 +16,7 @@ tool shapes in [`action-catalog.json`](./action-catalog.json), and the architect
 | Local ARC-1 skills | Specialized planning/generation around ARC-1 tools | Only through ARC-1 |
 | SAP documentation MCPs | Released-object, successor, feature and official documentation evidence | No |
 | External SAP skills/plugins | Domain guidance and review gates | No direct SAP write in this chain |
-| Human/SAP apps | Business parity, Key User implementation, exceptions and approvals | Outside ARC-1 |
+| Human/SAP apps | Business parity, Key User implementation, DDIC database adjustments, exceptions and approvals | Outside ARC-1 |
 
 Capability discovery happens before planning. Record the exact exposed namespace or skill name;
 never assume a plugin command exists because it appears in this document.
@@ -198,8 +198,9 @@ consumer-experience hub. It is not a generic Clean Core dependency.
 ## Missing enterprise integrations
 
 No currently exposed capability in this repository automates SAP Cloud ALM, LeanIX, Signavio, RISE
-Methodology Dashboard, Key User apps or ATC exemption creation. The orchestrator records manual
-handoffs and evidence links for these systems. They are not simulated with invented tool calls.
+Methodology Dashboard, Key User apps, ATC exemption creation, the ABAP Dictionary database utility,
+append-structure creation or table technical settings. The orchestrator records manual handoffs and
+evidence links for these systems. They are not simulated with invented tool calls.
 
 ## Capability severity
 

@@ -128,3 +128,6 @@ Primary actions are shown in the decision rows. Specialized dispatches remain ex
   actual deployment still requires cluster, registry and delivery approval.
 - Generative writes require diff approval. Deterministic SAP quick fixes may share one explicit
   package-and-transport approval, but still require syntax, activation, ATC and tests.
+- A DDIC change runs automatically only with `ddicDbImpact` `no_db_change` or `add_columns`,
+  proven from as-found definitions and a complete where-used. Data in development never proves a
+  class, and a deleted table or field always needs a retention approval.

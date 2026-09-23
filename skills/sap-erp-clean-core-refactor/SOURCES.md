@@ -187,7 +187,9 @@ A side-by-side Level A record additionally stores the exact released API/event/c
 all-touchpoint result, direct/unreleased access checks, data ownership, replication controls,
 transaction and identity models, runtime-fit rationale, CAP compile/test evidence, deployment
 evidence where executed, parity result and ERP retirement or stable-boundary plan. A wrapper is
-recorded as a separate B/C component even when its facade is released.
+recorded as a separate B/C component even when its facade is released. A DDIC change record stores
+the as-found and target definition of every object, its `ddicDbImpact` class with the where-used
+evidence behind it and, for a handoff, the database plan per system and the retention approval.
 
 Cache age never upgrades confidence. Recheck API release state, supported contracts and successor
 availability before execution even when planning evidence is cached.

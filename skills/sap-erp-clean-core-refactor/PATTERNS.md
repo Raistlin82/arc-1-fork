@@ -233,6 +233,8 @@ Execution sequence:
 
 Specialized dispatches are chosen only after the architecture action:
 
+- DDIC change: `adjust_ddic_in_place` when no system needs a database adjustment, otherwise
+  `ddic_database_handoff` (§15); either one runs before the code that uses the changed definitions;
 - SEGW service: `migrate-segw-to-rap`;
 - embedded analytics: `generate-analytics-star-schema` and `generate-cds-analytical-query`;
 - RAP behavior gap: `generate-rap-logic`;
@@ -249,7 +251,9 @@ The side-by-side plan must define:
 - retry, idempotency and compensation;
 - TCO, digital-access/commercial review where applicable;
 - availability, observability, transport and operations;
-- business parity and ERP retirement sequence.
+- business parity and ERP retirement sequence. Retiring S/4 tables whose data moved to BTP is a
+  `db_adjustment` (§15): it goes through `ddic_database_handoff` with a retention approval, inside
+  the retire phase, never as part of the build.
 
 The AEM resolver first distinguishes BTP ABAP Environment from CF/Kyma. For CAP, run
 `modernize-abap-side-by-side-core` and persist `side-by-side-decision.json`; then dispatch only the
@@ -339,6 +343,7 @@ complete.
 | Development owner | implementation, tests and support |
 | Clean Core governance | variants, exceptions, KPIs and lifecycle review |
 | Operations/security | runtime, identity, monitoring and production acceptance |
+| Basis/DBA | database plan per system, import windows and post-import consistency for DDIC adjustments |
 
 ### KPIs
 
