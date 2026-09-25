@@ -1047,6 +1047,10 @@
           ],
           "description": "Check mode: create (default) or modify."
         },
+        "group": {
+          "type": "string",
+          "description": "check/history: parent group for INCL L<group>… or a new FUNC; existing FUNC auto-resolves."
+        },
         "pgmid": {
           "type": "string",
           "description": "Program ID for remove_object: \"R3TR\" (whole object) or \"LIMU\" (sub-object). Required — object type alone does not determine pgmid."

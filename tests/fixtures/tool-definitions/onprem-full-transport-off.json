@@ -407,7 +407,7 @@
         },
         "group": {
           "type": "string",
-          "description": "For FUNC: parent function-group name. Required for FUNC create (the FUGR must already exist — create it first via SAPWrite type=FUGR). Auto-resolved via search for FUNC update/delete if omitted."
+          "description": "FUNC: existing FUGR; required for create, otherwise resolved. INCL: group for L<group>…; omit for standalone."
         },
         "processingType": {
           "type": "string",

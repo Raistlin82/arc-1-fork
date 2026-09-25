@@ -731,7 +731,7 @@ export function getToolDefinitions(
           group: {
             type: 'string',
             description:
-              'For FUNC: parent function-group name. Required for FUNC create (the FUGR must already exist — create it first via SAPWrite type=FUGR). Auto-resolved via search for FUNC update/delete if omitted.',
+              'FUNC: existing FUGR; required for create, otherwise resolved. INCL: group for L<group>…; omit for standalone.',
           },
           ...(btp ? {} : FuncProcessing.FUNCTION_PROCESSING_TOOL_PROPERTIES),
           dataType: { type: 'string', description: 'DOMA/DTEL: ABAP data type (e.g., CHAR, NUMC, DEC)' },
@@ -1641,6 +1641,10 @@ export function getToolDefinitions(
             type: 'string',
             enum: ['create', 'modify'],
             description: 'Check mode: create (default) or modify.',
+          },
+          group: {
+            type: 'string',
+            description: 'check/history: parent group for INCL L<group>… or a new FUNC; existing FUNC auto-resolves.',
           },
           pgmid: {
             type: 'string',
