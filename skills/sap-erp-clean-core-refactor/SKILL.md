@@ -85,6 +85,9 @@ target-domain decision. Do not default to BTP Cloud Foundry.
 - Load the smallest relevant evidence pack from
   `knowledge/clean-core-extensibility/decision-rules.json`. Use
   `npm run clean-core:query -- <terms>` during repository development.
+- The SAP source text (`knowledge/clean-core-extensibility/raw/`) is never shipped. If it is absent,
+  cite rules by source page and never quote SAP wording you cannot see; if a private install has it,
+  read the cited chunk before relying on a rule. See [SOURCES.md](./SOURCES.md#private-raw-corpus).
 
 ### 2. Inventory logical units and touchpoints
 

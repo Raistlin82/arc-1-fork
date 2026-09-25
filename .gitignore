@@ -124,3 +124,11 @@ __pycache__/
 
 # Local agent-skills install target (`npx arc-1 skills install`)
 .agents/
+
+# SAP copyrighted source text: never committed or published. Skill knowledge bases ship only the
+# derived graph and curated rules; the page-range transcripts (raw/) and the SAP source documents
+# they are extracted from stay in private local installs.
+**/knowledge/**/raw/
+**/knowledge/**/source/
+**/knowledge/**/sources/
+**/knowledge/**/*.pdf

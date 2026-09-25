@@ -1,4 +1,7 @@
 **/source/
+**/sources/
+**/raw/
+**/*.pdf
 **/graphify-out/.graphify*
 **/graphify-out/cache/
 **/graphify-out/cost.json

@@ -36,16 +36,42 @@ Path: `knowledge/clean-core-extensibility/`
 | `graphify-out/CURATION.md` | Curation metrics and the explicit non-executable bridges added to the source graph |
 | `graphify-out/GRAPH_REPORT.md` | Communities, quality observations and graph summary |
 | `graphify-out/graph.html` | Interactive human exploration |
-| `raw/*.md` | Page-bounded source extraction used to audit a rule without loading the full document |
+| `raw/*.md` | **Local only, never committed.** Page-bounded source extraction used to audit a rule without loading the full document; present only in private installs (see [Private raw corpus](#private-raw-corpus)) |
 
 Outside the knowledge directory, [`aem-model.json`](./aem-model.json) operationalizes the AEM
 selection criteria and `runtime/resolve-plan.mjs` combines them with `chain.json`. The knowledge
 graph explains and traces concepts; only the curated rules, structured AEM facts and live evidence
 authorize a runtime decision.
 
-The source PDF is not packaged. The curated index preserves its title/version and page references;
-raw chunks preserve enough local context to audit each rule. Graph generation caches and the local
-PDF symlink are build inputs, not runtime skill content.
+The source PDF is not packaged, and neither is any transcript of it. The curated index preserves its
+title/version and page references, which is all the public repository ships. Graph generation
+caches, the local PDF symlink and the raw chunks are build inputs, not runtime skill content.
+
+### Private raw corpus
+
+The source document is SAP copyrighted material distributed to SAP partners, so its full text must
+never be committed, packaged or published. `.gitignore` (repository root and `knowledge/`) and
+`knowledge/.npmignore` exclude `raw/`, `source/`, `sources/` and PDFs under any `knowledge/`
+directory. Do not weaken those rules, and do not paste substantial passages of the document into
+committed files: rules and graph nodes carry short labels and page numbers only.
+
+Detect the mode at runtime:
+
+```bash
+KB=skills/sap-erp-clean-core-refactor/knowledge/clean-core-extensibility
+HAS_RAW=$([ -d "$KB/raw" ] && echo yes || echo no)
+```
+
+- `HAS_RAW=no` (any clone of the public repository): work from `decision-rules.json`, the curated
+  graph and the page references, and cite the source as *Clean Core Extensibility for Architects*
+  (2026-07), PDF page N. Never fabricate a quotation you cannot see.
+- `HAS_RAW=yes` (private install): open the cited `raw/*.md` chunk to audit the exact wording
+  before relying on it.
+
+To rebuild the private corpus locally, obtain the PDF through your own SAP partner access, place it
+at `$KB/source/clean-core-extensibility-for-architects-2026-07.pdf` (ignored), and regenerate the
+page-range chunks into `$KB/raw/` (ignored) with the same graphify extraction that produced
+`graphify-out/`. Both directories stay on your machine.
 
 During repository work, query the compact layer with:
 
@@ -87,8 +113,8 @@ Important curated page groups:
 | AI fixes, wrappers, ATC and exemptions | 551-600 |
 
 `check:clean-core-skills` validates only that `sourcePages` are integer arrays (shape, not
-content); semantic accuracy of every page citation requires human review against the raw
-transcripts, because page numbers alone cannot prove what a page says.
+content); semantic accuracy of every page citation requires human review against the source
+document (or the private raw transcripts), because page numbers alone cannot prove what a page says.
 
 ## Live ARC-1 evidence
 
