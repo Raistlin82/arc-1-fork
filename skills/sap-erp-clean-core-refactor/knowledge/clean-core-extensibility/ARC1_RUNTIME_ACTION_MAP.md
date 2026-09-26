@@ -12,7 +12,7 @@ approved chain action may invoke ARC-1 writes.
 
 | Layer | Question | Artifact |
 |---|---|---|
-| Strategy | What does SAP Clean Core guidance require? | graph, raw source chunks, `decision-rules.json` |
+| Strategy | What does SAP Clean Core guidance require? | graph, `decision-rules.json`, raw source chunks (private installs only, never committed) |
 | Decision | Which standard, use case, domain, level and action apply? | `chain.json`, `DECISION_MATRIX.md` |
 | Capability | Can the current environment execute the action? | system probe, available skills/MCPs, action executor |
 | Execution | Which exact tool payloads and gates apply? | `action-catalog.json` plus live substituted inputs |
