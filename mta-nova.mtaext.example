@@ -1,0 +1,55 @@
+# ──────────────────────────────────────────────────────────────────────
+# NOVA team deployment — MTA Extension Descriptor (TEMPLATE)
+#
+# The ARC-1 the development team uses through the NOVA toolkit: read and
+# write, every capability on, each developer acting in SAP as themselves
+# (principal propagation). It is the only way to reach ADT on SAP S/4HANA
+# Cloud Public Edition (docs_page/s4hana-public-cloud.md), and it keeps SAP
+# passwords off the developers' machines for the other systems too.
+#
+#   cp mta-nova.mtaext.example mta-nova.mtaext      # gitignored: fill in the destination
+#   mbt build
+#   cf deploy mta_archives/arc1-mcp_<version>.mtar -e mta-nova.mtaext
+#
+# One deployment per SAP system (or per landscape): give each one its own
+# ARC1_SERVER_NAME and route. The developers add it to Claude Code with
+#   claude mcp add --transport http arc-1 https://<route>/mcp
+# (the NOVA installer writes it into .mcp.json from ARC1_MCP_URL) and log in
+# with XSUAA in the browser.
+#
+# What each developer may do is decided on the SAP side, not here:
+# - on SAP BTP, the role collection "ARC-1 Developer + SQL (<space>)" that the
+#   deployment creates (read, write, transports, git, data, sql);
+# - in the SAP system, the developer's own business roles: on S/4HANA Cloud
+#   Public Edition a developer extensibility role, on-premise S_DEVELOP,
+#   S_TRANSPRT and S_ADT_RES.
+# ──────────────────────────────────────────────────────────────────────
+
+_schema-version: "3.1"
+ID: arc1-mcp-nova
+extends: arc1-mcp
+
+modules:
+  - name: arc1-mcp-server
+    properties:
+      # ── The system ───────────────────────────────────────────────────
+      # SAP S/4HANA Cloud Public Edition: the SAMLAssertion destination, the one
+      # SAP Business Application Studio uses (docs_page/s4hana-public-cloud.md).
+      SAP_BTP_PP_DESTINATION: "<SYSTEM_ID>_SAML_ASSERTION"
+      SAP_SYSTEM_TYPE: "btp"
+      # On-premise or Private Cloud through the Cloud Connector instead: a
+      # PrincipalPropagation destination, SAP_SYSTEM_TYPE "onprem"
+      # (docs_page/principal-propagation-setup.md).
+      SAP_PP_ENABLED: "true"
+      SAP_PP_STRICT: "true"
+      ARC1_SERVER_NAME: "arc-1"
+
+      # ── Every capability on: the team develops, activates, transports ──
+      SAP_ALLOW_WRITES: "true"
+      SAP_ALLOWED_PACKAGES: "*"
+      SAP_ALLOW_TRANSPORT_WRITES: "true"
+      SAP_ALLOW_GIT_WRITES: "true"
+      # data preview and freestyle SQL: on for development and test systems;
+      # check the SAP API Policy and the customer's rules before a productive one
+      SAP_ALLOW_DATA_PREVIEW: "true"
+      SAP_ALLOW_FREE_SQL: "true"

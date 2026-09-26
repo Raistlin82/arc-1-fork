@@ -106,6 +106,7 @@ mta_archives/
 mta-overrides.mtaext
 mta-*.mtaext
 !mta-overrides.mtaext.example
+!mta-nova.mtaext.example
 !mta-ui-approuter.mtaext
 
 # TypeScript / Node.js
