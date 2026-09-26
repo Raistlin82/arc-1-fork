@@ -11,7 +11,6 @@
 import type { AdtClient } from '../adt/client.js';
 import { AdtSafetyError } from '../adt/errors.js';
 import { isServerDrivenObjectType } from '../adt/server-driven.js';
-import type { ClassStructure } from '../adt/types.js';
 import type { CachingLayer } from '../cache/caching-layer.js';
 import type { ServerConfig } from '../server/types.js';
 import { type CacheSecurityContext, invalidateInactiveList } from './cache-security.js';
@@ -28,7 +27,6 @@ import {
   objectUrlForType,
   sourceUrlForType,
 } from './object-types.js';
-import { resolveVersionAndDraftInfo, type SourceVersion } from './read.js';
 import { errorResult, type ToolResult } from './shared.js';
 import {
   writeActionAddMethod,
@@ -98,11 +96,7 @@ export async function handleSAPWrite(
     );
   }
 
-  // Server-driven objects (mostly SAP_BASIS 8.16+): DESD, EVTB, DTSC, CSNM, EVTO, COTA, DSFD, DTDC
-  // share one AFF generic-object write contract (POST metadata (blue:blueSource / dtdc:dtdcSource) → PUT source (JSON or DDL text per type)
-  // → activate). They route through the dedicated engine instead of the per-type switch below —
-  // objectBasePath(<sdo>) throws, so this MUST come before the objectUrl computation. Mirrors the
-  // server-driven branch in handleSAPRead.
+  // Types in SDO_REGISTRY use the shared engine (POST metadata → PUT source → activate).
   if (isServerDrivenObjectType(type)) {
     if (type === 'UIAD' && (action === 'create' || action === 'update')) {
       return writeUiad(client, action, name, args, config, cachingLayer, cacheSecurity);
@@ -231,39 +225,6 @@ export async function handleSAPWrite(
     return enforceAllowedPackageForObjectUrl(client, objectUrl, `Operations on ${type} '${name}'`);
   }
 
-  // Helper for class-section surgery (issue #303): fetch the class structure AND
-  // /source/main at the SAME effective version, so the spliced line ranges line
-  // up with the bytes being edited. resolveVersionAndDraftInfo picks 'inactive'
-  // when an unactivated draft exists. We pass that version to BOTH getClassStructure
-  // (the /objectstructure?version= read) and the source read, AND to the cache opts
-  // (so inactive bytes aren't cached under the 'active' key). Without this, a chained
-  // surgery call on a draft would splice active-version line ranges into inactive
-  // source and silently corrupt the draft.
-  async function fetchClassStructureAndMain(
-    clsName: string,
-  ): Promise<{ structure: ClassStructure; main: string; effectiveVersion: SourceVersion }> {
-    const { effectiveVersion } = await resolveVersionAndDraftInfo(
-      client,
-      cachingLayer,
-      'CLAS',
-      clsName,
-      'auto',
-      cacheSecurity,
-    );
-    const structure = await client.getClassStructure(clsName, effectiveVersion);
-    const main = cachingLayer
-      ? (
-          await cachingLayer.getSource(
-            'CLAS',
-            clsName,
-            (ifNoneMatch) => client.getClass(clsName, undefined, { ifNoneMatch, version: effectiveVersion }),
-            { version: effectiveVersion },
-          )
-        ).source
-      : (await client.getClass(clsName, undefined, { version: effectiveVersion })).source;
-    return { structure, main, effectiveVersion };
-  }
-
   const ctx: SapWriteContext = {
     client,
     args,
@@ -284,7 +245,6 @@ export async function handleSAPWrite(
     srcUrl,
     invalidateWrittenObject,
     enforcePackageForExistingObject,
-    fetchClassStructureAndMain,
   };
 
   switch (action) {
