@@ -177,6 +177,11 @@ export async function handleSAPRead(
   // See docs/research/2026-06-15-version-diff-saved-read-action.md.
   if (args.action === 'diff') {
     if (!name) return errorResult('SAPRead action="diff" requires a "name".');
+    if (isServerDrivenObjectType(type)) {
+      return errorResult(
+        'SAPRead action="diff" does not support server-driven types; read version="active" and version="inactive" separately.',
+      );
+    }
     const from = typeof args.from === 'string' && args.from ? args.from : 'active';
     const to = typeof args.to === 'string' && args.to ? args.to : 'inactive';
     const fromLabel = typeof args.fromLabel === 'string' && args.fromLabel ? args.fromLabel : undefined;
@@ -223,16 +228,15 @@ export async function handleSAPRead(
     }
   }
 
-  // Server-driven objects (ABAP Platform 2025 / SAP_BASIS 8.16+): DESD, EVTB, DTSC, COTA, …
-  // share one AFF generic-object contract (blue:blueSource metadata + JSON or DDL-text source), read
-  // via the discovery-gated generic engine instead of the per-type switch below. They bypass
-  // the version/draft/cache machinery (no /source/main text; JSON output).
+  // Types in SDO_REGISTRY use the discovery-gated engine for metadata and JSON or DDL-text source.
+  // Preserve the unversioned developer view for omitted/auto; explicit selection is checked by SAP metadata.
   if (isServerDrivenObjectType(type)) {
     if (!name) return errorResult(`"name" is required for SAPRead type=${type}.`);
     if (!(await ensureServerDrivenSupport(client.http, client.safety, type))) {
       return errorResult(serverDrivenUnavailableMessage('SAPRead', type));
     }
-    const sdo = await getServerDrivenObject(client.http, client.safety, type, name);
+    const version = args.version === 'active' || args.version === 'inactive' ? args.version : undefined;
+    const sdo = await getServerDrivenObject(client.http, client.safety, type, name, version);
     return textResult(toolJson(sdo));
   }
 
