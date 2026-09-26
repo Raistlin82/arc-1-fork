@@ -126,7 +126,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "arc-1@latest"
+        "github:Raistlin82/arc-1-fork"
       ],
       "env": {
         "SAP_URL": "${user_config.sap_url}",

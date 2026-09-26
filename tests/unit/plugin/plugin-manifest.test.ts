@@ -29,6 +29,9 @@ function readYaml(rel: string): Record<string, any> {
   return parse(readFileSync(join(ROOT, rel), 'utf8')) as Record<string, any>;
 }
 
+// the fork runs itself, built from git by `prepare`: never the upstream npm package
+const FORK = 'github:Raistlin82/arc-1-fork';
+
 function placeholder(name: string): string {
   return `\${${name}}`;
 }
@@ -72,7 +75,7 @@ describe('Agent Plugins 1.0 portable package', () => {
     expect(server).toEqual({
       type: 'stdio',
       command: 'npx',
-      args: ['-y', 'arc-1@latest'],
+      args: ['-y', FORK],
       cwd: placeholder('PLUGIN_DATA'),
     });
   });
@@ -91,11 +94,11 @@ describe('Claude Code plugin.json', () => {
     expect(typeof plugin.version).toBe('string');
   });
 
-  it('declares the ARC-1 MCP server inline as npx arc-1@latest', () => {
+  it('declares the ARC-1 MCP server inline as npx of this fork', () => {
     const server = plugin.mcpServers?.['arc-1'];
     expect(server).toBeTruthy();
     expect(server.command).toBe('npx');
-    expect(server.args).toEqual(['-y', 'arc-1@latest']);
+    expect(server.args).toEqual(['-y', FORK]);
   });
 
   it('maps SAP credentials from userConfig into the server env', () => {
@@ -133,7 +136,7 @@ describe('Cursor-native plugin adapter', () => {
     const cursorMcp = readJson(cursorPlugin.mcpServers);
     const server = cursorMcp.mcpServers?.['arc-1'];
     expect(server.command).toBe('npx');
-    expect(server.args).toEqual(['-y', 'arc-1@latest']);
+    expect(server.args).toEqual(['-y', FORK]);
     expect(server.env.SAP_URL).toBe(placeholder('env:SAP_URL'));
     expect(server.env.SAP_PASSWORD).toBe(placeholder('env:SAP_PASSWORD'));
   });
