@@ -14,6 +14,15 @@ ARC-1 connects AI assistants (Claude, GitHub Copilot, Copilot Studio, and any MC
 
 > 📖 **New: AI ABAP Development blog series** — long-form posts on AI for ABAP, ARC-1 design, and real-world BTP / Copilot Studio / Joule walkthroughs. **[Read the series →](https://blog.zeis.de/tags/ai-abap-development-series/)**
 
+## This fork: the ARC-1 of NOVA
+
+This fork is the ARC-1 that the [NOVA toolkit](https://github.com/Raistlin82/nova-app-builder-skill) installs: the ADT tool its developers work on the target SAP system with. It runs two ways, both from this repository:
+
+- **Locally, over stdio**, from git at a pinned commit: `npx -y github:Raistlin82/arc-1-fork#<commit>`. npm runs `prepare` ([`scripts/prepare.mjs`](scripts/prepare.mjs)), which builds `dist/` in the git checkout, so no npm release is needed. Give the commit abbreviated (12 characters): with the full 40-character commit of a GitHub repository, the `npx` of npm 10 stops with "GitFetcher requires an Arborist constructor to pack a tarball". The first start installs and builds (about 30 seconds); the next ones reuse the npx cache. The NOVA installer writes this entry into the project's `.mcp.json`, with the connection taken from environment variables (`SAP_URL`, `SAP_USER`, `SAP_PASSWORD`, `SAP_CLIENT`).
+- **Centrally, on SAP BTP Cloud Foundry**, one deployment per SAP system, with [`mta-nova.mtaext.example`](mta-nova.mtaext.example). It is the only way to reach ADT on SAP S/4HANA Cloud Public Edition: each developer logs in with XSUAA and ARC-1 acts in SAP as that developer (principal propagation, [setup](docs_page/s4hana-public-cloud.md)). No SAP password sits on a developer's machine.
+
+In both, NOVA turns on everything ARC-1 can do: writes in every package, transports, abapGit, data preview and free SQL. The server's own defaults stay the upstream ones (read-only), so a run of this fork without that configuration keeps them. Data preview and free SQL read application data: keep them to development and test systems, and check the [SAP API Policy](docs_page/sap-api-policy-and-architecture.md) before enabling them on a productive one.
+
 ## Why ARC-1?
 
 Built for organizations that need AI-assisted SAP development with guardrails. Inspired by the pioneering work of [abap-adt-api](https://github.com/marcellourbani/abap-adt-api), [mcp-abap-adt](https://github.com/mario-andreschak/mcp-abap-adt), and [vibing-steampunk](https://github.com/oisee/vibing-steampunk) — ARC-1 adds what's needed to run in production:

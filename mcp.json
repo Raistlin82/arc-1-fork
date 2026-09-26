@@ -4,7 +4,7 @@
     "arc-1": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "arc-1@latest"],
+      "args": ["-y", "github:Raistlin82/arc-1-fork"],
       "cwd": "${PLUGIN_DATA}"
     }
   }
