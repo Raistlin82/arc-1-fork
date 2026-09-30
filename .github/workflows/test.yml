@@ -164,7 +164,26 @@ jobs:
     outputs:
       current: ${{ steps.current.outputs.current }}
       reason: ${{ steps.current.outputs.reason }}
+      configured: ${{ steps.configured.outputs.configured }}
     steps:
+      # A repository without the SAP test system (a fork) has none of the TEST_SAP_* secrets: the SAP jobs are
+      # skipped with a notice instead of failing their preflight. Only presence is checked, never a value.
+      - name: Check the SAP test system secrets
+        id: configured
+        shell: bash
+        env:
+          HAS_URL: ${{ secrets.TEST_SAP_URL != '' }}
+          HAS_USER: ${{ secrets.TEST_SAP_USER != '' }}
+          HAS_PASSWORD: ${{ secrets.TEST_SAP_PASSWORD != '' }}
+          HAS_CLIENT: ${{ secrets.TEST_SAP_CLIENT != '' }}
+        run: |
+          if [ "${HAS_URL}" = "true" ] && [ "${HAS_USER}" = "true" ] && [ "${HAS_PASSWORD}" = "true" ] && [ "${HAS_CLIENT}" = "true" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=SAP jobs skipped::The ${SAP_CI_TARGET_LABEL} secrets (TEST_SAP_URL, TEST_SAP_USER, TEST_SAP_PASSWORD, TEST_SAP_CLIENT) are not configured in this repository: integration and e2e are skipped."
+          fi
+
       - name: Check PR head freshness
         id: current
         shell: bash
@@ -207,7 +226,8 @@ jobs:
        github.event.pull_request.head.repo.full_name == github.repository &&
        needs.gate.result == 'success' &&
        needs.test.result == 'success' &&
-       needs.sap-run-guard.outputs.current == 'true')
+       needs.sap-run-guard.outputs.current == 'true' &&
+       needs.sap-run-guard.outputs.configured == 'true')
     needs: [test, gate, sap-run-guard]
 
     steps:
@@ -297,6 +317,7 @@ jobs:
       needs.gate.result == 'success' &&
       needs.test.result == 'success' &&
       needs.sap-run-guard.outputs.current == 'true' &&
+      needs.sap-run-guard.outputs.configured == 'true' &&
       (github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'pull_request' &&
         github.event.pull_request.head.repo.full_name == github.repository))
