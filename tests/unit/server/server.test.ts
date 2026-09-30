@@ -1349,4 +1349,24 @@ describe('resolvePpDestinationName', () => {
     ).toBe(parsed);
     expect(parseVCAPServices).toHaveBeenCalledOnce();
   });
+
+  it('keeps a resolved BTP config and skips VCAP services without principal propagation', () => {
+    process.env.SAP_BTP_PP_DESTINATION = 'S4_PUBLIC_CLOUD';
+    const current = { destinationUrl: 'https://current.example' } as BTPConfig;
+    const parseVCAPServices = vi.fn(() => ({ destinationUrl: 'https://destination.example' }) as BTPConfig);
+    const pp = { ...DEFAULT_CONFIG, ppEnabled: true };
+
+    expect(resolveSingleTargetPpBtpConfig(pp, current, parseVCAPServices)).toBe(current);
+    expect(resolveSingleTargetPpBtpConfig({ ...pp, ppEnabled: false }, undefined, parseVCAPServices)).toBeUndefined();
+    expect(parseVCAPServices).not.toHaveBeenCalled();
+  });
+
+  it('does not load VCAP services when no PP destination is configured', () => {
+    const parseVCAPServices = vi.fn(() => ({ destinationUrl: 'https://destination.example' }) as BTPConfig);
+
+    expect(
+      resolveSingleTargetPpBtpConfig({ ...DEFAULT_CONFIG, ppEnabled: true }, undefined, parseVCAPServices),
+    ).toBeUndefined();
+    expect(parseVCAPServices).not.toHaveBeenCalled();
+  });
 });

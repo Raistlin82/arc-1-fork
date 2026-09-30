@@ -69,6 +69,7 @@ import {
 import { MultiTargetSharedAuthState } from './multi-target-shared-auth-state.js';
 import { injectTargetSchema, multiTargetToolDefinitions, sapTargetsDefinition } from './multi-target-tools.js';
 import { loadPlugins } from './plugin-loader.js';
+import { resolvePpDestinationName, resolveSingleTargetPpBtpConfig } from './pp-destination.js';
 import { createDataResultSemaphore, runtimeMemoryEnvelope } from './runtime-memory.js';
 import { buildServerInstructions } from './server-instructions.js';
 import { closeHttpServer, registerShutdownHandlers } from './shutdown.js';
@@ -156,6 +157,7 @@ export function getConfiguredToolDefinitions(
 }
 
 export { logAuthSummary } from './auth-summary.js';
+export { resolvePpDestinationName, resolveSingleTargetPpBtpConfig } from './pp-destination.js';
 export { filterToolsByAuthScope } from './tool-auth.js';
 
 /** True only when bare /mcp can actually dispatch through resolved shared destination credentials. */
@@ -295,30 +297,6 @@ export function selectPerUserProxy(
  * The Cloud Connector uses this header to generate an X.509 cert
  * mapped to the SAP user via CERTRULE.
  */
-/** Historical single-target dual-destination resolution. */
-export function resolvePpDestinationName(config: ServerConfig): string | undefined {
-  if (config.destinationName) {
-    return config.destinationName;
-  }
-  return process.env.SAP_BTP_PP_DESTINATION || process.env.SAP_BTP_DESTINATION;
-}
-
-/**
- * Load the bound Destination/Connectivity runtime for a single-target PP route.
- *
- * A Public Cloud deployment legitimately configures only SAP_BTP_PP_DESTINATION: there is no
- * shared startup destination and the SAP URL is resolved per user. Keep this decision independent
- * from SAP_BTP_DESTINATION so that strict PP-only profiles can reach the Destination service.
- */
-export function resolveSingleTargetPpBtpConfig(
-  config: ServerConfig,
-  current: BTPConfig | undefined,
-  parseVCAPServices: () => BTPConfig | null | undefined,
-): BTPConfig | undefined {
-  if (current || !config.ppEnabled || !resolvePpDestinationName(config)) return current;
-  return parseVCAPServices() ?? undefined;
-}
-
 async function createPerUserClient(
   config: ServerConfig,
   btpConfig: BTPConfig,
