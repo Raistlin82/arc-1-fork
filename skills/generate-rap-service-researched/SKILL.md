@@ -94,10 +94,10 @@ Extract and note:
 Search for existing RAP artifacts to understand the system's established patterns. This is critical for consistency.
 
 ```
-SAPSearch(searchType="object", query="Z*", maxResults=100)
+SAPSearch(query="Z*", objectType="BDEF", maxResults=100)
 ```
 
-Filter the returned rows by object type (`BDEF`, `SRVD`, `SRVB`, `DCLS`, `DDLX`). Normal object-name search does not apply an `objectType` filter; `objectType` is for `source_code` and `tadir_lookup`.
+Object search takes one `objectType` filter: search `BDEF` first, then `SRVD`, `SRVB`, `DDLX` and `DCLS` the same way when the pattern needs them. A list that reaches `maxResults` is cut: narrow the prefix instead of reading it as complete.
 
 **If NO Z* BDEFs are found**, you MUST still ground yourself in at least one real system example before writing any code. Use this deterministic fallback:
 
@@ -222,11 +222,14 @@ SAPNavigate(action="references", type="CLAS", name="<found_class>", maxResults=1
 
 ### 1d. Code Guidelines & Quality Standards
 
-Check if the system has ATC configuration or custom check variants that indicate code quality standards:
+List the system's ATC check variants, then run the Clean Core development variant, never `DEFAULT` (the Code Inspector variant, not a Clean Core check):
 
 ```
-SAPDiagnose(action="atc", type="CLAS", name="<any_existing_class>", variant="DEFAULT")
+SAPDiagnose(action="atc_variants", variant="*")
+SAPDiagnose(action="atc", type="CLAS", name="<any_existing_class>", variant="ABAP_CLOUD_DEVELOPMENT_DEFAULT")
 ```
+
+Prefer the governed customer copy of `ABAP_CLOUD_DEVELOPMENT_DEFAULT` when the list shows one, and record the variant used.
 
 If existing RAP classes were found in 1b, read one and run lint + formatter discovery to understand the baseline:
 
@@ -330,7 +333,7 @@ Before proceeding, compile a structured research summary. Present this to the us
 - Best practices from docs: [key findings]
 
 ### Quality Baseline
-- ATC variant: [DEFAULT / custom]
+- ATC variant: [the Clean Core variant used: governed copy / ABAP_CLOUD_DEVELOPMENT_DEFAULT]
 - Lint findings: [clean / N issues on existing code]
 - Strictness: [strict(2) / strict / none]
 - Formatter settings: [keywordUpper / keywordLower / keywordAuto, indentation on/off]

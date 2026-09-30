@@ -95,7 +95,18 @@ For customer or SAP dependencies, read live API state where supported:
 SAPRead(type="API_STATE", name="ZIF_EXAMPLE", objectType="INTF")
 ```
 
-For SAP objects, query exact object details in the official structured source. Record:
+For SAP objects, when the SAP Docs MCP exact-object capability of step 1 is exposed, call it once per
+unique object with the target level A:
+
+```text
+sap_get_object_details(object_type="<type>", object_name="<name>", system_type="<public_cloud|private_cloud|on_premise|btp>", target_clean_core_level="A")
+```
+
+It returns `cleanCoreLevel` (the extensibility axis), `state`, `complianceStatus` against level A and
+`successorObjects`. Cache the answer by `(object_type, object_name)`: many units reference the same
+SAP class. `found: false` means the object is outside the dataset: record it Unknown, never D. Without
+the capability, query the official structured release data (SAP/abap-atc-cr-cv-s4hc) and say so.
+Record:
 
 - object name and type;
 - customer edition/landscape and source release;
