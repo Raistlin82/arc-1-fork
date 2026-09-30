@@ -303,6 +303,22 @@ export function resolvePpDestinationName(config: ServerConfig): string | undefin
   return process.env.SAP_BTP_PP_DESTINATION || process.env.SAP_BTP_DESTINATION;
 }
 
+/**
+ * Load the bound Destination/Connectivity runtime for a single-target PP route.
+ *
+ * A Public Cloud deployment legitimately configures only SAP_BTP_PP_DESTINATION: there is no
+ * shared startup destination and the SAP URL is resolved per user. Keep this decision independent
+ * from SAP_BTP_DESTINATION so that strict PP-only profiles can reach the Destination service.
+ */
+export function resolveSingleTargetPpBtpConfig(
+  config: ServerConfig,
+  current: BTPConfig | undefined,
+  parseVCAPServices: () => BTPConfig | null | undefined,
+): BTPConfig | undefined {
+  if (current || !config.ppEnabled || !resolvePpDestinationName(config)) return current;
+  return parseVCAPServices() ?? undefined;
+}
+
 async function createPerUserClient(
   config: ServerConfig,
   btpConfig: BTPConfig,
@@ -1162,12 +1178,13 @@ export async function createAndStartServer(
     config.btpServiceKey ||
     config.btpServiceKeyFile ||
     process.env.SAP_BTP_DESTINATION ||
+    process.env.SAP_BTP_PP_DESTINATION ||
     config.multiTargetEndpoints
   );
   if (!config.url && !hasBtpConnection) {
     logger.warn(
       'SAP_URL is not configured — no SAP system connection available. ' +
-        'Copy .env.example to .env and set SAP_URL, SAP_USER, SAP_PASSWORD (or configure SAP_BTP_DESTINATION / SAP_BTP_SERVICE_KEY_FILE).',
+        'Copy .env.example to .env and set SAP_URL, SAP_USER, SAP_PASSWORD (or configure SAP_BTP_DESTINATION / SAP_BTP_PP_DESTINATION / SAP_BTP_SERVICE_KEY_FILE).',
     );
   }
 
@@ -1208,7 +1225,7 @@ export async function createAndStartServer(
   let btpConfig: BTPConfig | undefined;
   const btpDestination = process.env.SAP_BTP_DESTINATION;
   if (btpDestination) {
-    const { resolveBTPDestination, parseVCAPServices } = await import('@arc-mcp/xsuaa-auth/btp');
+    const { resolveBTPDestination } = await import('@arc-mcp/xsuaa-auth/btp');
     const resolved = await resolveBTPDestination(btpDestination, authLibLogger);
     config.url = resolved.url;
     config.username = resolved.username;
@@ -1216,21 +1233,22 @@ export async function createAndStartServer(
     config.client = resolved.client;
     btpProxy = resolved.proxy ?? undefined;
 
-    // Keep btpConfig for per-user destination lookup (principal propagation)
-    if (config.ppEnabled) {
-      btpConfig = parseVCAPServices() ?? undefined;
-      logger.info('Principal propagation enabled', {
-        destination: btpDestination,
-        hasBtpConfig: !!btpConfig,
-      });
-    }
-
     logger.info('BTP destination resolved', {
       destination: btpDestination,
       hasUrl: !!resolved.url,
       hasSharedCredentials: !!(resolved.username && resolved.password),
       hasProxy: !!btpProxy,
       ppEnabled: config.ppEnabled,
+    });
+  }
+
+  const ppDestination = resolvePpDestinationName(config);
+  if (config.ppEnabled && ppDestination) {
+    const { parseVCAPServices } = await import('@arc-mcp/xsuaa-auth/btp');
+    btpConfig = resolveSingleTargetPpBtpConfig(config, btpConfig, parseVCAPServices);
+    logger.info('Principal propagation enabled', {
+      destination: ppDestination,
+      hasBtpConfig: !!btpConfig,
     });
   }
 

@@ -39,6 +39,7 @@
     "dist",
     "bin",
     "skills",
+    "prepare.mjs",
     "README.md",
     "LICENSE"
   ],
@@ -80,7 +81,7 @@
     "cli": "tsx src/cli.ts",
     "extract-sap-cookies": "tsx src/extract-sap-cookies.ts",
     "probe": "tsx scripts/probe-adt-types.ts",
-    "prepare": "node scripts/prepare.mjs",
+    "prepare": "node prepare.mjs",
     "prepublishOnly": "npm run build",
     "test:eval": "node scripts/run-evals.mjs",
     "test:eval:live": "node scripts/run-evals.mjs --backend live",

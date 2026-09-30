@@ -42,6 +42,7 @@ import {
   resolveNullableOptionals,
   resolvePpDestinationName,
   resolveSingleTargetOverlapState,
+  resolveSingleTargetPpBtpConfig,
   runStartupAuthPreflight,
   runStartupAuthPreflightWithClient,
   VERSION,
@@ -1332,5 +1333,20 @@ describe('resolvePpDestinationName', () => {
     process.env.SAP_BTP_PP_DESTINATION = 'GLOBAL_PP';
     const cfg = { ...DEFAULT_CONFIG, destinationName: 'S4D' };
     expect(resolvePpDestinationName(cfg)).toBe('S4D');
+  });
+
+  it('loads VCAP services for a strict PP-only Public Cloud destination', () => {
+    process.env.SAP_BTP_PP_DESTINATION = 'S4_PUBLIC_CLOUD';
+    const parsed = { destinationUrl: 'https://destination.example' } as BTPConfig;
+    const parseVCAPServices = vi.fn(() => parsed);
+
+    expect(
+      resolveSingleTargetPpBtpConfig(
+        { ...DEFAULT_CONFIG, ppEnabled: true, ppStrict: true },
+        undefined,
+        parseVCAPServices,
+      ),
+    ).toBe(parsed);
+    expect(parseVCAPServices).toHaveBeenCalledOnce();
   });
 });

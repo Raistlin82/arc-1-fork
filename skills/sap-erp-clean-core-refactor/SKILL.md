@@ -82,6 +82,10 @@ target-domain decision. Do not default to BTP Cloud Foundry.
   given and reports `variantSource: "requestedUnverified"`, recorded as degraded evidence.
 - Record landscape, release, installed components, available ADT features, write ceiling, package
   allowlist, transport policy, confirmed ATC variants and optional MCP/skill capabilities.
+- When the landscape is S/4HANA Cloud Public Edition and no live ARC-1 source context exists, read
+  [`references/arc1-s4hana-public-cloud-runtime.md`](./references/arc1-s4hana-public-cloud-runtime.md)
+  and complete or hand off that runtime setup before inventory. Do not confuse ARC-1 running on BTP
+  with a separately connected SAP BTP ABAP Environment target.
 - Load the smallest relevant evidence pack from
   `knowledge/clean-core-extensibility/decision-rules.json`. Use
   `npm run clean-core:query -- <terms>` during repository development.
@@ -232,6 +236,8 @@ the plan before execution.
 - [`INTEGRATIONS.md`](./INTEGRATIONS.md): ARC-1, local skills, SAP skills and MCP capability map.
 - [`PATTERNS.md`](./PATTERNS.md): architecture, wrapper, execution and governance patterns.
 - [`SOURCES.md`](./SOURCES.md): evidence precedence and authoritative sources.
+- [`references/arc1-s4hana-public-cloud-runtime.md`](./references/arc1-s4hana-public-cloud-runtime.md):
+  SAML trust, destination, NOVA MTA deployment and Clean Core evidence boundaries for Public Cloud.
 - [`knowledge/clean-core-extensibility/ARC1_RUNTIME_ACTION_MAP.md`](./knowledge/clean-core-extensibility/ARC1_RUNTIME_ACTION_MAP.md): knowledge-to-runtime bridge.
 
 ## Refusal rules
