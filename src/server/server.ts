@@ -69,6 +69,7 @@ import {
 import { MultiTargetSharedAuthState } from './multi-target-shared-auth-state.js';
 import { injectTargetSchema, multiTargetToolDefinitions, sapTargetsDefinition } from './multi-target-tools.js';
 import { loadPlugins } from './plugin-loader.js';
+import { resolvePpDestinationName, resolveSingleTargetPpBtpConfig } from './pp-destination.js';
 import { createDataResultSemaphore, runtimeMemoryEnvelope } from './runtime-memory.js';
 import { buildServerInstructions } from './server-instructions.js';
 import { closeHttpServer, registerShutdownHandlers } from './shutdown.js';
@@ -156,6 +157,7 @@ export function getConfiguredToolDefinitions(
 }
 
 export { logAuthSummary } from './auth-summary.js';
+export { resolvePpDestinationName, resolveSingleTargetPpBtpConfig } from './pp-destination.js';
 export { filterToolsByAuthScope } from './tool-auth.js';
 
 /** True only when bare /mcp can actually dispatch through resolved shared destination credentials. */
@@ -295,14 +297,6 @@ export function selectPerUserProxy(
  * The Cloud Connector uses this header to generate an X.509 cert
  * mapped to the SAP user via CERTRULE.
  */
-/** Historical single-target dual-destination resolution. */
-export function resolvePpDestinationName(config: ServerConfig): string | undefined {
-  if (config.destinationName) {
-    return config.destinationName;
-  }
-  return process.env.SAP_BTP_PP_DESTINATION || process.env.SAP_BTP_DESTINATION;
-}
-
 async function createPerUserClient(
   config: ServerConfig,
   btpConfig: BTPConfig,
@@ -1162,12 +1156,13 @@ export async function createAndStartServer(
     config.btpServiceKey ||
     config.btpServiceKeyFile ||
     process.env.SAP_BTP_DESTINATION ||
+    process.env.SAP_BTP_PP_DESTINATION ||
     config.multiTargetEndpoints
   );
   if (!config.url && !hasBtpConnection) {
     logger.warn(
       'SAP_URL is not configured — no SAP system connection available. ' +
-        'Copy .env.example to .env and set SAP_URL, SAP_USER, SAP_PASSWORD (or configure SAP_BTP_DESTINATION / SAP_BTP_SERVICE_KEY_FILE).',
+        'Copy .env.example to .env and set SAP_URL, SAP_USER, SAP_PASSWORD (or configure SAP_BTP_DESTINATION / SAP_BTP_PP_DESTINATION / SAP_BTP_SERVICE_KEY_FILE).',
     );
   }
 
@@ -1208,7 +1203,7 @@ export async function createAndStartServer(
   let btpConfig: BTPConfig | undefined;
   const btpDestination = process.env.SAP_BTP_DESTINATION;
   if (btpDestination) {
-    const { resolveBTPDestination, parseVCAPServices } = await import('@arc-mcp/xsuaa-auth/btp');
+    const { resolveBTPDestination } = await import('@arc-mcp/xsuaa-auth/btp');
     const resolved = await resolveBTPDestination(btpDestination, authLibLogger);
     config.url = resolved.url;
     config.username = resolved.username;
@@ -1216,21 +1211,22 @@ export async function createAndStartServer(
     config.client = resolved.client;
     btpProxy = resolved.proxy ?? undefined;
 
-    // Keep btpConfig for per-user destination lookup (principal propagation)
-    if (config.ppEnabled) {
-      btpConfig = parseVCAPServices() ?? undefined;
-      logger.info('Principal propagation enabled', {
-        destination: btpDestination,
-        hasBtpConfig: !!btpConfig,
-      });
-    }
-
     logger.info('BTP destination resolved', {
       destination: btpDestination,
       hasUrl: !!resolved.url,
       hasSharedCredentials: !!(resolved.username && resolved.password),
       hasProxy: !!btpProxy,
       ppEnabled: config.ppEnabled,
+    });
+  }
+
+  const ppDestination = resolvePpDestinationName(config);
+  if (config.ppEnabled && ppDestination) {
+    const { parseVCAPServices } = await import('@arc-mcp/xsuaa-auth/btp');
+    btpConfig = resolveSingleTargetPpBtpConfig(config, btpConfig, parseVCAPServices);
+    logger.info('Principal propagation enabled', {
+      destination: ppDestination,
+      hasBtpConfig: !!btpConfig,
     });
   }
 

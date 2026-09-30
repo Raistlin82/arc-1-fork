@@ -56,9 +56,16 @@ Summary:
 
 1. **BTP subaccount → Connectivity → Destination Trust**: choose **Generate Trust** (if no trust
    certificate exists yet), then **Export** the subaccount's signing certificate (PEM).
+   Record its **Assertion Entity ID**, Subject CN and validity. Do not import this PEM under
+   **Destination Certificates**: that separate page manages destination-side X.509 client,
+   trusted/CA and keystore certificates, not the subaccount SAML signing trust.
 2. **S/4HANA Cloud → Communication Systems** app: create a system (e.g. `BAS_<subaccount-subdomain>`):
    - **General → Technical Data**: enable **Inbound Only**.
-   - **General → Identity Provider / OAuth 2.0 / SAML**: set **SAML Bearer Assertion Provider** to **ON**, upload the exported BTP certificate, and set the **SAML Bearer Issuer** to the certificate's Subject CN.
+   - **General → Identity Provider / OAuth 2.0 / SAML**: set **SAML Bearer Assertion Provider** to
+     **ON**, select **User Name** mapping, upload the exported BTP certificate, and set the
+     **SAML Bearer Issuer** to the exact BTP Assertion Entity ID / certificate Subject CN.
+   - Save, then compare the certificate identity and validity displayed by S/4HANA Cloud with the
+     active certificate on the BTP Destination Trust page.
 
 No communication *arrangement* and no communication *user* are needed for the developer connection —
 the SAML assertion carries the real user identity (email), which S/4HANA Cloud maps to a business user.
@@ -80,6 +87,7 @@ the SAP tutorial:
 | **AuthnContextClassRef** | `urn:oasis:names:tc:SAML:2.0:ac:classes:PreviousSession` |
 | **Client Key** | leave empty (tick "set empty") |
 | **Name ID Format** | `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress` |
+| **User ID Source** | `email` |
 
 Additional Properties (BAS-oriented; harmless for ARC-1, keep them if you reuse the BAS destination):
 
@@ -110,6 +118,24 @@ cf create-service destination lite arc1-destination
 ```
 
 ## Step 4: Configure ARC-1
+
+For the NOVA fork, start from the reviewed template instead of writing the full MTA extension by
+hand. The copied file is gitignored; keep customer-specific destination names out of Git:
+
+```bash
+cp -n mta-nova.mtaext.example mta-nova.mtaext
+# Set SAP_BTP_PP_DESTINATION in mta-nova.mtaext, then:
+npx mbt validate -e mta-nova.mtaext
+npm run btp:build
+cf deploy mta_archives/arc1-mcp_<version>.mtar -e mta-nova.mtaext
+```
+
+Before deployment, inspect the nested application payload as required by
+[BTP Cloud Foundry Deployment](btp-cloud-foundry-deployment.md#5-validate-build-and-inspect-the-mtar).
+The payload must include the package's npm `prepare` hook and must not include `.env`, customer
+extensions, service keys, private keys or certificates.
+
+The equivalent runtime properties are:
 
 ```yaml
 env:

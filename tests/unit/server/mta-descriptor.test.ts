@@ -17,7 +17,7 @@
  * overrides operators actually write.
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -196,6 +196,22 @@ describe('shipped mta.yaml resolves through the config parser', () => {
         'xs-security.json',
       ]),
     );
+  });
+
+  it('keeps the npm prepare hook available in the deployable module', () => {
+    const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
+      files?: string[];
+      scripts?: Record<string, string>;
+    };
+    const prepareCommand = packageJson.scripts?.prepare;
+    const preparePath = prepareCommand?.match(/^node\s+(\S+)$/)?.[1];
+    const ignored = appModuleDescriptor()['build-parameters']?.ignore as string[] | undefined;
+
+    expect(prepareCommand).toBe('node prepare.mjs');
+    expect(preparePath).toBeDefined();
+    expect(existsSync(join(ROOT, preparePath ?? ''))).toBe(true);
+    expect(packageJson.files).toContain(preparePath);
+    expect(ignored).not.toContain(preparePath);
   });
 
   it('registers only deployment-owned OAuth paths and keeps the optional UI out of the base requirements (#812)', () => {
