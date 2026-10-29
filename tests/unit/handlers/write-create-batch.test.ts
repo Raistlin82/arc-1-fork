@@ -97,6 +97,63 @@ describe('SAPWrite handler — create / batch_create', () => {
       expect(callMatching('PUT', '/sap/bc/adt/ddic/desd/ZARC1_SDO/source/main')).toBeDefined();
     });
 
+    it.each([
+      ['APLO', 'applicationlog/objects', 'APLO/TYP', 'v1', undefined],
+      ['SAJC', 'applicationjob/catalogs', 'SAJC', 'v2', 'className'],
+      ['SAJT', 'applicationjob/templates', 'SAJT', 'v2', 'catalogName'],
+    ])(
+      'creates %s through its advertised metadata and JSON contracts',
+      async (type, path, createType, version, reference) => {
+        const source = JSON.stringify({
+          formatVersion: '1',
+          header: { description: 'x', originalLanguage: 'en' },
+          ...(reference ? { generalInformation: { [reference]: 'ZARC1_REF' } } : {}),
+        });
+        const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+          action: 'create',
+          type,
+          name: 'ZARC1_APP',
+          package: '$TMP',
+          source,
+        });
+        expect(result.isError).toBeFalsy();
+        const post = callMatching('POST', `/sap/bc/adt/${path}`);
+        expect(post?.[1].body).toContain(`adtcore:type="${createType}"`);
+        expect(post?.[1].headers?.['Content-Type']).toBe(`application/vnd.sap.adt.blues.${version}+xml`);
+        if (reference) expect(post?.[1].body).toContain(`&quot;${reference}&quot;:&quot;ZARC1_REF&quot;`);
+        expect(callMatching('PUT', `/sap/bc/adt/${path}/ZARC1_APP/source/main`)?.[1].body).toBe(source);
+        expect(result.content[0]?.text).toContain(type === 'APLO' ? 'active immediately' : 'Next step: SAPActivate');
+      },
+    );
+
+    it.each(['SAJC', 'SAJT'])('refuses %s without its creation reference before any POST', async (type) => {
+      for (const source of [undefined, '{"generalInformation":{}}']) {
+        const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+          action: 'create',
+          type,
+          name: 'ZARC1_APP',
+          package: '$TMP',
+          source,
+        });
+        expect(result.isError).toBe(true);
+        expect(result.content[0]?.text).toContain('source.generalInformation.');
+      }
+      expect(mockFetch.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false);
+    });
+
+    it('reports that APLO updates take effect without activation', async () => {
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'update',
+        type: 'APLO',
+        name: 'ZARC1_APP',
+        source: '{"formatVersion":"1"}',
+      });
+      expect(result.isError).toBeFalsy();
+      expect(callMatching('PUT', '/sap/bc/adt/applicationlog/objects/ZARC1_APP/source/main')).toBeDefined();
+      expect(result.content[0]?.text).toContain('active immediately');
+      expect(result.content[0]?.text).not.toContain('SAPActivate');
+    });
+
     it('update without source returns an actionable error', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
         action: 'update',
@@ -1166,6 +1223,13 @@ describe('SAPWrite handler — create / batch_create', () => {
 
     it('FUGR delete: DELETEs to FUGR URL with lockHandle', async () => {
       const calls = captureFetch();
+      const sap = mockFetch.getMockImplementation()!;
+      mockFetch.mockImplementation((url: string, opts: any) =>
+        String(url).includes('/textelements/functiongroups/ZFG?version=inactive')
+          ? Promise.resolve(mockResponse(200, '<textElement name="ZFG" type="FUGR/PX" version="active"/>'))
+          : sap(url, opts),
+      );
+
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
         action: 'delete',
         type: 'FUGR',
@@ -1204,7 +1268,26 @@ describe('SAPWrite handler — create / batch_create', () => {
       expect(put!.body).toContain('ev_output = iv_input');
     });
 
-    it('FUNC update with structured parameters: splices into source preserving body', async () => {
+    it('FUNC create reports an incomplete signature envelope without misidentifying the FUNCTION keyword', async () => {
+      const calls = captureFetch();
+      const source = 'FUNCTION z_fm.\n  WRITE / 1.\n';
+      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
+        action: 'create',
+        type: 'FUNC',
+        name: 'Z_FM',
+        group: 'ZFG',
+        source,
+        parameters: [{ kind: 'importing', name: 'IV_INPUT', type: 'STRING' }],
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0]?.text).toContain('Could not splice structured parameters into the FUNCTION source');
+      expect(calls.find((c) => c.method === 'PUT' && c.url.includes('/source/main'))?.body).toBe(source);
+    });
+
+    it.each([
+      { label: 'full source', source: 'FUNCTION z_fm.\n  cv_flag = cv_flag + 1.\nENDFUNCTION.\n' },
+      { label: 'body only', source: '  cv_flag = cv_flag + 1.\n' },
+    ])('FUNC update with structured parameters preserves $label', async ({ source }) => {
       const calls = captureFetch();
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPWrite', {
         action: 'update',
@@ -1215,7 +1298,7 @@ describe('SAPWrite handler — create / batch_create', () => {
           { kind: 'importing', name: 'IV_INPUT', type: 'STRING', byValue: true },
           { kind: 'changing', name: 'CV_FLAG', type: 'I' },
         ],
-        source: 'FUNCTION z_fm.\n  cv_flag = cv_flag + 1.\nENDFUNCTION.\n',
+        source,
       });
       expect(result.isError).toBeUndefined();
       const put = calls.find((c) => c.method === 'PUT' && c.url.includes('/source/main'));
@@ -1574,22 +1657,9 @@ lv = CONV string( 1 ).`,
       );
     });
 
-    it('supplements DDLS update guidance with scoped where-used results when unfiltered results are partial', async () => {
+    it('uses one native where-used result for DDLS and BDEF update guidance', async () => {
       mockFetch.mockReset();
-      const scopeXml = `<?xml version="1.0" encoding="UTF-8"?>
-<usageReferences:scopeResponse xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
-  <usageReferences:objectType type="DDLS/DF" description="DDL Source" count="3"/>
-  <usageReferences:objectType type="BDEF/BO" description="Behavior Definition" count="1"/>
-</usageReferences:scopeResponse>`;
-      const unfilteredWhereUsedXml = `<?xml version="1.0" encoding="utf-8"?>
-<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
-  <usageReferences:referencedObjects>
-    <usageReferences:referencedObject uri="/sap/bc/adt/ddic/ddl/sources/ZI_CHILD_ONE" isResult="true" canHaveChildren="false" usageInformation="gradeDirect,includeProductive">
-      <usageReferences:adtObject adtcore:name="ZI_CHILD_ONE" adtcore:type="DDLS/DF" xmlns:adtcore="http://www.sap.com/adt/core"/>
-    </usageReferences:referencedObject>
-  </usageReferences:referencedObjects>
-</usageReferences:usageReferenceResult>`;
-      const scopedDdlsWhereUsedXml = `<?xml version="1.0" encoding="utf-8"?>
+      const whereUsedXml = `<?xml version="1.0" encoding="utf-8"?>
 <usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
   <usageReferences:referencedObjects>
     <usageReferences:referencedObject uri="/sap/bc/adt/ddic/ddl/sources/zi_child_one" isResult="true" canHaveChildren="false" usageInformation="gradeDirect,includeProductive">
@@ -1601,21 +1671,17 @@ lv = CONV string( 1 ).`,
     <usageReferences:referencedObject uri="/sap/bc/adt/ddic/ddl/sources/zi_child_three" isResult="true" canHaveChildren="false" usageInformation="gradeDirect,includeProductive">
       <usageReferences:adtObject adtcore:name="ZI_CHILD_THREE" adtcore:type="DDLS/DF" xmlns:adtcore="http://www.sap.com/adt/core"/>
     </usageReferences:referencedObject>
-  </usageReferences:referencedObjects>
-</usageReferences:usageReferenceResult>`;
-      const scopedBdefWhereUsedXml = `<?xml version="1.0" encoding="utf-8"?>
-<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences">
-  <usageReferences:referencedObjects>
     <usageReferences:referencedObject uri="/sap/bc/adt/bo/behaviordefinitions/ZI_ROOT" isResult="true" canHaveChildren="false" usageInformation="gradeDirect,includeProductive">
       <usageReferences:adtObject adtcore:name="ZI_ROOT" adtcore:type="BDEF/BO" xmlns:adtcore="http://www.sap.com/adt/core"/>
     </usageReferences:referencedObject>
+      <usageReferences:referencedObject uri="/sap/bc/adt/ddic/ddl/sources/ZI_CHILD_ONE" isResult="true" canHaveChildren="false" usageInformation="gradeDirect,includeProductive">
+      <usageReferences:adtObject adtcore:name="ZI_CHILD_ONE" adtcore:type="DDLS/DF" xmlns:adtcore="http://www.sap.com/adt/core"/>
+    </usageReferences:referencedObject>
   </usageReferences:referencedObjects>
 </usageReferences:usageReferenceResult>`;
-
       mockFetch.mockImplementation((url: string | URL, opts?: { method?: string; body?: string }) => {
         const method = (opts?.method ?? 'GET').toUpperCase();
         const urlStr = String(url);
-        const body = String(opts?.body ?? '');
         if (method === 'POST' && urlStr.includes('_action=LOCK')) {
           return Promise.resolve(
             mockResponse(200, '<asx:values><LOCK_HANDLE>LH_DDLS</LOCK_HANDLE><CORRNR></CORRNR></asx:values>', {
@@ -1623,17 +1689,8 @@ lv = CONV string( 1 ).`,
             }),
           );
         }
-        if (method === 'POST' && urlStr.includes('/usageReferences/scope')) {
-          return Promise.resolve(mockResponse(200, scopeXml, { 'x-csrf-token': 'T' }));
-        }
         if (method === 'POST' && urlStr.includes('/sap/bc/adt/repository/informationsystem/usageReferences?uri=')) {
-          if (body.includes('objectTypeFilter value="DDLS/DF"')) {
-            return Promise.resolve(mockResponse(200, scopedDdlsWhereUsedXml, { 'x-csrf-token': 'T' }));
-          }
-          if (body.includes('objectTypeFilter value="BDEF/BO"')) {
-            return Promise.resolve(mockResponse(200, scopedBdefWhereUsedXml, { 'x-csrf-token': 'T' }));
-          }
-          return Promise.resolve(mockResponse(200, unfilteredWhereUsedXml, { 'x-csrf-token': 'T' }));
+          return Promise.resolve(mockResponse(200, whereUsedXml, { 'x-csrf-token': 'T' }));
         }
         return Promise.resolve(mockResponse(200, '<ok/>', { 'x-csrf-token': 'T' }));
       });
@@ -1657,8 +1714,9 @@ lv = CONV string( 1 ).`,
       const usageBodies = mockFetch.mock.calls
         .map((call) => String((call[1] as { body?: string } | undefined)?.body ?? ''))
         .filter((body) => body.includes('usageReferenceRequest'));
-      expect(usageBodies.some((body) => body.includes('objectTypeFilter value="DDLS/DF"'))).toBe(true);
-      expect(usageBodies.some((body) => body.includes('objectTypeFilter value="BDEF/BO"'))).toBe(true);
+      expect(usageBodies).toHaveLength(1);
+      expect(usageBodies[0]).not.toContain('objectTypeFilter');
+      expect(mockFetch.mock.calls.some(([url]) => String(url).includes('/usageReferences/scope'))).toBe(false);
     });
 
     it('still skips BDEF for pre-write lint', async () => {

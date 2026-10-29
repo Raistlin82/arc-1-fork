@@ -447,7 +447,8 @@ describe('SAPReadSchemaBtp', () => {
     expect(SAPReadSchemaBtp.safeParse({ type: 'VARIANTS' }).success).toBe(false);
     expect(SAPReadSchemaBtp.safeParse({ type: 'AUTH' }).success).toBe(false);
     expect(SAPReadSchemaBtp.safeParse({ type: 'FTG2' }).success).toBe(false);
-    expect(SAPReadSchemaBtp.safeParse({ type: 'ENHO' }).success).toBe(false);
+    // ENHO (BAdI implementations) is a BTP type too.
+    expect(SAPReadSchemaBtp.safeParse({ type: 'ENHO', name: 'ZMY_ENH' }).success).toBe(true);
   });
 
   it('rejects expand_includes — the field is on-prem only', () => {
@@ -968,23 +969,23 @@ describe('SAPWriteSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('exposes edit_unit only for on-prem PROG/INCL writes', () => {
+  it.each(['edit_unit', 'add_unit'])('exposes %s only for on-prem PROG/INCL writes', (action) => {
     const program = SAPWriteSchema.safeParse({
-      action: 'edit_unit',
+      action,
       type: 'PROG',
       name: 'ZUNIT_TEST',
       unit: 'PROCESS_ORDERS',
       source: 'FORM process_orders.\nENDFORM.',
     });
     const include = SAPWriteSchema.safeParse({
-      action: 'edit_unit',
+      action,
       type: 'INCL',
       name: 'ZUNIT_INCLUDE',
       unit: 'STATUS_0100',
       source: 'MODULE status_0100 OUTPUT.\nENDMODULE.',
     });
     const btp = SAPWriteSchemaBtp.safeParse({
-      action: 'edit_unit',
+      action,
       type: 'CLAS',
       name: 'ZCL_TEST',
       unit: 'PROCESS_ORDERS',

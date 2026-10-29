@@ -99,6 +99,9 @@ affected object/source URI. Reject the automated path when:
 - the delta includes unrelated refactoring;
 - the proposal changes architecture or behavior beyond the finding.
 
+A `/providers/refactoring/` URI alone does not make a proposal unsupported: judge it by the delta it
+returns, not by its provider.
+
 ### 4. Apply proposal in memory
 
 Pass proposal data through exactly:
@@ -106,6 +109,9 @@ Pass proposal data through exactly:
 ```text
 SAPDiagnose(action="apply_quickfix", type="CLAS", name="ZCL_EXAMPLE", source="<current_source>", line=17, column=1, proposalUri="<proposal_uri>", proposalUserContent="<opaque_user_content>")
 ```
+
+Pass `userContent` unchanged, including an empty string. Some SAP proposals need additional input or
+suggest types that require correction: review the returned deltas before they enter the candidate.
 
 For a multi-object proposal, also pass every `proposalAffectedObjects` entry returned by preview,
 including current content. Merge deltas in memory and rebase later proposals on the latest

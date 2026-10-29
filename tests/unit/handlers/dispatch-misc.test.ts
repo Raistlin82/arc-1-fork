@@ -675,20 +675,24 @@ describe('tool dispatch & cross-cutting handler behavior', () => {
       }
     });
 
-    it('404 error includes SAPSearch hint', async () => {
-      mockFetch.mockReset();
-      // Make the mock reject with a 404 AdtApiError
-      mockFetch.mockRejectedValueOnce(
-        new AdtApiError('Not found', 404, '/sap/bc/adt/programs/programs/ZNONEXIST/source/main'),
-      );
-      const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
-        type: 'PROG',
-        name: 'ZNONEXIST',
-      });
-      expect(result.isError).toBe(true);
-      expect(result.content[0]?.text).toContain('SAPSearch');
-      expect(result.content[0]?.text).toContain('ZNONEXIST');
-    });
+    it.each(['Not found', 'ZNONEXIST does not have any inactive version'])(
+      'program 404 retains the SAPSearch hint: %s',
+      async (message) => {
+        mockFetch.mockReset();
+        // Make the mock reject with a 404 AdtApiError
+        mockFetch.mockRejectedValueOnce(
+          new AdtApiError(message, 404, '/sap/bc/adt/programs/programs/ZNONEXIST/source/main', message),
+        );
+        const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', {
+          type: 'PROG',
+          name: 'ZNONEXIST',
+        });
+        expect(result.isError).toBe(true);
+        expect(result.content[0]?.text).toContain('SAPSearch');
+        expect(result.content[0]?.text).toContain('ZNONEXIST');
+        expect(result.content[0]?.text).not.toContain('testclasses');
+      },
+    );
 
     it('401 error includes client hint', async () => {
       mockFetch.mockReset();
@@ -801,6 +805,32 @@ describe('tool dispatch & cross-cutting handler behavior', () => {
 
       expect(text).not.toContain('WAF');
       expect(text).not.toContain('SAP_GZIP_DATAPREVIEW_BODY');
+    });
+
+    it('shows SAP error text entity-decoded, and none of it in minimal-error mode', async () => {
+      const body =
+        '<?xml version="1.0" encoding="utf-8"?><exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">' +
+        '<namespace id="com.sap.adt"/><type id="uriMappingError"/>' +
+        '<message lang="EN">Invalid URI: /x?a=1&amp;b=2 &lt;tag&gt;</message>' +
+        '<localizedMessage lang="EN">Invalid URI: /x?a=1&amp;b=2 &lt;tag&gt;</localizedMessage>' +
+        '<localizedMessage lang="EN">Second &amp; &amp;lt;last&amp;gt;</localizedMessage>' +
+        '<properties><entry key="T100KEY-V1">/x?a=1&amp;b=2</entry></properties></exc:exception>';
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue(mockResponse(400, body));
+
+      const shown = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAPRead', { type: 'PROG', name: 'ZTEST' });
+      const text = shown.content[0]?.text ?? '';
+      expect(text).toContain('Invalid URI: /x?a=1&b=2 <tag>');
+      expect(text).toContain('Second & &lt;last&gt;');
+      expect(text).toContain('V1=/x?a=1&b=2');
+      expect(text).not.toContain('&amp;');
+
+      const hidden = await handleToolCall(createClient(), { ...DEFAULT_CONFIG, minimalErrors: true }, 'SAPRead', {
+        type: 'PROG',
+        name: 'ZTEST',
+      });
+      expect(hidden.content[0]?.text).toContain('ARC1_MINIMAL_ERRORS=true');
+      expect(hidden.content[0]?.text).not.toContain('Invalid URI');
     });
   });
 
@@ -1232,6 +1262,19 @@ describe('tool dispatch & cross-cutting handler behavior', () => {
       expect(result.content[0]?.text).toBeTruthy();
     });
 
+    it('forwards the advertised top-level version to SAPRead', async () => {
+      // 'inactive', not 'active': an omitted version also defaults to ?version=active.
+      const result = await handleToolCall(createClient(), { ...DEFAULT_CONFIG, toolMode: 'hyperfocused' }, 'SAP', {
+        action: 'read',
+        type: 'PROG',
+        name: 'ZHELLO',
+        version: 'inactive',
+      });
+      expect(result.isError).toBeUndefined();
+      const sourceCall = mockFetch.mock.calls.find((call: any[]) => String(call[0]).includes('/source/main'));
+      expect(String(sourceCall?.[0])).toContain('/programs/programs/ZHELLO/source/main?version=inactive');
+    });
+
     it('returns error for unknown SAP action', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAP', {
         action: 'invalid_action',
@@ -1243,11 +1286,42 @@ describe('tool dispatch & cross-cutting handler behavior', () => {
     it('routes SAP(search) with params', async () => {
       const result = await handleToolCall(createClient(), DEFAULT_CONFIG, 'SAP', {
         action: 'search',
+        version: 'auto',
         params: { query: 'ZCL*' },
       });
       // Should succeed (mock returns data)
       expect(result.isError).toBeUndefined();
     });
+
+    it.each([
+      { version: 'active', serviceVersion: undefined, expected: '0001' },
+      { version: 'auto', serviceVersion: '0002', expected: '0002' },
+    ])(
+      'keeps read version=$version separate from service version=$expected',
+      async ({ version, serviceVersion, expected }) => {
+        mockFetch.mockImplementation(async (url) =>
+          String(url).includes('/publishjobs')
+            ? mockResponse(
+                200,
+                '<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><SEVERITY>OK</SEVERITY></DATA></asx:values></asx:abap>',
+              )
+            : mockResponse(200, '<serviceBinding published="true" bindingCreated="true"/>', { 'x-csrf-token': 'T' }),
+        );
+        const result = await handleToolCall(createClient(), { ...DEFAULT_CONFIG, toolMode: 'hyperfocused' }, 'SAP', {
+          action: 'activate',
+          type: 'SRVB',
+          name: 'ZUI_TEST_O4',
+          version,
+          params: { action: 'publish_srvb', service_type: 'odatav4', version: serviceVersion },
+        });
+        expect(result.isError, result.content[0]?.text).toBeUndefined();
+        const posts = mockFetch.mock.calls.filter(
+          ([url, options]) => options?.method === 'POST' && String(url).includes('/publishjobs'),
+        );
+        expect(posts).toHaveLength(1);
+        expect(new URL(String(posts[0]![0])).searchParams.get('serviceversion')).toBe(expected);
+      },
+    );
   });
 
   describe('normalizeObjectType', () => {

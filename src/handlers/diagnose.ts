@@ -33,14 +33,12 @@ import {
   runAtcCheck,
   runUnitTests,
   supportsCdsTestCases,
-  syntaxCheck,
 } from '../adt/devtools.js';
 import {
   createTraceRequest,
   deleteTraceRequest,
   getAuthorizationTrace,
   getCdsCreateStatements,
-  getDump,
   getGatewayErrorDetail,
   getObjectState,
   getSqlTraceDirectory,
@@ -56,7 +54,9 @@ import {
   probeODataPerformance,
   setSqlTraceState,
 } from '../adt/diagnostics.js';
+import { getDumpWithFeedFallback } from '../adt/dump-feed-detail.js';
 import { AdtApiError, AdtNetworkError } from '../adt/errors.js';
+import { type FeedFilter, readDumpFeedSchema } from '../adt/feed-schema.js';
 import { internalOperationDenial } from '../adt/internal-data-operations.js';
 import { isServerDrivenObjectType } from '../adt/server-driven.js';
 import type {
@@ -72,6 +72,7 @@ import { handleCiQuality } from './diagnose-ci.js';
 import { isBtpSystem } from './feature-cache.js';
 import { classIncludeUrl, normalizeObjectType, objectUrlForType, sourceUrlForType } from './object-types.js';
 import { errorResult, type ToolResult, textResult, toolJson } from './shared.js';
+import { handleSyntaxCheck } from './syntax.js';
 
 const AUNIT_SOURCE_MAX_BLOCKS = 80;
 const AUNIT_SOURCE_MAX_DEPTH = 5;
@@ -648,39 +649,10 @@ export async function handleSAPDiagnose(
   const type = normalizeObjectType(String(args.type ?? ''));
 
   switch (action) {
-    case 'syntax': {
-      const objectUrl = objectUrlForType(type, name);
-      const version = args.version === 'inactive' ? 'inactive' : args.version === 'active' ? 'active' : undefined;
-      const content = typeof args.source === 'string' ? (args.source as string) : undefined;
-      const opts: { version?: 'active' | 'inactive'; content?: string } = {};
-      if (version) opts.version = version;
-      if (content !== undefined) opts.content = content;
-      const result = await syntaxCheck(
-        client.http,
-        client.safety,
-        objectUrl,
-        Object.keys(opts).length > 0 ? opts : undefined,
-      );
-      // Fail closed: SAP checked nothing (object does not exist yet) → never report "clean", or
-      // callers read hasErrors:false as "SAP will accept this source".
-      if (!result.checked) {
-        return textResult(
-          toolJson({
-            ...result,
-            hasErrors: true,
-            messages: [
-              {
-                severity: 'error',
-                text: `Not checked — ${(result.statusText || 'SAP did not process this check').replace(/\.$/, '')}. The source was NOT validated; create the object first (SAPWrite action="create"), then re-run the syntax check.`,
-                line: 0,
-                column: 0,
-              },
-            ],
-          }),
-        );
-      }
-      return textResult(toolJson(result));
-    }
+    case 'feed_schema':
+      return textResult(toolJson(await readDumpFeedSchema(client.http, client.safety)));
+    case 'syntax':
+      return handleSyntaxCheck(client, args);
     case 'unittest': {
       const coverage = args.coverage === true;
       const resultFormat = String(args.resultFormat ?? 'legacy');
@@ -1053,7 +1025,7 @@ export async function handleSAPDiagnose(
     case 'dumps': {
       const id = args.id as string | undefined;
       if (id) {
-        const detail = await getDump(client.http, client.safety, id);
+        const detail = await getDumpWithFeedFallback(client.http, client.safety, id);
         const includeFullText = args.includeFullText === true || String(args.includeFullText ?? '') === 'true';
         const selectedSections = selectDumpSections(detail, args.sections);
 
@@ -1073,6 +1045,7 @@ export async function handleSAPDiagnose(
             title: chapter.title,
             line: chapter.line,
           })),
+          ...(detail.origin ? { origin: detail.origin, note: detail.note } : {}),
         };
         if (includeFullText) {
           payload.formattedText = detail.formattedText;
@@ -1084,7 +1057,13 @@ export async function handleSAPDiagnose(
       const maxResults = args.maxResults ? Number(args.maxResults) : undefined;
       const from = args.from as string | undefined;
       const to = args.to as string | undefined;
-      const dumps = await listDumps(client.http, client.safety, { user, maxResults, from, to });
+      const dumps = await listDumps(client.http, client.safety, {
+        user,
+        maxResults,
+        from,
+        to,
+        filters: args.filters as FeedFilter[] | undefined,
+      });
       return textResult(toolJson(dumps));
     }
     case 'traces': {
@@ -1262,7 +1241,9 @@ function selectDumpSections(detail: DumpDetail, requestedSections: unknown): Rec
   if (availableIds.length === 0) return {};
 
   const requestedIds = resolveRequestedDumpSectionIds(detail, requestedSections);
-  const selectedIds = requestedIds.length > 0 ? requestedIds : pickDefaultDumpSectionIds(detail);
+  // A feed summary is already the focused part of a dump, so it is returned whole by default.
+  const defaultIds = detail.origin === 'feed-summary' ? availableIds : pickDefaultDumpSectionIds(detail);
+  const selectedIds = requestedIds.length > 0 ? requestedIds : defaultIds;
   const finalIds = selectedIds.length > 0 ? selectedIds : availableIds.slice(0, 5);
 
   return Object.fromEntries(finalIds.map((id) => [id, availableSections[id] ?? '']));

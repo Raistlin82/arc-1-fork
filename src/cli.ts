@@ -33,6 +33,7 @@ import {
   lintToCheckstyle,
   type StructuredDiffResult,
 } from './cli-checks.js';
+import { registerIdeConfigCommand } from './cli-ide.js';
 import { getToolRegistry, handleToolCall } from './handlers/dispatch.js';
 import { setCachedDiscovery, setCachedFeatures } from './handlers/feature-cache.js';
 import { errorResult, type ToolResult } from './handlers/shared.js';
@@ -355,7 +356,7 @@ function createRuntime(argv: readonly string[], state: CliExecutionState, overri
     if (!runtimeState.resolvedConfig) {
       runtimeState.resolvedConfig = deps.resolveConfiguration(configArgv(argv));
       const serverConfig = runtimeState.resolvedConfig.config;
-      initLogger(serverConfig.logFormat, serverConfig.verbose);
+      initLogger(serverConfig.logFormat, serverConfig.logLevel);
     }
     return runtimeState.resolvedConfig;
   };
@@ -837,6 +838,7 @@ export function createCliProgram(options: CreateCliProgramOptions = {}): Command
     );
 
   const configCommand = program.command('config').description('Configuration inspection');
+  registerIdeConfigCommand(configCommand);
   configCommand
     .command('show')
     .description('Show the resolved effective safety policy with source attribution')
@@ -955,7 +957,8 @@ export async function executeCliToolCall(
   try {
     const result = await runtime.deps.dispatchToolCall(
       direct.client,
-      config,
+      // IDE links are MCP presentation, never part of CLI source/JSON exports (including .env opt-in).
+      { ...config, ideLinks: 'off' },
       toolName,
       args,
       undefined,
@@ -1019,5 +1022,8 @@ export async function main(
 
 // Keep `npm run cli -- ...` working without making imports execute a command.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exitCode = await main(process.argv.slice(2));
+  // No top-level await: the single-executable bundle is CommonJS, which cannot contain one.
+  void main(process.argv.slice(2)).then((code) => {
+    process.exitCode = code;
+  });
 }

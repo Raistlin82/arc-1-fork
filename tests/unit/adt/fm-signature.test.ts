@@ -105,6 +105,21 @@ describe('buildFmSignatureClause', () => {
 });
 
 describe('parseFmSignature', () => {
+  it.each(['/NS/FOO', '/1BCDWB/GENERATED'])(
+    'parses and edits namespaced function %s while preserving documentation and the body',
+    (name) => {
+      const prefix = '"! Keep documentation\r\n';
+      const body = '\r\n  WRITE / 1.\r\nENDFUNCTION.\r\n* Keep footer\r\n';
+      const source = `${prefix}FUNCTION ${name}\r\n  IMPORTING iv_input TYPE char10.\r\n${body}`;
+      expect(parseFmSignature(source).params).toEqual([{ kind: 'importing', name: 'IV_INPUT', type: 'char10' }]);
+      const output = spliceFmSignature(source, name, [{ kind: 'importing', name: 'IV_INPUT', type: 'STRING' }]);
+      expect(output.startsWith(`${prefix}FUNCTION ${name}\r\n`)).toBe(true);
+      expect(output).toContain('IV_INPUT TYPE STRING.');
+      expect(output.endsWith(body)).toBe(true);
+      expect(output.replaceAll('\r\n', '')).not.toContain('\n');
+    },
+  );
+
   it('returns empty arrays for FUNCTION X. ENDFUNCTION.', () => {
     const result = parseFmSignature('FUNCTION X.\nENDFUNCTION.\n');
     expect(result.params).toEqual([]);
@@ -198,6 +213,15 @@ describe('spliceFmSignature', () => {
     expect(result).toContain('VALUE(NEW_PARAM) TYPE STRING');
     expect(result).toContain('body line.');
     expect(result).not.toContain('name TYPE c');
+  });
+
+  it('preserves the body after SAP’s template comment and bare signature terminator', () => {
+    const source =
+      "FUNCTION z_fm\r\n \" You can use the template 'functionModuleParameter' to add here the signature!\r\n.\r\n\r\n DATA lv_guard TYPE i.\r\n lv_guard = 17.\r\nENDFUNCTION.";
+    const result = spliceFmSignature(source, 'Z_FM', [{ kind: 'importing', name: 'IV_X', type: 'I' }]);
+    expect(result).toContain('IV_X TYPE I.');
+    expect(result).toContain('DATA lv_guard TYPE i.\r\n lv_guard = 17.');
+    expect(parseFmSignature(source).params).toEqual([]);
   });
 
   it('inserts signature into bare stub', () => {

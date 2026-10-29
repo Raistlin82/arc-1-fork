@@ -809,8 +809,7 @@ After all artifacts are created and activated:
 
 1. **Syntax check** the behavior pool:
    ```
-   SAPRead(type="CLAS", name="ZBP_I_<entity>")
-   SAPDiagnose(action="syntax", type="CLAS", name="ZBP_I_<entity>", source="<behavior_pool_source>")
+   SAPRead(type="SYNTAX", objectType="CLAS", name="ZBP_I_<entity>")
    ```
 
 2. **ATC check** the full stack (if ATC is available):
