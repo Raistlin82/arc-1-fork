@@ -13,6 +13,10 @@ on:
 
 jobs:
   release-please:
+    # Releases are cut upstream only. In a fork release-please cannot see the upstream tags, so it
+    # recomputes the version from scratch (1.9.0 → 0.10.0) and every publish job would follow it.
+    # Every other job needs this one, so skipping it skips them too, workflow_dispatch included.
+    if: ${{ github.repository == 'arc-mcp/arc-1' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
