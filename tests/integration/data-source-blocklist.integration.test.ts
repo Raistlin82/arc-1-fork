@@ -4,6 +4,8 @@
  * Verified fixtures:
  * - DEMO_CDS_SUMDIST -> SCARR + SPFLI on SAP_BASIS 750 and 758
  * - SCARR data preview is bound on the 758 target; the available 750 endpoint is unbound
+ * - BSEG is a cluster table in RFBLG on non-HANA ECC 750 SP23 (principal propagation, 2026-09-26);
+ *   cluster cases skip when the target has no active BSEG cluster fixture
  */
 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -19,6 +21,7 @@ describe('experimental data-source blocklist live contract', () => {
   let client: AdtClient;
   let basisRelease = 0;
   let dataPreviewAvailable = false;
+  let bsegClusterContainer = '';
 
   beforeAll(async () => {
     requireSapCredentials();
@@ -35,7 +38,20 @@ describe('experimental data-source blocklist live contract', () => {
     } catch (error) {
       if (!(error instanceof AdtApiError && error.statusCode === 404)) throw error;
     }
+    if (dataPreviewAvailable) {
+      const { rows } = await client.runQuery(
+        "SELECT TABCLASS, SQLTAB FROM DD02L WHERE TABNAME = 'BSEG' AND AS4LOCAL = 'A'",
+        2,
+      );
+      if (rows.length === 1 && rows[0]?.TABCLASS?.trim() === 'CLUSTER') bsegClusterContainer = rows[0].SQLTAB!.trim();
+    }
   });
+
+  const requireClusterFixture = (ctx: Parameters<typeof skipTest>[0]): void => {
+    if (!bsegClusterContainer) {
+      skipTest(ctx, `${SkipReason.NO_FIXTURE}: BSEG is not an active cluster table on this target`);
+    }
+  };
 
   afterEach(() => vi.restoreAllMocks());
 
@@ -128,6 +144,82 @@ describe('experimental data-source blocklist live contract', () => {
     const strict = withBlocked(['USR02']);
     await expect(strict.runTableQuery('CdsFrwk_flight_booking', { maxRows: 1 })).rejects.toMatchObject({
       code: 'DATA_LINEAGE_UNRESOLVED',
+    });
+  });
+
+  // Read-only standard demos captured on A4H 758 SP02 for #912; pre-758 fixtures are not verified.
+  describe.each([
+    ['DEMO_CDS_SPFLI_ENTITY', 'CARRID', ['DEMO_CDS_SPFLI_ENTITY', 'SPFLI']],
+    ['DEMO_MANAGED_ROOT_WAS', 'KEY_FIELD', ['DEMO_MANAGED_ROOT_WAS', 'DEMO_TAB_ROOT_3']],
+    ['DEMO_MANAGED_ROOT_PROJ', 'KEY_FIELD', ['DEMO_MANAGED_ROOT_PROJ', 'DEMO_MANAGED_ROOT_WAS', 'DEMO_TAB_ROOT_3']],
+    ['DEMO_CDS_ASSOCIATION_VE', 'CARRIER', ['DEMO_CDS_ASSOCIATION_VE', 'SCARR']],
+    ['DEMO_CDS_PV_PARENT', 'ID', ['DEMO_CDS_PV_PARENT', 'DEMO_CDS_PV_CHILD', 'DEMO_CDS_VIEW_CHILD', 'DEMO_DDIC_TYPES']],
+  ] as const)('view-entity lineage: %s', (name, column, sourcePath) => {
+    const requireViewEntityFixture = (ctx: Parameters<typeof skipTest>[0]): void => {
+      if (basisRelease < 758) {
+        skipTest(ctx, `${SkipReason.NO_FIXTURE}: these CDS demos are not verified on the pre-758 test target`);
+      }
+    };
+
+    it('allows the freestyle query with an unrelated blocklist', async (ctx) => {
+      requireViewEntityFixture(ctx);
+      const result = await withBlocked(['USR02']).runQuery(`SELECT ${column} FROM ${name}`, 1);
+      expect(result.columns).toEqual([column]);
+    });
+
+    it('denies the terminal table before sending a data POST', async (ctx) => {
+      requireViewEntityFixture(ctx);
+      const strict = withBlocked([sourcePath.at(-1)!]);
+      const postSpy = vi.spyOn(strict.http, 'post');
+      await expect(strict.runQuery(`SELECT ${column} FROM ${name}`, 1)).rejects.toMatchObject({
+        code: 'DATA_SOURCE_BLOCKED',
+        sourcePath,
+      });
+      expect(postSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  it.for([
+    ['SAPQuery', (c: AdtClient) => c.runQuery('SELECT * FROM DEMO_ANALYTICAL_QUERY', 1)],
+    ['TABLE_QUERY', (c: AdtClient) => c.runTableQuery('DEMO_ANALYTICAL_QUERY', { maxRows: 1 })],
+    ['TABLE_CONTENTS', (c: AdtClient) => c.getTableContents('DEMO_ANALYTICAL_QUERY', 1)],
+  ] as const)('denies the live analytical query before a %s data POST', async ([_, call], ctx) => {
+    if (basisRelease < 758) {
+      skipTest(ctx, `${SkipReason.NO_FIXTURE}: analytical query demo is not verified on the pre-758 test target`);
+    }
+    const strict = withBlocked(['USR02']);
+    const postSpy = vi.spyOn(strict.http, 'post');
+    await expect(call(strict)).rejects.toMatchObject({
+      code: 'DATA_LINEAGE_UNRESOLVED',
+      sourcePath: ['DEMO_ANALYTICAL_QUERY'],
+      reason: 'dependency DEMO_ANALYTICAL_QUERY is not active in the database',
+    });
+    expect(postSpy).not.toHaveBeenCalled();
+  });
+
+  it('allows a live cluster table whose physical container is not blocked', async (ctx) => {
+    requireClusterFixture(ctx);
+    const strict = withBlocked(['USR02']);
+    const result = await strict.runTableQuery('BSEG', { columns: ['BUKRS'], maxRows: 1 });
+    expect(result.columns).toEqual(['BUKRS']);
+  });
+
+  it('denies a live cluster table through its blocked physical container', async (ctx) => {
+    requireClusterFixture(ctx);
+    const strict = withBlocked([bsegClusterContainer]);
+    await expect(strict.runTableQuery('BSEG', { columns: ['BUKRS'], maxRows: 1 })).rejects.toMatchObject({
+      code: 'DATA_SOURCE_BLOCKED',
+      sourcePath: ['BSEG', bsegClusterContainer],
+      matchedSource: bsegClusterContainer,
+    });
+  });
+
+  it('keeps the live physical container itself unresolved', async (ctx) => {
+    requireClusterFixture(ctx);
+    const strict = withBlocked(['USR02']);
+    await expect(strict.runQuery(`SELECT BUKRS FROM ${bsegClusterContainer}`, 1)).rejects.toMatchObject({
+      code: 'DATA_LINEAGE_UNRESOLVED',
+      sourcePath: [bsegClusterContainer],
     });
   });
 

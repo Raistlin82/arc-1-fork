@@ -781,8 +781,7 @@ If behavior pool activation fails because `METHODS ... FOR ...` signatures are m
 For any failing object, run syntax check to identify the issue:
 
 ```
-SAPRead(type="<type>", name="<name>")
-SAPDiagnose(action="syntax", type="<type>", name="<name>", source="<saved_source>")
+SAPRead(type="SYNTAX", objectType="<type>", name="<name>")
 ```
 
 ## Step 13: Create and Publish Service Binding
@@ -823,8 +822,7 @@ SAPRead(type="DDLS", name="ZI_<entity>")
 SAPRead(type="DCLS", name="ZI_<entity>_DCL")
 SAPRead(type="BDEF", name="ZI_<entity>")
 SAPRead(type="DDLS", name="ZC_<entity>")
-SAPRead(type="CLAS", name="ZBP_I_<entity>")
-SAPDiagnose(action="syntax", type="CLAS", name="ZBP_I_<entity>", source="<behavior_pool_source>")
+SAPRead(type="SYNTAX", objectType="CLAS", name="ZBP_I_<entity>")
 ```
 
 Present a summary checklist:

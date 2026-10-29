@@ -124,11 +124,20 @@ export class DataSourcePolicyError extends AdtSafetyError {
 }
 
 /**
- * SQL node kinds SAP emits in the dependency branch. Verified live on SAP_BASIS 750, 758 and 816.
+ * SQL node kinds from SAP_BASIS 750/758/816 captures. View-entity and projection kinds are verified
+ * on 758 SP02 and 816 SP01 (#912), not 750.
  * Anything outside this set inside a SQL branch fails closed.
  */
-export const SQL_NODE_KINDS = ['CDS_VIEW', 'TABLE', 'CDS_TABLE_FUNCTION'] as const;
-export type SqlNodeKind = (typeof SQL_NODE_KINDS)[number];
+const CDS_VIEW_KINDS = ['CDS_VIEW', 'CDS_VIEW_ENTITY', 'CDS_PROJECTION_VIEW'] as const;
+export const SQL_NODE_KINDS = [...CDS_VIEW_KINDS, 'TABLE', 'CDS_TABLE_FUNCTION'] as const;
+export type SqlNodeKind = (typeof SQL_NODE_KINDS)[number] | 'TABLE_ENTITY';
+
+/** Internal proof request; an empty TYPE is never an authorization. */
+class TableEntityCandidate extends DataSourceLineageError {
+  constructor(readonly entity: string) {
+    super(`CDS dependency graph node ${entity} is missing TYPE; active table-entity proof is required`);
+  }
+}
 
 /**
  * The EXACT auxiliary chain SAP emits for access-control metadata, verified live on 758/816 for the
@@ -167,7 +176,7 @@ export type ResolvedDirectDataSource =
 
 export interface DataSourcePolicyResolver {
   resolveDirectSource(name: string): Promise<ResolvedDirectDataSource>;
-  readTableReplacement(name: string): Promise<TableReplacement | undefined>;
+  readTableReplacement(name: string): Promise<TableReplacement | PhysicalTableContainer | undefined>;
   readCdsDependencyGraph(ddlSource: string): Promise<CdsDependencyNode>;
 }
 
@@ -176,9 +185,10 @@ export interface DataSourcePolicyBackend {
     name: string,
     maxResults: number,
   ): Promise<Array<{ objectName: string; objectType: string; uri: string }>>;
-  readTableReplacement(name: string): Promise<TableReplacement | undefined>;
+  readTableReplacement(name: string): Promise<TableReplacement | PhysicalTableContainer | undefined>;
   dependencyGraphAccept(): string | undefined;
   readDependencyGraph(path: string, accept: string): Promise<string>;
+  readActiveDdlMetadata?(name: string): Promise<string>;
 }
 
 /** Request-scoped adapter from ADT metadata reads to the pure lineage evaluator. */
@@ -397,6 +407,65 @@ export class DataSourceBlocklistGuard {
     return { kind: 'unknown', name };
   }
 
+  private async proveTableEntity(name: string): Promise<CdsDependencyNode> {
+    if (!this.backend.readActiveDdlMetadata) throw new DataSourceLineageError('active DDLS metadata is unavailable');
+    const resolved = await this.resolveDirectSource(name);
+    if (resolved.kind !== 'cds' || resolved.ddlSource !== name) {
+      throw new DataSourceLineageError('table entity requires an unambiguous matching entity and DDLS identity');
+    }
+    this.metadataRequests += 1;
+    const xml = await this.backend.readActiveDdlMetadata(name);
+    if (xml.length > MAX_GRAPH_XML_CHARS) throw new DataSourceLineageError('DDLS metadata exceeds input limit');
+    const raw = asRecord((graphParser.parse(xml) as Record<string, unknown>).ddlSource);
+    if (
+      !raw ||
+      attribute(raw, 'name')?.toUpperCase() !== name ||
+      attribute(raw, 'type') !== 'DDLS/DF' ||
+      attribute(raw, 'version') !== 'active' ||
+      attribute(raw, 'source_type') !== 'table entity'
+    ) {
+      throw new DataSourceLineageError(`active DDLS metadata did not prove table entity ${name}`);
+    }
+    return { name, aliases: [name], kind: 'TABLE_ENTITY', databaseExists: true, accessControlled: false, children: [] };
+  }
+
+  private async parseProvenGraph(xml: string): Promise<CdsDependencyNode> {
+    const candidates = new Set<string>();
+    let graph: CdsDependencyNode;
+    for (;;) {
+      try {
+        // Classify the complete shape before doing proof reads. This tree is local only:
+        // no caller can authorize it until every candidate has been proven below.
+        graph = parseCdsDependencyGraph(xml, candidates);
+        break;
+      } catch (error) {
+        if (!(error instanceof TableEntityCandidate)) throw error;
+        if (candidates.size >= MAX_DIRECT_SOURCES)
+          throw new DataSourceLineageError('table-entity proof limit exceeded');
+        candidates.add(error.entity);
+      }
+    }
+    const blocked = new Set(this.blockedSources.map((name) => canonicalDataSourceName(name)));
+    const checkBlocked = (node: CdsDependencyNode, path: string[]): void => {
+      const matched = node.aliases.find((alias) => blocked.has(canonicalDataSourceName(alias)));
+      if (matched) {
+        throw new DataSourcePolicyError(
+          'DATA_SOURCE_BLOCKED',
+          graph.name,
+          path,
+          `exact source ${matched} matches the configured blocklist`,
+          { matchedSource: matched },
+        );
+      }
+      for (const child of node.children) checkBlocked(child, [...path, child.name]);
+    };
+    // A known blocked sibling needs no metadata proof and remains the useful denial reason
+    // even when SAP would refuse the first table entity's metadata request.
+    checkBlocked(graph, [graph.name]);
+    for (const name of candidates) await this.proveTableEntity(name);
+    return graph;
+  }
+
   private async readCdsDependencyGraph(ddlSource: string): Promise<CdsDependencyNode> {
     const collection = CDS_DEPENDENCY_GRAPH_PATH;
     const requestGraph = async (accept: string): Promise<CdsDependencyNode> => {
@@ -406,9 +475,20 @@ export class DataSourceBlocklistGuard {
       // drives the element-info fallback below.
       if (/SQLDependencyModel/i.test(accept)) params.set('addMetrics', 'false');
       this.metadataRequests += 1;
-      const graph = parseCdsDependencyGraph(
-        await this.backend.readDependencyGraph(`${collection}?${params.toString()}`, accept),
-      );
+      let graph: CdsDependencyNode;
+      try {
+        graph = await this.parseProvenGraph(
+          await this.backend.readDependencyGraph(`${collection}?${params.toString()}`, accept),
+        );
+      } catch (error) {
+        if (
+          !(error instanceof AdtApiError) ||
+          error.statusCode !== 400 ||
+          !/<type\s+id="NoDependencyGraphDataCalculationPossible"\s*\/>/.test(error.responseBody ?? '')
+        )
+          throw error;
+        graph = await this.proveTableEntity(ddlSource);
+      }
       const count = (node: CdsDependencyNode): number => 1 + node.children.reduce((n, c) => n + count(c), 0);
       this.graphNodes += count(graph);
       return graph;
@@ -452,7 +532,8 @@ function parseProperties(node: Record<string, unknown>): Map<string, string> {
     const key = attribute(entry, 'key')?.toUpperCase();
     const text = entry['#text'];
     const value = attribute(entry, 'value') ?? (typeof text === 'string' && text.trim() ? text.trim() : undefined);
-    if (key && value !== undefined) result.set(key, value);
+    // Empty DB_EXISTS is SAP's false value; an omitted property is a different (legacy) case.
+    if (key) result.set(key, value ?? '');
   }
   return result;
 }
@@ -466,7 +547,7 @@ function parseProperties(node: Record<string, unknown>): Map<string, string> {
  * classification is the primary boundary here — a later failed table-source read is defence in depth,
  * not the protection.
  */
-export function parseCdsDependencyGraph(xml: string): CdsDependencyNode {
+export function parseCdsDependencyGraph(xml: string, provenTableEntities?: ReadonlySet<string>): CdsDependencyNode {
   if (xml.length > MAX_GRAPH_XML_CHARS) {
     throw new DataSourceLineageError(`CDS dependency graph exceeds input limit ${MAX_GRAPH_XML_CHARS} characters`);
   }
@@ -531,16 +612,34 @@ export function parseCdsDependencyGraph(xml: string): CdsDependencyNode {
     countNode(depth);
 
     const properties = parseProperties(raw);
-    const declared = properties.get('TYPE')?.trim().toUpperCase();
+    let declared = properties.get('TYPE')?.trim().toUpperCase();
+    let provenName: string | undefined;
+    if (
+      declared === '' &&
+      !attribute(raw, 'name') &&
+      !attribute(raw, 'type') &&
+      rawChildren(raw).length === 0 &&
+      ['FROM', 'INNER_JOIN'].includes(properties.get('RELATION') ?? '') &&
+      properties.get('AC_STATE') === 'NA' &&
+      !properties.has('DB_EXISTS')
+    ) {
+      const entity = canonicalDataSourceName(properties.get('ENTITY_NAME') ?? '');
+      if (entity !== canonicalDataSourceName(properties.get('NODE_NAME') ?? '')) {
+        throw new DataSourceLineageError('untyped graph leaf has conflicting identities');
+      }
+      if (!provenTableEntities?.has(entity)) throw new TableEntityCandidate(entity);
+      declared = 'TABLE_ENTITY';
+      provenName = entity;
+    }
     if (!declared) {
       throw new DataSourceLineageError('CDS dependency graph node is missing TYPE');
     }
-    if (!(SQL_NODE_KINDS as readonly string[]).includes(declared)) {
+    if (!provenName && !(SQL_NODE_KINDS as readonly string[]).includes(declared)) {
       throw new DataSourceLineageError(`CDS dependency graph node declares unsupported kind ${declared}`);
     }
     const kind = declared as SqlNodeKind;
 
-    const rawName = attribute(raw, 'name');
+    const rawName = provenName ?? attribute(raw, 'name');
     if (!rawName) throw new DataSourceLineageError('CDS dependency graph node is missing its name');
     let name: string;
     try {
@@ -610,18 +709,47 @@ export interface TableReplacement {
   ddlSource: string;
 }
 
-/** A bounded catalog result must prove one active transparent table and at most one replacement. */
-export function parseTableReplacement(table: string, rows: Record<string, string>[]): TableReplacement | undefined {
+/**
+ * A pooled or cluster table has no replacement object (SAP forbids one) but stores its rows in a
+ * physical table pool/cluster, which is checked as its lineage node.
+ */
+export interface PhysicalTableContainer {
+  container: string;
+}
+
+/**
+ * A bounded catalog result must prove one active transparent table with at most one replacement, or one
+ * active pooled/cluster table without replacement metadata and with its physical container.
+ */
+export function parseTableReplacement(
+  table: string,
+  rows: Record<string, string>[],
+): TableReplacement | PhysicalTableContainer | undefined {
   const row = rows[0];
-  const fields = ['TABNAME', 'TABCLASS', 'VIEWREF', 'VIEWREF_ERR', 'DDLNAME'];
+  const fields = ['TABNAME', 'TABCLASS', 'VIEWREF', 'VIEWREF_ERR', 'SQLTAB', 'DDLNAME'];
   if (rows.length !== 1 || !row || fields.some((field) => typeof row[field] !== 'string')) {
     throw new DataSourceLineageError('replacement catalog returned missing or ambiguous metadata');
   }
-  if (row.TABNAME!.trim() !== table || row.TABCLASS!.trim() !== 'TRANSP' || row.VIEWREF_ERR!.trim()) {
-    throw new DataSourceLineageError('replacement catalog did not confirm a valid active transparent table');
+  const tableClass = row.TABCLASS!.trim();
+  if (row.TABNAME!.trim() !== table || !['TRANSP', 'POOL', 'CLUSTER'].includes(tableClass) || row.VIEWREF_ERR!.trim()) {
+    throw new DataSourceLineageError(
+      'replacement catalog did not confirm a valid active transparent, pooled or cluster table',
+    );
   }
   const name = row.VIEWREF!.trim();
   const ddlSource = row.DDLNAME!.trim();
+  if (tableClass !== 'TRANSP') {
+    if (name || ddlSource) {
+      throw new DataSourceLineageError(
+        'replacement catalog reported replacement metadata for a pooled or cluster table',
+      );
+    }
+    try {
+      return { container: canonicalDataSourceName(row.SQLTAB!) };
+    } catch {
+      throw new DataSourceLineageError('replacement catalog did not supply the physical table pool or cluster');
+    }
+  }
   if (!name && !ddlSource) return undefined;
   try {
     return { name: canonicalDataSourceName(name), ddlSource: canonicalDataSourceName(ddlSource) };
@@ -663,7 +791,7 @@ export async function enforceBlockedDataSources(
   }
   if (roots.length === 0) throw unresolved('UNKNOWN', [], 'no direct source was supplied');
 
-  const replacementCache = new Map<string, TableReplacement | undefined>();
+  const replacementCache = new Map<string, TableReplacement | PhysicalTableContainer | undefined>();
   const activeResolution = new Set<string>();
 
   const checkBlocked = (directSource: string, path: string[], aliases: string[]): void => {
@@ -687,7 +815,7 @@ export async function enforceBlockedDataSources(
     throw unresolved(roots[0]!, [roots[0]!], `request exceeds direct-source limit ${MAX_DIRECT_SOURCES}`);
   }
 
-  const replacementFor = async (table: string): Promise<TableReplacement | undefined> => {
+  const replacementFor = async (table: string): Promise<TableReplacement | PhysicalTableContainer | undefined> => {
     if (replacementCache.has(table)) return replacementCache.get(table);
     if (replacementCache.size >= MAX_REPLACEMENT_SOURCES) {
       throw new DataSourceLineageError(`replacement inspection exceeds source limit ${MAX_REPLACEMENT_SOURCES}`);
@@ -706,7 +834,13 @@ export async function enforceBlockedDataSources(
       for (const source of INTERNAL_DATA_OPERATIONS.replacement_lineage.sources) {
         checkBlocked(directSource, [...path, source], [source]);
       }
-      return await replacementFor(table);
+      const lineage = await replacementFor(table);
+      if (lineage && 'container' in lineage) {
+        // Blocking the pool/cluster blocks every logical table stored in it.
+        checkBlocked(directSource, [...path, lineage.container], [lineage.container]);
+        return undefined;
+      }
+      return lineage;
     } catch (error) {
       if (error instanceof DataSourcePolicyError) throw error;
       if (error instanceof AdtApiError && error.statusCode === 404) {
@@ -750,7 +884,16 @@ export async function enforceBlockedDataSources(
     }
 
     checkBlocked(directSource, path, [canonicalDataSourceName(resolved.ddlSource)]);
-    const graph = await resolver.readCdsDependencyGraph(canonicalDataSourceName(resolved.ddlSource));
+    const graph = await resolver.readCdsDependencyGraph(canonicalDataSourceName(resolved.ddlSource)).catch((error) => {
+      if (error instanceof DataSourcePolicyError && error.code === 'DATA_SOURCE_BLOCKED') {
+        // Early graph denial is relative to its graph root; retain the caller/replacement prefix.
+        const prefix = error.sourcePath[0] === path.at(-1) ? path.slice(0, -1) : path;
+        throw new DataSourcePolicyError(error.code, directSource, [...prefix, ...error.sourcePath], error.reason, {
+          matchedSource: error.matchedSource,
+        });
+      }
+      throw error;
+    });
     const normalizedGraphAliases = graph.aliases.map((alias) => canonicalDataSourceName(alias));
     if (!normalizedGraphAliases.includes(canonicalDataSourceName(resolved.name))) {
       throw unresolved(
@@ -769,7 +912,7 @@ export async function enforceBlockedDataSources(
       if (node.databaseExists === false) {
         throw unresolved(directSource, nodePath, `dependency ${node.name} is not active in the database`);
       }
-      if (node.kind === 'TABLE') {
+      if (node.kind === 'TABLE' || node.kind === 'TABLE_ENTITY') {
         if (node.children.length > 0)
           throw unresolved(directSource, nodePath, `table node ${node.name} has unexpected children`);
         return;
@@ -784,7 +927,7 @@ export async function enforceBlockedDataSources(
           `CDS table function ${node.name} is not supported by the experimental policy: SAP does not expose its AMDP USING lineage in the dependency graph`,
         );
       }
-      if (node.kind !== 'CDS_VIEW') {
+      if (!(CDS_VIEW_KINDS as readonly string[]).includes(node.kind)) {
         throw unresolved(directSource, nodePath, `dependency kind ${node.kind} is unsupported`);
       }
       if (node.children.length === 0) {

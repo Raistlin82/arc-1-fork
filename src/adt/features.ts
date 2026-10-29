@@ -23,7 +23,7 @@ import { fetchDiscoveryDocument } from './discovery.js';
 import { AdtApiError } from './errors.js';
 import type { AdtHttpClient } from './http.js';
 import { parseReleaseNumber } from './release.js';
-import type { AuthProbeResult, FeatureStatus, ResolvedFeatures, SystemType } from './types.js';
+import type { AuthProbeResult, FeatureStatus, ResolvedFeatures, SystemType, TextSearchStatus } from './types.js';
 import { parseInstalledComponents, parseSyntaxConfigurations } from './xml-parser.js';
 
 /** Probe definition: which URL to check for each feature */
@@ -67,7 +67,9 @@ function resolveFeature(mode: FeatureMode, probeOutcome: ProbeOutcome, id: strin
     return { id, available: false, mode: 'off', message: 'Disabled by configuration' };
   }
   // auto
-  const baseMessage = probeOutcome.available ? `${description} is available` : `${description} is not available`;
+  const baseMessage = probeOutcome.available
+    ? `${description} is available`
+    : `${description} is ${id === 'hana' ? 'not confirmed' : 'not available'}`;
   const message = probeOutcome.reason ? `${baseMessage} — ${probeOutcome.reason}` : baseMessage;
   return {
     id,
@@ -114,6 +116,12 @@ export async function probeFeatures(
           return classifyFeatureProbeStatus(probe.id, 200);
         } catch (err) {
           if (err instanceof AdtApiError) {
+            if (err.statusCode < 400)
+              return {
+                id: probe.id,
+                available: false,
+                reason: 'cannot determine availability from an invalid ADT response',
+              };
             return classifyFeatureProbeStatus(probe.id, err.statusCode);
           }
           // Network-level error (no AdtApiError) → cannot reach SAP at all → unavailable.
@@ -135,22 +143,22 @@ export async function probeFeatures(
     resultMap.set(result.id, { available: result.available, reason: result.reason });
   }
 
-  // Component-based HANA detection overrides the endpoint probe when the hanainfo
-  // endpoint is absent (e.g. some S/4HANA releases). Only applies in auto mode.
+  // Components can prove the database independently of an unavailable hanainfo endpoint.
+  // Preserve its diagnostic: authorization/network failures must not be called absence.
   if (!resultMap.get('hana')?.available && systemDetection.hasHana && modeMap.hana === 'auto') {
     resultMap.set('hana', {
       available: true,
-      reason: 'inferred from installed components (hanainfo endpoint absent)',
+      reason: `inferred from installed components (hanainfo probe: ${resultMap.get('hana')?.reason ?? 'unconfirmed'})`,
     });
   }
 
-  // Discovery-based HANA detection: NHI (Native HANA Integration) workspaces are only
-  // registered on HANA-based systems. Fires when both the hanainfo probe and the components
-  // feed failed to confirm HANA (e.g. empty components feed + hanainfo 404).
+  // NHI collections also exist on non-HANA systems (#932). Preserve them as context,
+  // never as proof of the database when the endpoint and components do not confirm it.
   if (!resultMap.get('hana')?.available && discoveryNhiPresent && modeMap.hana === 'auto') {
+    const reason = resultMap.get('hana')?.reason;
     resultMap.set('hana', {
-      available: true,
-      reason: 'inferred from ADT discovery document (NHI workspace present — Native HANA Integration)',
+      available: false,
+      reason: `${reason ? `${reason}; ` : ''}NHI workspace presence does not identify the database`,
     });
   }
 
@@ -304,17 +312,6 @@ async function detectReleaseFromSyntaxConfigurations(client: AdtHttpClient): Pro
 }
 
 /**
- * Detect HANA presence from ADT discovery document NHI signal (exported for testing).
- *
- * NHI (Native HANA Integration) workspaces at /sap/bc/adt/nhi/* are only registered
- * on HANA-based SAP systems. This is the last fallback when both the hanainfo endpoint
- * probe and the software components feed fail to produce a signal.
- */
-export function detectHanaFromDiscovery(nhiPresent: boolean): boolean {
-  return nhiPresent;
-}
-
-/**
  * Detect HANA DB presence from installed software components (exported for testing).
  *
  * Rules (any match → HANA):
@@ -324,11 +321,15 @@ export function detectHanaFromDiscovery(nhiPresent: boolean): boolean {
  *    HANA-only, and `S4` is SAP's reserved prefix for S/4HANA software components.
  *    On S/4HANA 2021+ the core component is `S4FND`, not `S4CORE`.
  * 3. Component name `BW4CORE` — BW/4HANA is also HANA-only.
+ * 4. ABAP Environment identity: SAP_BASIS + SAP_CLOUD, without SAP_ABA. Its database
+ *    is ABAP-managed HANA Cloud; a configured BTP mode alone is not evidence.
  *
  * DB release info is intentionally not surfaced: only HDB-named components carry a
  * meaningful release; S4/BW4CORE releases describe the ABAP stack, not the DB.
  */
 export function detectHanaFromComponents(components: Array<{ name: string }>): boolean {
+  const names = new Set(components.map((component) => component.name.toUpperCase()));
+  if (names.has('SAP_BASIS') && names.has('SAP_CLOUD') && !names.has('SAP_ABA')) return true;
   for (const c of components) {
     const name = c.name.toUpperCase();
     if (/HDB|HANA/.test(name)) return true;
@@ -361,7 +362,7 @@ export function detectSystemType(
  * a search that legitimately found nothing. The `db` selector is part of the
  * advertised support template; an explicit empty value asks about source search.
  */
-export async function probeTextSearch(client: AdtHttpClient): Promise<{ available: boolean; reason?: string }> {
+export async function probeTextSearch(client: AdtHttpClient): Promise<TextSearchStatus> {
   try {
     await client.get('/sap/bc/adt/repository/informationsystem/textsearch/support?db=', undefined, {
       probe: true,
@@ -387,25 +388,25 @@ export async function probeTextSearch(client: AdtHttpClient): Promise<{ availabl
  * SAP ADT's own `AdtRisTextSearchService.isSupported()` catches the latter as
  * `ResourceForbiddenException` and returns false. Preserve that distinction so
  * users are not sent to SU53/PFCG for a feature that is disabled server-side. */
-function isUnsupportedTextSearchResponse(statusCode: number, responseBody?: string): boolean {
-  if (statusCode !== 403 || !responseBody) return false;
+function unsupportedTextSearchMessage(statusCode: number, responseBody?: string): string | undefined {
+  if (![403, 500].includes(statusCode) || !responseBody) return undefined;
   const properties = AdtApiError.extractProperties(responseBody);
   const messageId = (properties['T100KEY-ID'] ?? properties['T100KEY-MSGID'] ?? '').toUpperCase();
   const messageNumber = properties['T100KEY-NO'] ?? properties['T100KEY-MSGNO'] ?? '';
-  return (
-    (messageId === 'SADT_REST' && messageNumber.padStart(3, '0') === '020') ||
-    /\bthe action is not supported\b/i.test(responseBody)
-  );
+  if (statusCode === 403 && messageId === 'SADT_REST' && messageNumber.padStart(3, '0') === '020')
+    return 'SADT_REST 020';
+  if (statusCode === 500 && messageId === 'SRIS_SEARCH' && messageNumber.padStart(3, '0') === '006')
+    return 'SRIS_SEARCH 006';
+  return undefined;
 }
 
-export function classifyTextSearchError(
-  statusCode: number,
-  responseBody?: string,
-): { available: boolean; reason?: string } {
-  if (isUnsupportedTextSearchResponse(statusCode, responseBody)) {
+export function classifyTextSearchError(statusCode: number, responseBody?: string): TextSearchStatus {
+  const unsupportedMessage = unsupportedTextSearchMessage(statusCode, responseBody);
+  if (unsupportedMessage) {
     return {
       available: false,
-      reason: 'Source code search is not supported by this SAP backend (SADT_REST 020).',
+      unsupported: true,
+      reason: `Source code search is not supported by this SAP backend (${unsupportedMessage}).`,
     };
   }
 
@@ -419,6 +420,7 @@ export function classifyTextSearchError(
     case 404:
       return {
         available: false,
+        unsupported: true,
         reason:
           'The textsearch endpoint is not available on this system — ADT answered "No suitable resource found". ' +
           'This is the generic reply for any URI the ADT handler does not map, so confirm the collection is ' +
@@ -427,7 +429,11 @@ export function classifyTextSearchError(
     case 500:
       return { available: false, reason: 'Search framework error (component BC-DWB-AIE) — check SAP Note 3605050.' };
     case 501:
-      return { available: false, reason: 'Not implemented — source code search requires SAP_BASIS >= 7.51.' };
+      return {
+        available: false,
+        unsupported: true,
+        reason: 'Not implemented — source code search requires SAP_BASIS >= 7.51.',
+      };
     default:
       return { available: false, reason: `textsearch returned HTTP ${statusCode}.` };
   }

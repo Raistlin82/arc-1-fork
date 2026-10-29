@@ -15,8 +15,8 @@
  */
 
 import type { EvalScenario } from '../types.js';
-
 import { SCENARIOS as ACTIVATE } from './activate.js';
+import { SCENARIOS as APPLICATION_LOG } from './application-log.js';
 import { SCENARIOS as CONTEXT_DEPS } from './context-deps.js';
 import { SCENARIOS as CONTEXT_IMPACT } from './context-impact.js';
 import { SCENARIOS as DIAGNOSE } from './diagnose.js';
@@ -27,6 +27,7 @@ import { SCENARIOS as QUERY } from './query.js';
 import { SCENARIOS as READ_BASIC } from './read-basic.js';
 import { SCENARIOS as REVISIONS } from './revisions.js';
 import { SCENARIOS as SEARCH } from './search.js';
+import { SCENARIOS as STORED_TEXT } from './stored-text.js';
 import { SCENARIOS as TRANSPORT } from './transport.js';
 import { SCENARIOS as WRITE } from './write.js';
 
@@ -36,6 +37,7 @@ import { SCENARIOS as WRITE } from './write.js';
  */
 export const SCENARIO_FILES: Record<string, EvalScenario[]> = {
   activate: ACTIVATE,
+  'application-log': APPLICATION_LOG,
   'context-deps': CONTEXT_DEPS,
   'context-impact': CONTEXT_IMPACT,
   diagnose: DIAGNOSE,
@@ -46,6 +48,7 @@ export const SCENARIO_FILES: Record<string, EvalScenario[]> = {
   'read-basic': READ_BASIC,
   revisions: REVISIONS,
   search: SEARCH,
+  'stored-text': STORED_TEXT,
   transport: TRANSPORT,
   write: WRITE,
 };

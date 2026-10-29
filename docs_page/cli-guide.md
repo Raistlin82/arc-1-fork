@@ -5,7 +5,21 @@ commands use the same schemas, dispatcher, safety policy, feature evidence, and 
 tool calls.
 
 The npm package installs three equivalent executable names: `arc1`, `arc-1`, and `arc1-cli`. This
-guide uses `arc1`.
+guide uses `arc1`. The separate `arc1-source` helper prepares local files for an
+[existing Codex MCP connection](codex-file-source.md); it does not connect to SAP.
+
+## Generate Eclipse link configuration
+
+`arc1 config ide` prints a small JSON fragment to merge into one existing MCP server entry.
+It is offline and preserves connection/authentication setup. For example:
+
+```bash
+arc1 config ide --mcp-client eclipse --system-id A4H
+arc1 config ide --mcp-client eclipse --endpoint https://YOUR-ARC1/A4H/001/mcp
+```
+
+See [IDE integration](ide-integration.md) for BTP prerequisites and Eclipse project selection.
+VS Code uses SAP ADT MCP and needs no generated ARC-1 link settings. Use `--mcp-client`, not the `--client` flag that selects the SAP logon client.
 
 ## Install reproducibly
 
@@ -248,11 +262,10 @@ Use ABAP SQL spelling such as `alias~field` and `ASCENDING`/`DESCENDING`, not `a
 `DESC`, or `LIMIT`. Keep free SQL off unless its data-access use case is explicitly approved.
 
 With `SAP_ALLOW_DATA_PREVIEW=true`, prefer `SAPRead(type="TABLE_QUERY")` with structured `columns`,
-`where`, and `maxRows`. The legacy `TABLE_CONTENTS` path is suitable for an unfiltered sample, but on
-758 its requested limit returns `N+1` rows and its documented condition-only filter is not accepted by
-the backend. Do not use that legacy filter/limit as a CI data boundary; use TABLE_QUERY or enforce the
-final cap in your caller. On 758, spell inequality as `<>`; the currently accepted `!=` input is sent
-unchanged and SAP rejects it.
+`where`, and `maxRows`. The legacy `TABLE_CONTENTS` path is suitable for an unfiltered sample;
+ARC-1 caps returned rows even when SAP includes a lookahead row. Its condition-only filter is not
+accepted by the tested 758 backend: use TABLE_QUERY for structured filtering. On 758, spell inequality
+as `<>`; the currently accepted `!=` input is sent unchanged and SAP rejects it.
 
 For an approved but security-first deployment, `SAP_BLOCKED_DATA_SOURCES=USR02,PA0002` activates the
 experimental exact source blocklist. It performs strict SQL parsing and fresh live CDS/replacement lineage
@@ -501,8 +514,9 @@ ARC-1 starts read-only. SQL, data preview, object writes, transport writes, and 
 positive opt-ins. Per-user scopes can restrict the server ceiling but cannot expand it. Keep package
 and transport allowlists narrow, and use `SAP_DENY_ACTIONS` for action-level exclusions.
 
-ARC-1 primarily uses ADT REST endpoints under `/sap/bc/adt/*`. SAP does not list that complete surface
-as published APIs in SAP Business Accelerator Hub. Before production or agentic use, review the
-[SAP API Policy and architecture alignment](sap-api-policy-and-architecture.md), verify the relevant
-endpoint status with SAP for your deployment, and apply your organization's data-egress and automation
-controls. Using the deterministic CLI does not change the endpoint's publication status.
+ARC-1 primarily uses ADT REST endpoints under `/sap/bc/adt/*`. SAP's API Policy FAQ Q33 classifies
+ADT APIs as internal and limits development use to endorsed channels; ARC-1's standalone TypeScript
+client is not specifically identified as one. Follow the custom-MCP architecture and clarify this
+channel and intended use with SAP as described in [SAP API Policy and architecture alignment](sap-api-policy-and-architecture.md),
+including dev/test. A deterministic CLI does not itself establish an endorsed channel or alter the
+API's permitted use. Apply your organization's data-egress and automation controls as well.

@@ -84,6 +84,13 @@ Order:
 
 ### 3. Preview quickfix
 
+Take one editable snapshot per source unit first. Its `source` is the `<current_source>` of every
+call below, and its `sourceHash` guards the final write:
+
+```text
+SAPRead(type="CLAS", name="ZCL_EXAMPLE", format="editable")
+```
+
 For each selected finding, pass current source and exact position:
 
 ```text
@@ -99,6 +106,9 @@ affected object/source URI. Reject the automated path when:
 - the delta includes unrelated refactoring;
 - the proposal changes architecture or behavior beyond the finding.
 
+A `/providers/refactoring/` URI alone does not make a proposal unsupported: judge it by the delta it
+returns, not by its provider.
+
 ### 4. Apply proposal in memory
 
 Pass proposal data through exactly:
@@ -106,6 +116,9 @@ Pass proposal data through exactly:
 ```text
 SAPDiagnose(action="apply_quickfix", type="CLAS", name="ZCL_EXAMPLE", source="<current_source>", line=17, column=1, proposalUri="<proposal_uri>", proposalUserContent="<opaque_user_content>")
 ```
+
+Pass `userContent` unchanged, including an empty string. Some SAP proposals need additional input or
+suggest types that require correction: review the returned deltas before they enter the candidate.
 
 For a multi-object proposal, also pass every `proposalAffectedObjects` entry returned by preview,
 including current content. Merge deltas in memory and rebase later proposals on the latest
@@ -134,9 +147,13 @@ If syntax fails, do not write. Store the candidate and diagnostic as a low-confi
 ### 7. Persist and activate
 
 ```text
-SAPWrite(action="update", type="CLAS", name="ZCL_EXAMPLE", source="<approved_candidate>", transport="DEVK900001")
+SAPWrite(action="update", type="CLAS", name="ZCL_EXAMPLE", source="<approved_candidate>", transport="DEVK900001", expectedSourceHash="<source_hash>")
 SAPActivate(action="activate", type="CLAS", name="ZCL_EXAMPLE")
 ```
+
+`expectedSourceHash` is the snapshot's `sourceHash`. If ARC-1 refuses the write because the source
+changed since the snapshot, do not retry with a fresh hash: take a new snapshot, rebuild the candidate
+and go through the approval gate again.
 
 For multiple affected objects, write all approved candidates under the same scope and activate as
 a batch. A partial write is a failure: restore from the captured version baseline or leave the

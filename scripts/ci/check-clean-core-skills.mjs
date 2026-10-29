@@ -255,6 +255,30 @@ if (chain) {
     }
   }
 
+  // Optimistic concurrency: a write that replaces existing source must carry the sourceHash of a
+  // read_editable_source taken earlier in the same sequence, or a change another developer saved
+  // between the read and the approved write is silently overwritten. TABL/structure sources are
+  // the one exception ARC-1 cannot guard, so the DDIC action may update without it.
+  const HASH_GUARDED_WRITE_OPS = new Set(['write_update', 'edit_method', 'edit_unit']);
+  for (const [name, action] of Object.entries(actions)) {
+    if (name === chain.ddicContract?.executableAction) continue;
+    const operations = action.operationIds ?? [];
+    const firstGuardedWrite = operations.findIndex((operation) => HASH_GUARDED_WRITE_OPS.has(operation));
+    if (firstGuardedWrite < 0) continue;
+    const read = operations.indexOf('read_editable_source');
+    if (read < 0 || read > firstGuardedWrite) {
+      fail(`action ${name}: read_editable_source must run before ${operations[firstGuardedWrite]} to guard the source`);
+    }
+  }
+  for (const id of ['edit_method', 'edit_unit']) {
+    if (!catalog?.operations?.[id]?.requiredInputs?.includes('expectedSourceHash')) {
+      fail(`operation ${id} must require expectedSourceHash`);
+    }
+  }
+  if (!catalog?.operations?.write_update?.conditionalInputs?.expectedSourceHash) {
+    fail('operation write_update must state when expectedSourceHash is required (conditionalInputs)');
+  }
+
   // Catalog closure: an operation no action runs rots silently. Session-scope operations are driven
   // by the protocol rather than by a per-unit action sequence: SKILL.md pre-flight, govern-mode
   // package gates, operator transport handling, and discovery-gated evidence that a mandatory

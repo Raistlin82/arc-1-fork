@@ -1189,7 +1189,7 @@ describe('SAPTransport + SAPWrite transport behavior', () => {
         id: 'A4HK906291',
       });
       const payload = JSON.parse(result.content[0]?.text ?? '{}');
-      expect(payload.comparison).toBe('transport-correction-to-immediate-previous');
+      expect(payload.comparison).toBe('released transport snapshot against preceding snapshot');
       expect(payload.transport).toMatchObject({ id: 'A4HK906291', status: 'R' });
     });
 
@@ -1245,7 +1245,7 @@ describe('SAPTransport + SAPWrite transport behavior', () => {
       expect(parts[0].note).toMatch(/revision history unavailable/);
     });
 
-    it('reports an inventory reason rather than an empty object when every part 404s', async () => {
+    it('retains explicit unavailable parts when every selected part 404s', async () => {
       mockFetch.mockImplementation((url: string) => {
         const u = String(url);
         if (u.includes('/cts/transportrequests/')) return Promise.resolve(mockResponse(200, ccimpTransportXml()));
@@ -1256,9 +1256,11 @@ describe('SAPTransport + SAPWrite transport behavior', () => {
         id: 'A4HK906291',
       });
       const payload = JSON.parse(result.content[0]?.text ?? '{}');
-      expect(payload.objects[0].parts).toEqual([]);
-      // Without this the object is indistinguishable from "nothing changed".
-      expect(payload.objects[0].inventoryReason).toMatch(/no readable source/);
+      expect(payload.objects[0].parts).toHaveLength(1);
+      expect(payload.objects[0].parts[0]).toMatchObject({
+        part: 'implementations',
+        baselineStatus: 'baseline-unavailable',
+      });
     });
 
     it('withholds SAP diagnostics from result notes under minimalErrors', async () => {
@@ -1330,10 +1332,10 @@ describe('SAPTransport + SAPWrite transport behavior', () => {
       const first = await page(0, 2);
       expect(first.totalObjects).toBe(3);
       expect(first.shown).toBe(2);
-      expect(first.hint).toContain('offset=2');
+      expect(first.nextOffset).toBe(2);
       const second = await page(2, 2);
       expect(second.shown).toBe(1);
-      expect(second.hint).toBeUndefined();
+      expect(second.nextOffset).toBeUndefined();
 
       // The two pages partition the set with no gap and no repeat, in sorted order.
       const names = [...first.objects, ...second.objects].map((o: { name: string }) => o.name);
@@ -1869,6 +1871,8 @@ describe('SAPTransport + SAPWrite transport behavior', () => {
     it('auto-propagates lock corrNr to delete when no transport supplied', async () => {
       const calls: Array<{ url: string; method: string }> = [];
       mockFetch.mockImplementation((url: string, opts: any) => {
+        if (String(url).includes('/textelements/programs/ZTEST?version=inactive'))
+          return Promise.resolve(mockResponse(200, '<textElement name="ZTEST" type="PROG/PX" version="active"/>'));
         calls.push({ url: url.toString(), method: opts?.method ?? 'GET' });
         // CSRF HEAD
         if (opts?.method === 'HEAD') return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
@@ -1898,6 +1902,8 @@ describe('SAPTransport + SAPWrite transport behavior', () => {
     it('uses explicit transport over lock corrNr in delete', async () => {
       const calls: Array<{ url: string; method: string }> = [];
       mockFetch.mockImplementation((url: string, opts: any) => {
+        if (String(url).includes('/textelements/programs/ZTEST?version=inactive'))
+          return Promise.resolve(mockResponse(200, '<textElement name="ZTEST" type="PROG/PX" version="active"/>'));
         calls.push({ url: url.toString(), method: opts?.method ?? 'GET' });
         if (opts?.method === 'HEAD') return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
         if (url.toString().includes('_action=LOCK'))
@@ -1925,6 +1931,8 @@ describe('SAPTransport + SAPWrite transport behavior', () => {
     it('does not add corrNr to delete when lock returns empty corrNr', async () => {
       const calls: Array<{ url: string; method: string }> = [];
       mockFetch.mockImplementation((url: string, opts: any) => {
+        if (String(url).includes('/textelements/programs/ZTEST?version=inactive'))
+          return Promise.resolve(mockResponse(200, '<textElement name="ZTEST" type="PROG/PX" version="active"/>'));
         calls.push({ url: url.toString(), method: opts?.method ?? 'GET' });
         if (opts?.method === 'HEAD') return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
         if (url.toString().includes('_action=LOCK'))
@@ -1949,6 +1957,8 @@ describe('SAPTransport + SAPWrite transport behavior', () => {
 
     it('delete succeeds for $TMP objects without transport', async () => {
       mockFetch.mockImplementation((url: string, opts: any) => {
+        if (String(url).includes('/textelements/programs/ZTEST?version=inactive'))
+          return Promise.resolve(mockResponse(200, '<textElement name="ZTEST" type="PROG/PX" version="active"/>'));
         if (opts?.method === 'HEAD') return Promise.resolve(mockResponse(200, '', { 'x-csrf-token': 'T' }));
         if (url.toString().includes('_action=LOCK'))
           return Promise.resolve(mockResponse(200, lockBodyNoCorrNr, { 'x-csrf-token': 'T' }));
@@ -2250,6 +2260,8 @@ describe('SAPTransport + SAPWrite transport behavior', () => {
 
       mockFetch.mockReset();
       mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        if (String(url).includes('/textelements/programs/ZPROGRAM?version=inactive'))
+          return Promise.resolve(mockResponse(200, '<textElement name="ZPROGRAM" type="PROG/PX" version="active"/>'));
         const method = (opts?.method ?? 'GET').toUpperCase();
         if (method === 'POST' && String(url).includes('_action=LOCK')) {
           return Promise.resolve(mockResponse(200, lockBody, { 'x-csrf-token': 'T' }));
@@ -2281,6 +2293,8 @@ describe('SAPTransport + SAPWrite transport behavior', () => {
 
       mockFetch.mockReset();
       mockFetch.mockImplementation((url: string | URL, opts?: { method?: string }) => {
+        if (String(url).includes('/textelements/programs/ZPROGRAM?version=inactive'))
+          return Promise.resolve(mockResponse(200, '<textElement name="ZPROGRAM" type="PROG/PX" version="active"/>'));
         const method = (opts?.method ?? 'GET').toUpperCase();
         const parsed = new URL(String(url));
         if (method === 'POST' && parsed.searchParams.get('_action') === 'LOCK') {
@@ -2339,6 +2353,7 @@ describe('SAPTransport + SAPWrite transport behavior', () => {
         action: 'create',
         type: 'DDLS',
         name: 'ZI_BAD',
+        lintBeforeWrite: false, // Exercise the SAP create failure, past the local lint gate.
         source: 'define view entity ZI_BAD as select from sflight {}',
       });
 

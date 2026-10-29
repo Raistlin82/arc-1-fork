@@ -198,7 +198,7 @@ For each object in S but not in U:
 SAPNavigate(action="references", type="<type>", name="<name>", maxResults=1000)
 ```
 
-(`references` is ARC-1's where-used action — it calls SAP's where-used scope API under the hood.)
+(`references` is ARC-1's where-used action — it calls SAP's where-used API under the hood.)
 `maxResults` lifts the default 100-entry cap; take counts from `total`, never from the returned rows
 (set W membership only needs `total > 0`).
 
