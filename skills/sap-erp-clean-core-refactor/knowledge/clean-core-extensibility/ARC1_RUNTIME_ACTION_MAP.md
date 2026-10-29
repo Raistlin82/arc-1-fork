@@ -23,7 +23,7 @@ approved chain action may invoke ARC-1 writes.
 | Role | Canonical operation IDs |
 |---|---|
 | System and landscape | `system_probe`, `read_system` |
-| Inventory | `inventory_package`, `exact_tadir_lookup`, `read_source` |
+| Inventory | `inventory_package`, `exact_tadir_lookup`, `read_source`, `read_editable_source` |
 | Dependencies and fan-in | `read_dependencies`, `find_references`, `read_usages`, `read_impact`, `read_relations` (when exposed) |
 | Classification | `atc_variants`, `atc_assessment`, `atc_batch_assessment`, `read_api_state` |
 | Package gates (govern) | `atc_ci_gate`, `unittest_ci_gate` |
@@ -99,13 +99,14 @@ record `total` and treat `truncated=true` as degraded fan-in evidence.
 ### Deterministic remediation
 
 ```text
+SAPRead(type="CLAS", name="ZCL_EXAMPLE", format="editable")
 SAPDiagnose(action="quickfix", type="CLAS", name="ZCL_EXAMPLE", source="<current_source>", line=17, column=1)
 SAPDiagnose(action="apply_quickfix", type="CLAS", name="ZCL_EXAMPLE", source="<current_source>", line=17, column=1, proposalUri="<proposal_uri>", proposalUserContent="<opaque_user_content>")
 SAPLint(action="lint_and_fix", source="<candidate_source>", name="ZCL_EXAMPLE")
 SAPLint(action="format", source="<candidate_source>")
 SAPDiagnose(action="syntax", type="CLAS", name="ZCL_EXAMPLE", source="<candidate_source>")
-SAPWrite(action="update", type="CLAS", name="ZCL_EXAMPLE", source="<candidate_source>", transport="DEVK900001")
-SAPWrite(action="edit_unit", type="PROG", name="ZEXAMPLE", unit="check_authority", source="<candidate_form>", transport="DEVK900001")
+SAPWrite(action="update", type="CLAS", name="ZCL_EXAMPLE", source="<candidate_source>", transport="DEVK900001", expectedSourceHash="<source_hash>")
+SAPWrite(action="edit_unit", type="PROG", name="ZEXAMPLE", unit="check_authority", source="<candidate_form>", transport="DEVK900001", expectedSourceHash="<source_hash>")
 SAPActivate(action="activate", type="CLAS", name="ZCL_EXAMPLE")
 SAPDiagnose(action="unittest", type="CLAS", name="ZCL_EXAMPLE", coverage=true)
 SAPRead(action="diff", type="CLAS", name="ZCL_EXAMPLE", from="active", to="inactive")
@@ -114,12 +115,21 @@ SAPRead(action="diff", type="CLAS", name="ZCL_EXAMPLE", from="active", to="inact
 `proposalUri` and `proposalUserContent` must be passed through exactly from the preview response.
 Apply multi-object quick fixes only when every affected source and explicit approval are available.
 
+`read_editable_source` returns `{source, sourceHash}` uncached. Build the candidate on that
+`source` and pass its `sourceHash` as `expectedSourceHash` on the write: ARC-1 compares it under the
+lock and refuses the write when someone saved the source after the read, so a change made while the
+diff waited for approval is never overwritten. On a refusal, read again, rebuild the candidate and
+ask for approval again. The hash covers the whole addressed source: for `edit_method` on a local
+handler class read the include that holds it (`include="implementations"`), for a global method
+the main source. TABL and structure sources cannot be guarded; `adjust_ddic_in_place` updates them
+without the hash, inside its own approval and joint activation.
+
 ### Custom API release
 
 ```text
 SAPRead(type="API_STATE", name="ZIF_EXAMPLE", objectType="INTF")
 SAPNavigate(action="references", type="INTF", name="ZIF_EXAMPLE", maxResults=1000)
-SAPManage(action="set_api_state", name="ZIF_EXAMPLE", objectType="INTF", apiState="RELEASED", contract="C1", transport="DEVK900001")
+SAPManage(action="set_api_state", name="ZIF_EXAMPLE", objectType="INTF", apiState="RELEASED", contract="C1", apiVisibility=["cloudDevelopment"], transport="DEVK900001")
 SAPDiagnose(action="atc", type="CLAS", name="ZCL_CONSUMER", variant="ABAP_CLOUD_READINESS")
 ```
 
@@ -127,14 +137,22 @@ SAPDiagnose(action="atc", type="CLAS", name="ZCL_CONSUMER", variant="ABAP_CLOUD_
 classic DDIC and other object types may require C0, C3 or another supported contract. Releasing one
 dependency does not automatically classify all consumers A.
 
+`apiVisibility` is a complete selection, not a default override: `["cloudDevelopment"]` makes the
+release usable from ABAP Cloud code, which is why the chain releases. Add `keyUserApps` only when
+the key-user decision needs the API there. Send it explicitly: C1 defaults Cloud visibility to true
+on S/4HANA 2023/2025, but BTP ABAP Environment (920) defaults both flags to false and refuses a
+release without a selection (ARS_STATE_HANDLER/119). ARC-1 verifies the selection on readback even
+when SAP reports no change, and refuses it when the contract marks the flag read-only.
+
 ### Wrapper
 
 ```text
 SAPManage(action="create_package", name="ZCC_WRAPPERS", description="Clean Core wrappers", superPackage="ZCC", softwareComponent="HOME", transport="DEVK900001", recordChanges=true)
 SAPWrite(action="create", type="CLAS", name="ZCL_CC_WRAPPER", description="Clean Core wrapper", package="ZCC_WRAPPERS", transport="DEVK900001", source="<wrapper_source>")
 SAPActivate(action="activate", type="CLAS", name="ZCL_CC_WRAPPER")
-SAPManage(action="set_api_state", name="ZCL_CC_WRAPPER", objectType="CLAS", apiState="RELEASED", contract="C1", transport="DEVK900001")
-SAPWrite(action="update", type="CLAS", name="ZCL_CONSUMER", source="<rewritten_consumer>", transport="DEVK900001")
+SAPManage(action="set_api_state", name="ZCL_CC_WRAPPER", objectType="CLAS", apiState="RELEASED", contract="C1", apiVisibility=["cloudDevelopment"], transport="DEVK900001")
+SAPRead(type="CLAS", name="ZCL_CONSUMER", format="editable")
+SAPWrite(action="update", type="CLAS", name="ZCL_CONSUMER", source="<rewritten_consumer>", transport="DEVK900001", expectedSourceHash="<source_hash>")
 SAPDiagnose(action="atc", type="CLAS", name="ZCL_CONSUMER", variant="ABAP_CLOUD_READINESS")
 SAPDiagnose(action="unittest", type="CLAS", name="ZCL_CC_WRAPPER", coverage=true)
 SAPWrite(action="create", type="SKTD", name="ZCC_WRAPPERS", description="Wrapper decision", package="ZCC_DOC", transport="DEVK900001", refObjectType="DEVC/K", refObjectName="ZCC_WRAPPERS", source="<governance_record>")

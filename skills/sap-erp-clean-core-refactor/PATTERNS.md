@@ -222,11 +222,13 @@ Execution sequence:
    already take the transport, so discovering the route afterwards proves nothing.
 4. Delegate deterministic findings to `migrate-custom-code`.
 5. Design against released APIs/extension points and release-supported ABAP syntax.
-6. Generate a candidate without persisting it.
+6. Take an editable snapshot (`read_editable_source`) and generate the candidate from it without
+   persisting it.
 7. Lint, format and run SAP syntax checks on the candidate (`lint_candidate`, `syntax_check`).
 8. Present the concrete diff for approval.
 9. Write and activate through ARC-1 (`write_update` for a whole source, `edit_unit` for a single
-   FORM/MODULE in a PROG/INCL, `edit_method` for one class method).
+   FORM/MODULE in a PROG/INCL, `edit_method` for one class method), each with the snapshot's
+   `expectedSourceHash`: a source saved by someone else during the approval refuses the write.
 10. Run ATC and applicable unit/CDS/RAP tests, then compare against the captured baseline
     (`read_diff`).
 11. Reclassify the logical unit and update the plan.

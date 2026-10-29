@@ -95,6 +95,11 @@ Primary actions are shown in the decision rows. Specialized dispatches remain ex
   `run_unit_tests` follow the last one — an ATC run before the change proves the old state, not the
   absence of regression. `migrate_custom_code` therefore lists `atc_assessment` twice: once to find
   the findings, once to prove no regression. CI enforces this against each action's MUST gates.
+- **Every write over existing source is hash-guarded**: `read_editable_source` precedes the first
+  `write_update`, `edit_method` or `edit_unit`, and the write carries its `expectedSourceHash`, so a
+  change saved by someone else between the read and the approved write refuses the write instead of
+  being overwritten. CI enforces the order. `adjust_ddic_in_place` is the one exception: ARC-1
+  cannot guard TABL and structure sources.
 - **`write_update` and `edit_unit` are alternatives, not steps**: whole-source replacement versus
   replacing a single FORM or MODULE in a PROG/INCL. Pick per object type; procedural units prefer
   `edit_unit` so the rest of the report is untouched.

@@ -213,7 +213,7 @@
       "execution": "arc1_guarded",
       "localSkills": ["setup-abap-mirror", "sap-object-documenter", "generate-abap-unit-test", "generate-cds-unit-test", "debug-slow-sql", "convert-ui5-to-fiori-elements"],
       "gates": ["plan_approved", "aem_recorded", "released_touchpoints", "abap_cloud_target_proven", "transport_scoped", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
-      "operationIds": ["read_source", "read_dependencies", "transport_check", "lint_candidate", "syntax_check", "write_update", "edit_unit", "activate_object", "atc_assessment", "run_unit_tests", "read_diff"]
+      "operationIds": ["read_source", "read_dependencies", "transport_check", "read_editable_source", "lint_candidate", "syntax_check", "write_update", "edit_unit", "activate_object", "atc_assessment", "run_unit_tests", "read_diff"]
     },
     "rewrite_side_by_side_btp_abap": {
       "execution": "arc1_target_guarded",
@@ -226,7 +226,7 @@
         "accept": ["parity_approved"],
         "retire": ["source_retirement_proven"]
       },
-      "operationIds": ["read_source", "read_dependencies", "read_api_state", "transport_check", "lint_candidate", "syntax_check", "batch_create_objects", "activate_batch", "publish_service_binding", "write_update", "activate_object", "atc_assessment", "run_unit_tests", "read_diff"]
+      "operationIds": ["read_source", "read_dependencies", "read_api_state", "transport_check", "lint_candidate", "syntax_check", "batch_create_objects", "activate_batch", "publish_service_binding", "read_editable_source", "write_update", "activate_object", "atc_assessment", "run_unit_tests", "read_diff"]
     },
     "keep_at_level_b": {
       "execution": "documented_exception",
@@ -244,7 +244,7 @@
       "execution": "arc1_guarded_composite",
       "localSkills": ["setup-abap-mirror", "sap-object-documenter", "generate-abap-unit-test"],
       "gates": ["plan_approved", "aem_recorded", "wrapper_isolated", "wrapper_exception_governed", "owner_approved", "transport_scoped", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
-      "operationIds": ["read_api_state", "find_references", "transport_check", "create_wrapper_package", "lint_candidate", "syntax_check", "create_wrapper_class", "activate_object", "release_api", "write_update", "atc_assessment", "run_unit_tests", "write_governance_document"]
+      "operationIds": ["read_api_state", "find_references", "transport_check", "create_wrapper_package", "lint_candidate", "syntax_check", "create_wrapper_class", "activate_object", "release_api", "read_editable_source", "write_update", "atc_assessment", "run_unit_tests", "write_governance_document"]
     },
     "extract_to_side_by_side_cf": {
       "execution": "delegated_guarded",
@@ -347,7 +347,7 @@
       "execution": "arc1_guarded",
       "localSkills": ["migrate-custom-code"],
       "gates": ["plan_approved", "transport_scoped", "syntax_clean", "atc_no_regression", "tests_green"],
-      "operationIds": ["atc_assessment", "quickfix_preview", "quickfix_apply", "transport_check", "syntax_check", "write_update", "activate_object", "run_unit_tests", "atc_assessment"]
+      "operationIds": ["atc_assessment", "read_editable_source", "quickfix_preview", "quickfix_apply", "transport_check", "syntax_check", "write_update", "activate_object", "run_unit_tests", "atc_assessment"]
     },
     "migrate_segw_to_rap": {
       "execution": "delegated_guarded",
@@ -365,7 +365,7 @@
       "execution": "delegated_guarded",
       "localSkills": ["generate-rap-logic"],
       "gates": ["plan_approved", "syntax_clean", "atc_no_regression", "tests_green", "generative_diff_approved"],
-      "operationIds": ["scaffold_rap_handlers", "syntax_check", "edit_method", "batch_create_objects", "activate_object", "atc_assessment", "run_unit_tests"]
+      "operationIds": ["scaffold_rap_handlers", "read_editable_source", "syntax_check", "edit_method", "batch_create_objects", "activate_object", "atc_assessment", "run_unit_tests"]
     },
     "rap_full_stack_researched": {
       "execution": "delegated_guarded",
