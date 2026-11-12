@@ -1,6 +1,6 @@
 # ARC-1 Idea Roadmap
 
-**Last reviewed:** 2026-10-22
+**Last reviewed:** 2026-11-12
 
 This page is ARC-1's idea parking lot. It records worthwhile work that is **not implemented now** so
 it does not disappear, but it is not a delivery schedule and it does not answer "what should we do
@@ -110,6 +110,8 @@ sequence.
 | [FEAT-91](#feat-91) | Validate the legacy dump user filter | P2 | S | Needs research | Diagnostics |
 | [FEAT-74](#feat-74) | Qualify dump-filter matching | P2 | S | Needs research | Diagnostics |
 | [FEAT-94](#feat-94) | Report a dump feed's shorter time window | P2 | S | Needs research | Diagnostics |
+| [FEAT-95](#feat-95) | Live-qualify persisted ATC results and developer-scenario ATC | P1 | S | Needs research | Diagnostics |
+| [FEAT-96](#feat-96) | Start a central ATC run series through ADT | P3 | M | Blocked | Diagnostics |
 | [FEAT-50](#feat-50) | ADT type-probe fixture coverage | P3 | XS each | Contributor-driven | Diagnostics |
 | [FEAT-32](#feat-32) | Stable data-preview pagination | P3 | M | Needs research | Data access |
 | [FEAT-86](#feat-86) | Additional stored-text profiles and persistence | P3 | M | Needs research | Data access |
@@ -892,6 +894,45 @@ volume limits are not implemented.
 
 **Resume with.** Capture a bounded real trace result, define redaction and response-size behavior,
 and keep trace activation separate from result reading.
+
+<a id="feat-95"></a>
+### FEAT-95 — Live-qualify persisted ATC results and developer-scenario ATC
+
+- **Priority / effort / status:** P1 / S / Needs research
+- **Category:** Diagnostics
+
+**Remaining gap.** `SAPDiagnose atc_results` and `atc_remote` are implemented against the ADT
+discovery templates of `/sap/bc/adt/atc/results`, the live 758 run-status `displayid` link and the
+measured `<atcresult:checkVariant>` element, but are verified only with mocks and synthetic
+fixtures. The list/result element names, the `ageMin`/`ageMax` unit (assumed days), the
+`activeResult`/`centralResult` value, `sysId` behavior on central and checked systems, the size of a
+real S/4HANA readiness result, and whether a delegated developer-scenario run links a persisted
+result are unconfirmed.
+
+**Resume with.** Access to a central check system (758+) with a scheduled run series and a checked
+system with ADT access to its reference check system (SAP Note 2808562). Run the checklist in
+[the plan](https://github.com/Raistlin82/arc-1-fork/blob/main/docs/plans/2026-11-12-atc-results-remote.md),
+replace the synthetic fixtures with captures and tighten the tolerant parser.
+[Research](https://github.com/Raistlin82/arc-1-fork/blob/main/docs/research/2026-11-12-remote-atc-and-results.md).
+
+<a id="feat-96"></a>
+### FEAT-96 — Start a central ATC run series through ADT
+
+- **Priority / effort / status:** P3 / M / Blocked
+- **Category:** Diagnostics
+
+**Idea.** Let an agent start (or re-run) a central ATC run series for a checked system, choosing the
+object provider, RFC destination or system group, e.g. an `S4HANA_READINESS_<release>` series before
+a system conversion.
+
+**Why it remains.** ADT discovery exposes no run-series, scheduling, object-provider or RFC-destination
+resource; the ATC run body only references objects of the connected system. Today an ATC
+administrator or quality expert schedules the series once in transaction ATC of the central check
+system and ARC-1 reads the results with `atc_results` `scope="central"`. Report or RFC execution
+belongs in extensions (ADR-0009), not core.
+
+**Resume with.** A SAP release whose ADT discovery advertises such a resource, or an approved
+extension design.
 
 <a id="feat-74"></a>
 ### FEAT-74 — Qualify dump-filter matching

@@ -616,6 +616,13 @@ targets under ADR-0007. It adds no repository mutation, parallel per-object jobs
 fallback. SAP authorization, global request/rate limits and `SAP_DENY_ACTIONS` still apply;
 the semaphore limits concurrent HTTP requests, not total ATC findings or SAP job duration.
 
+Reviewed ATC results extension (W8, 2026-11-12): `SAPDiagnose.atc_results` is a passive, bounded
+read of persisted ATC result sets on the call's one selected target (2 MiB list / 8 MiB result,
+paged output). `SAPDiagnose.atc_remote` is the same ATC workload as `atc objects[]` (same limits,
+one target, one SAP identity) that the target itself may delegate to its configured central check
+system; ARC-1 selects no RFC destination or second system. Both keep `read` scope, the ADR-0006
+workload decision, ADR-0007 Basic rules, SAP authorization and `SAP_DENY_ACTIONS`.
+
 For 17–256 targets, the model obtains exact IDs and meaningful labels from `SAPTargets`; descriptions
 are deliberately not duplicated into every SAP-contacting tool schema. There is no standalone HTTP
 target catalog or browser HTML target page in v1. Copyable pinned and aggregate client-configuration
@@ -1086,7 +1093,7 @@ Work:
 - Add `SAPLint` and `SAPTransport` only through explicit action allowlists:
   `lint|lint_and_fix|list_rules` and `list|get|diff|check|history`. Permit the following `SAPDiagnose`
   actions through a separate exact allowlist: `syntax`, `unittest`, `atc`, `atc_variants`,
-  `cds_testcases`, `dumps`, `feed_schema`, `traces`, `trace_requests`, `system_messages`, `gateway_errors`,
+  `atc_results`, `atc_remote`, `cds_testcases`, `dumps`, `feed_schema`, `traces`, `trace_requests`, `system_messages`, `gateway_errors`,
   `object_state`, `quickfix`, `odata_perf`, `cds_sql`, `sql_trace_state`, `sql_trace_directory`, and
   `authorization_trace`. The existing data gates still control `odata_perf` and
   `authorization_trace`. Reject every omitted action at both list time and call time.

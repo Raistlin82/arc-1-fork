@@ -54,6 +54,11 @@ SAPRead(type="CLAS", name="ZCL_EXAMPLE")
 SAPRead(type="VERSIONS", name="ZCL_EXAMPLE", objectType="CLAS")
 ```
 
+If the findings come from a central or scheduled ATC run (for example an S/4HANA readiness run
+series), read them with `SAPDiagnose(action="atc_results", id="<displayId>", atcResult={objectName:"ZCL_EXAMPLE"})`
+instead of asking the ATC administrator, and re-check after each fix with `atc` (or `atc_remote` on a
+checked system that delegates to the central check system).
+
 If the requested variant is unavailable, stop for target-relevant findings unless the parent plan
 explicitly accepts a named degraded fallback. No findings is not success until checked-object
 coverage is proven.

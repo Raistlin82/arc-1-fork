@@ -82,6 +82,14 @@ target-domain decision. Do not default to BTP Cloud Foundry.
   given and reports `variantSource: "requestedUnverified"`, recorded as degraded evidence.
 - Record landscape, release, installed components, available ADT features, write ceiling, package
   allowlist, transport policy, confirmed ATC variants and optional MCP/skill capabilities.
+- When the assessment ran centrally (for example an S/4HANA readiness run series
+  `S4HANA_READINESS_<release>` on a central check system), read it with operation
+  `atc_central_results` and then `atc_central_result_findings` instead of asking the ATC
+  administrator for an export; record the result's `checkVariant`, `createdAt` and `complete`. On a
+  checked system configured for the ATC developer scenario, `atc_remote_assessment` runs an ad-hoc
+  check that SAP delegates to the central check system. Neither operation can start a run series:
+  the ATC administrator schedules it once in transaction ATC. Both depend on the landscape, so
+  missing results or a capability refusal are recorded as degraded evidence, never as clean.
 - When the landscape is S/4HANA Cloud Public Edition and no live ARC-1 source context exists, read
   the [S/4HANA Public Cloud setup](https://github.com/Raistlin82/arc-1-fork/blob/main/docs_page/s4hana-public-cloud.md)
   and complete or hand off that runtime setup before inventory. Do not confuse ARC-1 running on BTP

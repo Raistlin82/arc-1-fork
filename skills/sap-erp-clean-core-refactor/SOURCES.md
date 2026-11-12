@@ -127,6 +127,7 @@ Use operation IDs from [`action-catalog.json`](./action-catalog.json):
 | What custom code exists? | `inventory_package`, `exact_tadir_lookup`, `read_source` — a listing is partial until a TADIR census confirms it |
 | Who depends on it? | `read_dependencies`, `find_references`, `read_usages`, `read_impact` (for CDS blast radius), `read_relations` (transitive shape, when exposed) |
 | What is the current Clean Core evidence? | `atc_assessment`, `atc_batch_assessment`, `read_api_state` |
+| What did a central/scheduled ATC run find (e.g. S/4HANA readiness)? | `atc_central_results`, `atc_central_result_findings`; ad hoc on a checked system: `atc_remote_assessment` |
 | Does the package still pass its gates? | `atc_ci_gate`, `unittest_ci_gate` (govern mode, fail closed) |
 | What exactly does this request change? | `transport_diff` (DDIC objects appear without a source diff) |
 | What does this DDIC change touch? | `read_source`, `read_ddic_structure`, `find_references` with `maxResults` |

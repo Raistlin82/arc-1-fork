@@ -70,6 +70,9 @@ SAPDiagnose(action="atc_variants", variant="*")
 SAPDiagnose(action="atc", type="CLAS", name="ZCL_EXAMPLE", variant="ABAP_CLOUD_READINESS")
 SAPDiagnose(action="atc", objects=[{type:"CLAS", name:"ZCL_EXAMPLE"}, {type:"INTF", name:"ZIF_EXAMPLE"}], variant="ABAP_CLOUD_READINESS", resultFormat="structured")
 SAPRead(type="API_STATE", name="ZIF_EXAMPLE", objectType="INTF")
+SAPDiagnose(action="atc_results", atcResult={scope:"central", sysId:"ERP"}, variant="S4HANA_READINESS*")
+SAPDiagnose(action="atc_results", id="<displayId>", maxResults=100, atcResult={objectName:"ZCL_EXAMPLE"})
+SAPDiagnose(action="atc_remote", objects=[{type:"CLAS", name:"ZCL_EXAMPLE"}], variant="<local reference variant>")
 ```
 
 A package listing is never a complete inventory. It defaults to 200 objects (max 1000), reports
@@ -91,6 +94,15 @@ fan-in count.
 
 `atc_variants` lists the variants this system actually has plus its default, so variant availability
 is live evidence in the pre-flight step — never a guess and never an ATC run used as a probe.
+
+`atc_results` reads ATC results ARC-1 did not start — the active result, central run-series results
+for a checked system (`sysId`), or one user's results — and pages one result's findings with its
+`checkVariant`, `createdAt`, object count and `complete` flag. It replaces asking the ATC
+administrator for an export; it cannot schedule the run series, which that administrator does once
+in transaction ATC. `atc_remote` runs an ad-hoc check on a checked system that SAP delegates to its
+central check system (ATC developer scenario); it needs an explicit variant, refuses when discovery
+lacks the ATC run or result resources, and reports the persisted result it produced. Both are
+landscape-dependent: a capability refusal is a recorded gap, not a clean result.
 
 `references` caps at 100 entries unless `maxResults` is passed (max 1000), and `total` counts every
 match before the cap. Fan-in is decision evidence for `release_api` and an effort multiplier, so

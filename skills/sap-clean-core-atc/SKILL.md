@@ -84,6 +84,21 @@ SAPDiagnose(action="atc", type="CLAS", name="ZCL_EXAMPLE", variant="ABAP_CLOUD_R
 If unavailable, run the system's configured assessment/default variant, record its exact name and
 mark Level A evidence degraded. Do not claim equivalent coverage without comparing the checks.
 
+When the assessment already ran centrally (a run series scheduled in transaction ATC, for example
+`S4HANA_READINESS_<release>` on a central check system for an SAP ERP conversion), read that result
+instead of asking the ATC administrator for an export:
+
+```text
+SAPDiagnose(action="atc_results", atcResult={scope:"central", sysId:"ERP"}, variant="S4HANA_READINESS*")
+SAPDiagnose(action="atc_results", id="<displayId>", maxResults=100, atcResult={objectName:"ZCL_EXAMPLE"})
+```
+
+Record the result's `checkVariant`, `createdAt` and `complete`; an incomplete or missing result is
+degraded evidence. On a checked system configured for the ATC developer scenario, run the check ad
+hoc with `SAPDiagnose(action="atc_remote", objects=[{type:"CLAS", name:"ZCL_EXAMPLE"}], variant="<local reference variant>")`
+— SAP delegates it to the central check system. ARC-1 cannot start a run series or pick an RFC
+destination/object provider; the ATC administrator schedules the series once.
+
 ATC complements API release evidence. A released object may still be used through a forbidden
 statement or technology; an ATC finding may also require edition/release-specific confirmation.
 

@@ -34,6 +34,7 @@ connection.
 | Inventory | package read, exact TADIR lookup, source read | `inventory_package`, `exact_tadir_lookup`, `read_source` | Block package plan; a package listing alone is recorded as partial (`completeness: "unknown"`) |
 | Impact | dependencies, where-used, live usages, CDS blast radius, native relations when exposed | `read_dependencies`, `find_references`, `read_usages`, `read_impact`, `read_relations` | Mark fan-in degraded; block destructive actions/API release |
 | Classification | ATC variants, per-object and batch ATC, API state | `atc_variants`, `atc_assessment`, `atc_batch_assessment`, `read_api_state` | `ResearchRequired` for affected unit |
+| Central ATC evidence | persisted/central ATC results; developer-scenario remote run | `atc_central_results`, `atc_central_result_findings`, `atc_remote_assessment` | Record the gap and the administrator who schedules the run series; never treat as clean |
 | Package gates | package-level ATC and ABAP Unit CI runs | `atc_ci_gate`, `unittest_ci_gate` | Degrade to per-unit `atc_assessment` / `run_unit_tests`; record the gate as degraded |
 | Mechanical fixes | quickfix, lint, syntax | `quickfix_preview`, `quickfix_apply`, `lint_candidate`, `format_candidate`, `syntax_check` | Keep as proposal/manual remediation |
 | ABAP execution | editable snapshot, hash-guarded update/create, unit surgery, activation, unit tests, diff | `read_editable_source`, `write_update`, `edit_unit`, `batch_create_objects`, `activate_object`, `run_unit_tests`, `read_diff` | Plan remains read-only |

@@ -308,6 +308,9 @@ prerequisites.
 
 1. `bootstrap-system-context` captures release, system type, components and ADT capabilities;
    operation `atc_variants` confirms which check variants and default this system really has.
+   Central or scheduled ATC evidence (run series, S/4HANA readiness) is read with
+   `atc_central_results` / `atc_central_result_findings`; it replaces asking the ATC administrator
+   for an export, but a run series is still scheduled by that administrator in transaction ATC.
 2. `sap-transport-overview` identifies open-request conflicts.
 3. ARC-1 inventory operations collect package contents and exact object metadata. The package
    listing is partial by construction — capped, and blind to many repository types — so an exact
