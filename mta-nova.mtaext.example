@@ -1,8 +1,8 @@
 # ──────────────────────────────────────────────────────────────────────
 # NOVA team deployment — MTA Extension Descriptor (TEMPLATE)
 #
-# The ARC-1 the development team uses through the NOVA toolkit: read and
-# write, every capability on, each developer acting in SAP as themselves
+# Nova ARC-1 (based on ARC-1, Key2 fork): the server the development team
+# uses through the NOVA toolkit: read and write, every capability on, each developer acting in SAP as themselves
 # (principal propagation). It is the only way to reach ADT on SAP S/4HANA
 # Cloud Public Edition (docs_page/s4hana-public-cloud.md), and it keeps SAP
 # passwords off the developers' machines for the other systems too.
@@ -12,8 +12,9 @@
 #   cf deploy mta_archives/arc1-mcp_<version>.mtar -e mta-nova.mtaext
 #
 # One deployment per SAP system (or per landscape): give each one its own
-# ARC1_SERVER_NAME and route. The developers add it to Claude Code with
-#   claude mcp add --transport http arc-1 https://<route>/mcp
+# ARC1_SERVER_NAME (nova-arc-1, or nova-arc-1-<system> with more than one)
+# and route. The developers add it to Claude Code with
+#   claude mcp add --transport http nova-arc-1 https://<route>/mcp
 # (the NOVA installer writes it into .mcp.json from ARC1_MCP_URL) and log in
 # with XSUAA in the browser.
 #
@@ -42,14 +43,17 @@ modules:
       # (docs_page/principal-propagation-setup.md).
       SAP_PP_ENABLED: "true"
       SAP_PP_STRICT: "true"
-      ARC1_SERVER_NAME: "arc-1"
+      ARC1_SERVER_NAME: "nova-arc-1"
 
       # ── Every capability on: the team develops, activates, transports ──
       SAP_ALLOW_WRITES: "true"
       SAP_ALLOWED_PACKAGES: "*"
       SAP_ALLOW_TRANSPORT_WRITES: "true"
       SAP_ALLOW_GIT_WRITES: "true"
-      # data preview and freestyle SQL: on for development and test systems;
-      # check the SAP API Policy and the customer's rules before a productive one
+      # data preview and freestyle SQL: on by default (decision of the Nova
+      # product owner); the agent access of the Nova configurator for this
+      # system (manifest system.agentAccess: route DIRECT, MCP Gateway or Joule
+      # A2A, per-system switch) says when to turn them off and which actions to
+      # deny with SAP_DENY_ACTIONS
       SAP_ALLOW_DATA_PREVIEW: "true"
       SAP_ALLOW_FREE_SQL: "true"
