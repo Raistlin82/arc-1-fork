@@ -43,8 +43,11 @@ const BUDGETS = {
   // +4: parent function group for SAPTransport check/history.
   // SAPQuery action-dependent schemas now live in query-tool.ts; lower the ratchet after extraction.
   // +references packages/detail: keep two small parameter definitions beside SAPNavigate.
-  'src/handlers/tools.ts': 1776, // +5: explicit direct package scope (#1065).
-  'src/handlers/schemas.ts': 1573, // +31: direct package inputs and mode validation (#1065).
+  // +1 net: SAPDiagnose atc_results/atc_remote enum + description line (W8), offset by trimmed
+  // descriptions; their inputs live in diagnose-fields.ts and the rules in atc-results-input.ts.
+  'src/handlers/tools.ts': 1777, // +5: explicit direct package scope (#1065).
+  // +9: SAPDiagnose atc_results/atc_remote enum, atcResult field and shared objects/timeout refinements (W8).
+  'src/handlers/schemas.ts': 1582, // +31: direct package inputs and mode validation (#1065).
   // +shared parseNamedItems relocated here from transport.ts (now used by ATC variants too) +
   // parseAtcSystemCheckVariant (FEAT-68 ATC variant listing) + parseFunctionModuleProperties and
   // the pre-7.52 projectexplorer function-group parser.

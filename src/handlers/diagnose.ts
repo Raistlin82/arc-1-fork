@@ -68,6 +68,7 @@ import type {
   UnitTestResult,
 } from '../adt/types.js';
 import { getCurrentContext } from '../server/context.js';
+import { handleAtcResultActions } from './diagnose-atc-results.js';
 import { handleCiQuality } from './diagnose-ci.js';
 import { isBtpSystem } from './feature-cache.js';
 import { classIncludeUrl, normalizeObjectType, objectUrlForType, sourceUrlForType } from './object-types.js';
@@ -891,6 +892,9 @@ export async function handleSAPDiagnose(
         toolJson({ findings: result.findings, variant: result.variant, variantSource: result.variantSource }),
       );
     }
+    case 'atc_results':
+    case 'atc_remote':
+      return handleAtcResultActions(client, args);
     case 'atc_variants': {
       // Discover which check variant to pass to action="atc": the system default (which action="atc"
       // resolves and sends itself when no variant is given — SAP does NOT apply it on an empty
@@ -1230,7 +1234,7 @@ export async function handleSAPDiagnose(
     }
     default:
       return errorResult(
-        `Unknown SAPDiagnose action: ${action}. Supported: syntax, unittest, unittest_ci, atc, atc_ci, atc_variants, cds_testcases, object_state, quickfix, apply_quickfix, dumps, traces, trace_start, trace_requests, trace_cancel, system_messages, gateway_errors, odata_perf, cds_sql, sql_trace_state, set_sql_trace_state, sql_trace_directory, authorization_trace`,
+        `Unknown SAPDiagnose action: ${action}. Supported: syntax, unittest, unittest_ci, atc, atc_ci, atc_variants, atc_results, atc_remote, cds_testcases, object_state, quickfix, apply_quickfix, dumps, traces, trace_start, trace_requests, trace_cancel, system_messages, gateway_errors, odata_perf, cds_sql, sql_trace_state, set_sql_trace_state, sql_trace_directory, authorization_trace`,
       );
   }
 }

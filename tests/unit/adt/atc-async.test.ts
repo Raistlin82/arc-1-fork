@@ -108,6 +108,8 @@ describe('asynchronous ATC run lifecycle', () => {
       completionEvidence: 'asyncRunCompleted',
       runStatusCode: 201,
       runStatus: 'Completed',
+      // The captured completed status links the persisted result (≠ worklist id).
+      resultDisplayId: 'DEA8421BB8E81FE1A9AF2379E41998A2',
       findingStatistics: null,
       expectedFindingCount: null,
       truncated: false,

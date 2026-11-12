@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SYNTHETIC, not a live capture. Header elements per docs/plans/fix-atc-effective-check-variant.md
+     (<atcresult:checkVariant>) and public client code; object/finding attributes reuse the live 758
+     worklist shape (atc-worklist-findings.xml). Replace with a live capture (roadmap FEAT-95). -->
+<atcresult:resultList xmlns:atcresult="http://www.sap.com/adt/atc/result" xmlns:atcobject="http://www.sap.com/adt/atc/object" xmlns:atcfinding="http://www.sap.com/adt/atc/finding" xmlns:adtcore="http://www.sap.com/adt/core">
+  <atcresult:result>
+    <atcresult:displayId>005056A62AA91EEF818525AD389CA4BD</atcresult:displayId>
+    <atcresult:title>ERP S/4HANA readiness</atcresult:title>
+    <atcresult:checkVariant>S4HANA_READINESS_2023</atcresult:checkVariant>
+    <atcresult:runSeries>ERP_S4_READINESS</atcresult:runSeries>
+    <atcresult:createdAt>2026-11-01T22:00:00Z</atcresult:createdAt>
+    <atcresult:objects>
+      <atcobject:object adtcore:uri="/sap/bc/adt/atc/objects/R3TR/PROG/ZREPORT_A" adtcore:type="PROG" adtcore:name="ZREPORT_A" adtcore:packageName="ZERP">
+        <atcobject:findings>
+          <atcfinding:finding adtcore:uri="/sap/bc/adt/atc/findings/itemid/AA01/index/1" atcfinding:location="/sap/bc/adt/programs/programs/zreport_a/source/main#start=12,4" atcfinding:priority="1" atcfinding:checkId="CHK_S4_SIMPL" atcfinding:checkTitle="S/4HANA: Search for usages of simplified objects" atcfinding:messageId="1" atcfinding:messageTitle="Usage of table KONV (SAP Note 2220005)" atcfinding:exemptionApproval="-" atcfinding:quickfixInfo="atc:AA01,1">
+            <atcfinding:quickfixes atcfinding:manual="false" atcfinding:automatic="true" atcfinding:pseudo="false"/>
+          </atcfinding:finding>
+          <atcfinding:finding adtcore:uri="/sap/bc/adt/atc/findings/itemid/AA01/index/2" atcfinding:location="/sap/bc/adt/programs/programs/zreport_a/source/main#start=40,0" atcfinding:priority="2" atcfinding:checkId="CHK_S4_FLE" atcfinding:checkTitle="S/4HANA: Field length extensions" atcfinding:messageId="5" atcfinding:messageTitle="Material number length"/>
+        </atcobject:findings>
+      </atcobject:object>
+      <atcobject:object adtcore:uri="/sap/bc/adt/atc/objects/R3TR/CLAS/ZCL_ORDER" adtcore:type="CLAS" adtcore:name="ZCL_ORDER" adtcore:packageName="ZERP">
+        <atcobject:findings>
+          <atcfinding:finding adtcore:uri="/sap/bc/adt/atc/findings/itemid/AA02/index/1" atcfinding:location="/sap/bc/adt/oo/classes/zcl_order/source/main#start=7,2" atcfinding:priority="3" atcfinding:checkId="CHK_S4_SIMPL" atcfinding:checkTitle="S/4HANA: Search for usages of simplified objects" atcfinding:messageId="2" atcfinding:messageTitle="Usage of BAPI_SALESORDER_CHANGE"/>
+        </atcobject:findings>
+      </atcobject:object>
+      <atcobject:object adtcore:uri="/sap/bc/adt/atc/objects/R3TR/INTF/ZIF_CLEAN" adtcore:type="INTF" adtcore:name="ZIF_CLEAN" adtcore:packageName="ZERP"/>
+    </atcresult:objects>
+  </atcresult:result>
+</atcresult:resultList>

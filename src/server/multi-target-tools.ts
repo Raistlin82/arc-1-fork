@@ -65,6 +65,8 @@ const MULTI_TARGET_ACTION_RULES = new Map<
         'unittest',
         'atc',
         'atc_variants',
+        'atc_results',
+        'atc_remote',
         'cds_testcases',
         'dumps',
         'feed_schema',

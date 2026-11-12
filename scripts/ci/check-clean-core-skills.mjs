@@ -288,6 +288,11 @@ if (chain) {
     'system_probe',
     'read_system',
     'atc_variants',
+    // Persisted/central ATC results and the developer-scenario remote run depend on the landscape
+    // (central check system, run series, checked-system configuration); no per-unit sequence may require them.
+    'atc_central_results',
+    'atc_central_result_findings',
+    'atc_remote_assessment',
     'atc_ci_gate',
     'unittest_ci_gate',
     'read_relations',

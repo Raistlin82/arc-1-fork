@@ -153,6 +153,9 @@ export const ACTION_POLICY: Record<string, ActionPolicy> = {
   'SAPDiagnose.atc': { scope: 'read', opType: OperationType.Read },
   'SAPDiagnose.atc_ci': { scope: 'read', opType: OperationType.Read },
   'SAPDiagnose.atc_variants': { scope: 'read', opType: OperationType.Read },
+  // Persisted ATC results (passive read) and developer-scenario ATC (workload-producing read like atc).
+  'SAPDiagnose.atc_results': { scope: 'read', opType: OperationType.Read },
+  'SAPDiagnose.atc_remote': { scope: 'read', opType: OperationType.Read },
   'SAPDiagnose.cds_testcases': { scope: 'read', opType: OperationType.Read },
   'SAPDiagnose.dumps': { scope: 'read', opType: OperationType.Read },
   'SAPDiagnose.feed_schema': { scope: 'read', opType: OperationType.Read },

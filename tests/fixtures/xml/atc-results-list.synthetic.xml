@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SYNTHETIC, not a live capture. Shape inferred from ADT discovery templates and public client code;
+     see docs/research/2026-11-12-remote-atc-and-results.md. Replace with a live capture (roadmap FEAT-95). -->
+<atcresult:resultList xmlns:atcresult="http://www.sap.com/adt/atc/result">
+  <atcresult:result>
+    <atcresult:displayId>005056A62AA91EEF818525AD389CA4BD</atcresult:displayId>
+    <atcresult:title>ERP S/4HANA readiness</atcresult:title>
+    <atcresult:checkVariant>S4HANA_READINESS_2023</atcresult:checkVariant>
+    <atcresult:runSeries>ERP_S4_READINESS</atcresult:runSeries>
+    <atcresult:createdAt>2026-11-01T22:00:00Z</atcresult:createdAt>
+    <atcresult:createdBy>ATC_ADMIN</atcresult:createdBy>
+    <atcresult:isActive>true</atcresult:isActive>
+    <atcresult:isCentral>true</atcresult:isCentral>
+    <atcresult:sysId>ERP</atcresult:sysId>
+  </atcresult:result>
+  <atcresult:result atcresult:displayId="005056A62AA91EEF818525AD389C0001" atcresult:title="Nightly clean core" atcresult:checkVariant="ABAP_CLOUD_READINESS" atcresult:createdAt="2026-10-30T22:00:00Z" atcresult:isActive="false"/>
+</atcresult:resultList>

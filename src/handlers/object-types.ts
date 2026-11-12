@@ -359,7 +359,7 @@ export function normalizeTypeArgsForValidation(
       if (
         Array.isArray(cleaned.objects) &&
         cleaned.objects.length === 0 &&
-        (!['atc', 'syntax'].includes(String(cleaned.action)) ||
+        (!['atc', 'atc_remote', 'syntax'].includes(String(cleaned.action)) ||
           cleaned.name !== undefined ||
           cleaned.type !== undefined ||
           cleaned.url !== undefined)

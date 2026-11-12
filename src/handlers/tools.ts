@@ -1130,8 +1130,9 @@ export function getToolDefinitions(
         '- "syntax": check objects[] (CLAS/INTF/PROG/DDLS; version active/inactive). Single: prefer SAPRead SYNTAX.\n' +
         '- "unittest": harmless ABAP Unit for CLAS/PROG/FUGR or DEVC (exact; includeSubpackages recurses).\n' +
         '- "unittest_ci": harmless package tests with source reconciliation; empty/incomplete runs fail.\n' +
-        '- "atc": ATC (name+type or objects [{type,name}], max 20). Omit variant for system default; unknown variant errors. "atc_variants": read variants/default, optional variant name filter.\n' +
+        '- "atc": ATC (name+type or objects [{type,name}], max 20); no variant = system default; unknown variant errors. "atc_variants": variants + default (variant = name filter).\n' +
         '- "atc_ci": package ATC CI; requires available API and verified selection.\n' +
+        '- "atc_results": list stored/central ATC results; id=displayId pages findings. "atc_remote": atc delegated by a checked system to its central check system.\n' +
         '- "cds_testcases": read suggested CDS Unit tests (name; SAP_BASIS 8.16+).\n' +
         '- "object_state": active/inactive ETags/hashes/divergence (name+type; CLAS includes). No server-driven types.\n' +
         '- "quickfix": proposals: name+type+source+line; optional column/sourceUri.\n' +
@@ -1159,6 +1160,8 @@ export function getToolDefinitions(
               'atc',
               'atc_ci',
               'atc_variants',
+              'atc_results',
+              'atc_remote',
               'cds_testcases',
               'dumps',
               'feed_schema',
@@ -1186,7 +1189,7 @@ export function getToolDefinitions(
           url: {
             type: 'string',
             description:
-              'odata_perf: host-relative OData path from the app network request (e.g. /sap/opu/odata4/sap/.../Entity?$filter=…). Absolute URLs rejected.',
+              'odata_perf: host-relative OData path, e.g. /sap/opu/odata4/sap/.../Entity?$filter=…; absolute URLs rejected.',
           },
           type: {
             type: 'string',
@@ -1219,8 +1222,7 @@ export function getToolDefinitions(
           },
           sourceUri: {
             type: 'string',
-            description:
-              'quickfix/apply_quickfix source URI; default type/name main source. Set for includes, e.g. /includes/definitions.',
+            description: 'quickfix source URI (default main source); set for includes, e.g. /includes/definitions.',
           },
           line: {
             type: 'number',
@@ -1242,27 +1244,26 @@ export function getToolDefinitions(
           proposalUserContent: {
             type: 'string',
             description:
-              'Opaque userContent from quickfix action (required for apply_quickfix). May be an empty string; pass through exactly.',
+              'Opaque userContent from quickfix (required for apply_quickfix); pass through exactly, even empty.',
           },
           proposalAffectedObjects: {
             type: 'array',
-            description:
-              'quickfix affectedObjects; provide current content for each source unit when applying multi-object fixes.',
+            description: 'quickfix affectedObjects with current content per source unit (multi-object fixes).',
             items: {
               type: 'object',
               required: ['uri'],
               properties: {
-                uri: { type: 'string', description: 'Affected ADT source URI, optionally with #start/#end range.' },
-                type: { type: 'string', description: 'Optional ADT object type metadata.' },
-                name: { type: 'string', description: 'Optional ADT object name metadata.' },
-                description: { type: 'string', description: 'Optional affected object description.' },
-                content: { type: 'string', description: 'Current source content for this affected unit.' },
+                uri: { type: 'string', description: 'Affected source URI, optional #start/#end range.' },
+                type: { type: 'string' },
+                name: { type: 'string' },
+                description: { type: 'string' },
+                content: { type: 'string', description: 'Current content of this unit.' },
               },
             },
           },
           id: {
             type: 'string',
-            description: 'dumps/traces: omit to list, supply for detail. trace_cancel: request ID.',
+            description: 'dumps/traces/atc_results: omit to list, supply for detail. trace_cancel: request ID.',
           },
           detailUrl: {
             type: 'string',
@@ -1270,7 +1271,7 @@ export function getToolDefinitions(
           },
           errorType: {
             type: 'string',
-            description: 'gateway_errors: required with id instead of detailUrl, e.g. "Frontend Error".',
+            description: 'gateway_errors: with id instead of detailUrl, e.g. "Frontend Error".',
           },
           user: { type: 'string', description: 'SAP-user filter for dumps, feeds, or authorization_trace.' },
           filters: {
@@ -1284,7 +1285,7 @@ export function getToolDefinitions(
           },
           to: {
             type: 'string',
-            description: 'Inclusive upper time bound for dumps/system_messages/gateway_errors; ISO or YYYYMMDDHHMMSS.',
+            description: 'Inclusive upper bound; formats as from.',
           },
           maxResults: {
             type: 'number',
@@ -1303,13 +1304,13 @@ export function getToolDefinitions(
           coverage: {
             type: 'boolean',
             description:
-              'unittest only: collect statement/branch/procedure coverage and methodsBelowFull. Unavailable measurements do not discard test results. Default false.',
+              'unittest: statement/branch/procedure coverage + methodsBelowFull (default false); missing data keeps test results.',
           },
           includeSubpackages: { type: 'boolean', default: false },
           resultFormat: {
             type: 'string',
             enum: ['legacy', 'structured', 'junit'],
-            description: 'unittest: legacy|structured|junit; atc: legacy|structured; other actions reject it.',
+            description: 'unittest: legacy|structured|junit; atc: legacy|structured; others reject it.',
           },
           sqlOn: {
             type: 'boolean',

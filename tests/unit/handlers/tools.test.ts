@@ -317,7 +317,7 @@ describe('Tool Definitions', () => {
     expect(resultFormat.enum).toEqual(['legacy', 'structured', 'junit']);
     expect(resultFormat.description).toContain('unittest: legacy|structured|junit');
     expect(resultFormat.description).toContain('atc: legacy|structured');
-    expect(resultFormat.description).toContain('other actions reject it');
+    expect(resultFormat.description).toContain('others reject it');
   });
 
   it('advertises exact-by-default DEVC package AUnit scope', () => {

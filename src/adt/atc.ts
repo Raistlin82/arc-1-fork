@@ -76,6 +76,11 @@ export interface AtcRunResult {
   runStatus: string | null;
   /** Raw run infos when SAP returns a synchronous `<worklistRun>` body; otherwise empty. */
   runInfos: AtcRunInfo[];
+  /**
+   * Persisted result id from the completed run's `…/results/displayid` link (≠ worklist id). Present
+   * only when SAP linked one; read it back with SAPDiagnose(action="atc_results", id=…).
+   */
+  resultDisplayId?: string;
   worklist: {
     id: string;
     timestamp?: string;
@@ -343,9 +348,11 @@ export async function runAtcWorklist(
           );
         }
         if (isAtcRunCompleted(runStatus)) {
+          const resultDisplayId = parseAtcRunResultDisplayId(statusResp.body);
           const completedContext: AtcResultContext = {
             ...statusContext,
             completionEvidence: 'asyncRunCompleted',
+            ...(resultDisplayId ? { resultDisplayId } : {}),
           };
           try {
             const resultResp = await http.get(
@@ -500,6 +507,7 @@ interface AtcResultContext {
   runStatusCode: number;
   runStatus: string | null;
   completionEvidence: AtcCompletionEvidence | null;
+  resultDisplayId?: string;
 }
 
 function incompleteAtcResult(context: AtcResultContext, reason: string): AtcRunResult {
@@ -521,12 +529,13 @@ function incompleteAtcResult(context: AtcResultContext, reason: string): AtcRunR
     runStatusCode: context.runStatusCode,
     runStatus: context.runStatus,
     runInfos: context.runInfos,
+    ...(context.resultDisplayId ? { resultDisplayId: context.resultDisplayId } : {}),
     worklist: { id: context.worklistId },
     infos: [],
   };
 }
 
-function nodeRecord(value: unknown): Record<string, unknown> | undefined {
+export function nodeRecord(value: unknown): Record<string, unknown> | undefined {
   if (!value) return undefined;
   if (Array.isArray(value)) {
     const first = value[0];
@@ -535,17 +544,17 @@ function nodeRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
 }
 
-function nodeValues(value: unknown): unknown[] {
+export function nodeValues(value: unknown): unknown[] {
   return Array.isArray(value) ? value : value == null ? [] : [value];
 }
 
-function nodeRecords(value: unknown): Record<string, unknown>[] {
+export function nodeRecords(value: unknown): Record<string, unknown>[] {
   return nodeValues(value).filter(
     (item): item is Record<string, unknown> => item !== null && typeof item === 'object' && !Array.isArray(item),
   );
 }
 
-function nodeText(value: unknown): string {
+export function nodeText(value: unknown): string {
   const first = nodeValues(value)[0];
   if (first == null) return '';
   if (typeof first !== 'object') return String(first).trim();
@@ -569,6 +578,24 @@ function parseAtcRunStatus(xml: string): string | null {
   if (roots.length !== 1) return null;
   const status = typeof roots[0]?.['@_status'] === 'string' ? roots[0]['@_status'].trim() : '';
   return status || null;
+}
+
+const ATC_RESULT_DISPLAY_PREFIX = '/sap/bc/adt/atc/results/';
+
+/**
+ * The persisted-result display id a completed run links to. Live 758 run status carries
+ * `<atom:link rel="…/relations/results/displayid" href="/sap/bc/adt/atc/results/<id>">`
+ * (tests/fixtures/xml/atc-run-status-completed.xml). Only one canonical, query-free link counts.
+ */
+export function parseAtcRunResultDisplayId(xml: string): string | undefined {
+  const run = nodeRecords(parseXml(xml).run);
+  if (run.length !== 1) return undefined;
+  const ids = nodeRecords(run[0]!.link)
+    .filter((link) => /\/results\/displayid$/i.test(String(link['@_rel'] ?? '')))
+    .map((link) => canonicalHostRelativeAdtPath(String(link['@_href'] ?? ''), ATC_RESULT_DISPLAY_PREFIX))
+    .map((path) => path?.slice(ATC_RESULT_DISPLAY_PREFIX.length) ?? '')
+    .filter((id) => /^[A-Za-z0-9]{1,64}$/.test(id));
+  return ids.length === 1 ? ids[0] : undefined;
 }
 
 function normalizedAtcRunStatus(status: string): string {
@@ -614,7 +641,7 @@ function isValidProcessedObject(object: Record<string, unknown>): boolean {
   );
 }
 
-function parseAtcFinding(finding: Record<string, unknown>): AtcFinding {
+export function parseAtcFinding(finding: Record<string, unknown>): AtcFinding {
   const rawUri = String(finding['@_location'] ?? finding['@_uri'] ?? '');
   let line = 0;
   const startIdx = rawUri.indexOf('#start=');
@@ -775,6 +802,7 @@ function parseAtcRunResult(xml: string, context: AtcResultContext): AtcRunResult
     runStatusCode: context.runStatusCode,
     runStatus: context.runStatus,
     runInfos: context.runInfos,
+    ...(context.resultDisplayId ? { resultDisplayId: context.resultDisplayId } : {}),
     worklist: {
       id: bodyWorklistId,
       ...(root['@_timestamp'] ? { timestamp: String(root['@_timestamp']) } : {}),

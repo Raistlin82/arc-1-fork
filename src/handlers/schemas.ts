@@ -29,7 +29,8 @@ import { isServerDrivenObjectType } from '../adt/server-driven.js';
 import { SYNTAX_BATCH_TYPES } from '../adt/syntax-batch.js';
 import { TEXT_ELEMENT_PARTS as SAPREAD_TEXT_ELEMENT_INCLUDES } from '../adt/text-elements.js';
 import { MAX_GREP_PATTERN_LENGTH } from '../context/grep.js';
-import { CI_PACKAGES_SCHEMA } from './diagnose-fields.js';
+import { validateAtcResultActions } from './atc-results-input.js';
+import { atcResultInputSchema, CI_PACKAGES_SCHEMA } from './diagnose-fields.js';
 import { dumpFilters, validateDumpFilterInputs } from './dump-filter-inputs.js';
 import { sourcePreconditionError } from './editable-source.js';
 import { FUNCTION_PROCESSING_TYPES, FUNCTION_UPDATE_TASK_KINDS } from './function-processing.js';
@@ -1109,6 +1110,8 @@ export const SAPDiagnoseSchema = z
       'atc',
       'atc_ci',
       'atc_variants',
+      'atc_results',
+      'atc_remote',
       'cds_testcases',
       'dumps',
       'feed_schema',
@@ -1173,10 +1176,12 @@ export const SAPDiagnoseSchema = z
     configuration: z.string().min(1).max(128).optional(),
     failOnSeverity: z.enum(['error', 'warning', 'info']).optional(),
     includeReportXml: looseOptionalBoolean,
+    atcResult: atcResultInputSchema(looseOptionalBoolean).optional(),
   })
   .strict()
   .superRefine((input, ctx) => {
     validateDumpFilterInputs(input, ctx);
+    validateAtcResultActions(input, ctx);
     if (input.action === 'syntax' && input.objects !== undefined) {
       if (input.objects.some((object) => !(SYNTAX_BATCH_TYPES as readonly string[]).includes(object.type)))
         ctx.addIssue({
@@ -1225,12 +1230,15 @@ export const SAPDiagnoseSchema = z
 
     if (
       input.objects !== undefined &&
-      (input.action !== 'atc' || input.name !== undefined || input.type !== undefined || input.url !== undefined)
+      (!['atc', 'atc_remote'].includes(input.action) ||
+        input.name !== undefined ||
+        input.type !== undefined ||
+        input.url !== undefined)
     ) {
       ctx.addIssue({
         code: 'custom',
         path: ['objects'],
-        message: 'objects is only supported for atc and cannot be combined with name, type, or url.',
+        message: 'objects is only supported for atc/atc_remote and cannot be combined with name, type, or url.',
       });
     }
     if (input.action === 'unittest' && input.type !== undefined) {
@@ -1257,6 +1265,7 @@ export const SAPDiagnoseSchema = z
       input.timeoutSeconds !== undefined &&
       input.action !== 'unittest' &&
       input.action !== 'atc' &&
+      input.action !== 'atc_remote' &&
       input.action !== 'unittest_ci' &&
       input.action !== 'atc_ci'
     ) {
@@ -1264,7 +1273,7 @@ export const SAPDiagnoseSchema = z
         code: 'custom',
         path: ['timeoutSeconds'],
         message:
-          'SAPDiagnose timeoutSeconds is only supported for action="unittest", "atc", "unittest_ci", or "atc_ci".',
+          'SAPDiagnose timeoutSeconds is only supported for action="unittest", "atc", "atc_remote", "unittest_ci", or "atc_ci".',
       });
     }
     if (input.resultFormat !== undefined) {

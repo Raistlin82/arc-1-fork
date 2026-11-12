@@ -64,6 +64,12 @@ describe('ACTION_POLICY matrix', () => {
     expect(policy?.opType).toBe(OperationType.Read);
   });
 
+  it.each(['atc_results', 'atc_remote'])('SAPDiagnose.%s requires only read scope', (action) => {
+    const policy = getActionPolicy('SAPDiagnose', action);
+    expect(policy?.scope).toBe('read');
+    expect(policy?.opType).toBe(OperationType.Read);
+  });
+
   it('SAPDiagnose.atc_ci is a workload-producing read', () => {
     const policy = getActionPolicy('SAPDiagnose', 'atc_ci');
     expect(policy?.scope).toBe('read');
