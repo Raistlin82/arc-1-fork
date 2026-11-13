@@ -32,6 +32,22 @@ extends: arc1-mcp
 
 modules:
   - name: arc1-mcp-server
+    # ── The stack (optional until verified) ──────────────────────────
+    # SAP retires the Cloud Foundry stack cflinuxfs4 (deprecated since
+    # 20/08/2026, no new apps from 12/04/2027, no staging from 10/05/2027)
+    # and makes cflinuxfs5 (Ubuntu 24.04) the default on 15/02/2027; the
+    # cockpit lists arc1-mcp-server among the "applications that need to be
+    # migrated to cflinuxfs5" (SAP Community, "Keep Your Apps Secure and
+    # Supported: Here's How to Get to cflinuxfs5", 19/08/2026, read on
+    # 2026-11-13; schedule in SAP Note 3794333). mta.yaml names no stack.
+    # Uncomment to move the app at the next deploy, then check it with
+    # `cf app arc1-mcp-server`. Not yet verified on a real landscape: the
+    # buildpack is the one SAP provides (nodejs_buildpack); the part to watch
+    # is the native module better-sqlite3 (the SQLite cache), which is built
+    # for the stack when the app is staged. To go back: the cockpit, Change
+    # Stack.
+    # parameters:
+    #   stack: cflinuxfs5
     properties:
       # ── The system ───────────────────────────────────────────────────
       # SAP S/4HANA Cloud Public Edition: the SAMLAssertion destination, the one
