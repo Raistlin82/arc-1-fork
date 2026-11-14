@@ -35,6 +35,7 @@ approved chain action may invoke ARC-1 writes.
 | Retirement | `find_references`, `delete_object` |
 | DDIC adjustment | `read_source`, `read_ddic_structure`, `find_references`, `batch_create_objects`, `write_ddic_metadata`, `write_update`, `activate_batch` |
 | Transport | `transport_check`, `transport_diff`, `transport_create`, `transport_release` |
+| Release upgrade (upgrade mode) | `system_probe`, `read_system`, `read_dependencies`, `find_references`, `read_api_state`, `atc_variants`, `atc_batch_assessment` |
 
 The runtime must copy the operation, substitute every declared `requiredInput`, and preserve the
 argument names. It must not abbreviate a call in generated executable instructions.
@@ -50,6 +51,7 @@ argument names. It must not abbreviate a call in generated executable instructio
 | Brownfield debt | runtime/static use, fan-in, business owner, current level | `remove_unused`, rewrite, side-by-side, keep B or research |
 | AI-assisted remediation | deterministic proposal or generated candidate, confidence and syntax result | `migrate_custom_code` or diff-approved rewrite |
 | Governance | ATC variants, transport policy, KPIs, exception/wrapper lifecycle | block, proceed, degraded/manual or continuous review |
+| Release upgrade | modification and enhancement inventory, SAP object changelog, API state and classification in the target release | `prioritize_before_upgrade`, `reassess_after_upgrade` (proposals only) |
 
 ## Valid call examples
 

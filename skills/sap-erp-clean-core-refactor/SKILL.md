@@ -26,6 +26,7 @@ resolution.
 | `plan` | Approved-target proposal, decision record, action sequence and evidence gaps | No |
 | `execute` | Apply only approved and currently supported actions | Yes |
 | `govern` | KPI baseline, ATC regression, exception/wrapper lifecycle and review backlog | No by default |
+| `upgrade` | Around a release upgrade: before it, the units whose debt costs upgrade effort, ranked; after it, the units at B, C and D re-read against the target release with a proposal A, B or stay | No |
 
 ## Input
 
@@ -37,8 +38,10 @@ resolution.
 |---|---|---|
 | `--landscape` | `auto`, `s4-public-cloud`, `s4-private-cloud`, `s4-on-premise`, `btp-abap-environment` | Probe when `auto`; never silently assume Public Cloud or BTP |
 | `--domain` | `auto`, `standard`, `key-user`, `embedded-abap-cloud`, `side-by-side-btp-abap`, `side-by-side-cf`, `side-by-side-kyma`, `hybrid` | `auto` runs AEM; an explicit value is checked against AEM and never overrides a conflict |
-| `--target-level` | `A`, `B` | Optional constraint, not a deployment selector |
+| `--target-level` | `A`, `B` | Optional constraint, not a deployment selector: the resolver turns a decision below it into `research_required` (`targetLevelContract`) |
 | `--push-to-a` | comma-separated logical units | Selective escalation after architecture review |
+| `--upgrade-from`, `--upgrade-to` | release names, e.g. `SAP S/4HANA 2021`, `SAP S/4HANA 2023` | `upgrade` mode only; required, and never the same release |
+| `--upgrade-phase` | `before`, `after` | `upgrade` mode only: before SUM on the source release, or after it on the target release |
 | `--force-refresh` | boolean | Ignore cached external evidence |
 | `--report` | `markdown`, `dossier` | `dossier` delegates to `sap-migration-dossier` |
 
@@ -228,6 +231,31 @@ the plan before execution.
 - Do not create exemptions for informational Level B findings. C/D exceptions must be explicit,
   finding-level, time-bound and owned.
 
+### 7. Upgrade mode
+
+Run it around a release upgrade of SAP S/4HANA (Private Edition or on-premise; Public Edition upgrades are SAP's).
+It is read-only, adds no decision and reuses the decisions above per unit (`chain.json` `upgradeContract`,
+[`PATTERNS.md`](./PATTERNS.md) §16, [`WORKFLOW.md`](./WORKFLOW.md#release-upgrade-sequence)).
+
+- `before` (`prioritize_before_upgrade`): record `upgradeEffortDriver` for every unit from the modification inventory
+  (business modifications), the enhancement inventory (implicit enhancement implementations) and the SAP object
+  changelog against the target release (an incompatible change of a used internal object, or no changelog: Level C
+  unverified). Resolve each unit with `runtime/resolve-plan.mjs` as usual. Work before SUM only on what is valid on
+  both releases: a unit whose successor is released only in the target release (`successorAvailableInSource=false`)
+  moves to `after`.
+- `after` (`reassess_after_upgrade`): prove the system runs the target release (`system_probe`, `read_system`:
+  `targetReleaseConfirmed`), then for every unit at B, C or D re-read its dependencies (`read_dependencies`) and the
+  API state of every SAP touchpoint on the target release (`read_api_state`), with `atc_batch_assessment` under the
+  Clean Core variant confirmed by `atc_variants`. A unit whose touchpoints were not all re-read keeps
+  `upgradeEvidenceComplete=false` and stays. `releasedSuccessor`, `releasedExtensionPoint` and `classicApiAvailable`
+  mean *in the target release*. Units at A or Unknown are not re-read: Unknown is missing evidence, never a level.
+- Run `node runtime/resolve-upgrade.mjs --units <file>` (repository: `npm run --silent clean-core:upgrade -- --units
+  <file>`) and write the result to the file the caller names (in a NOVA program `docs/program/upgrade-opportunities.json`).
+  It carries `counts` (`reread`, `riseToA`, `riseToB`, `stay`), the effort sum and, per unit, the proposal, the rule,
+  the successors, the evidence and the PATTERNS §13 effort band. Exit code 2 means `research_required`: read
+  `conflicts`, never import it as a result.
+- A proposal is not an approval. An approved proposal enters a wave and is decided there with the decisions above.
+
 ## Confidence policy
 
 | Change | Confidence | Automation |
@@ -253,5 +281,6 @@ the plan before execution.
 Stop or return `research_required` when the landscape is unknown, the business owner or parity
 decision is missing, a target capability is unavailable, a released successor is unproven, BTP
 ownership/boundary/runtime evidence is incomplete, a wrapper cannot be isolated, a DDIC change has
-an unproven database impact, a required gate is degraded without accepted fallback, or a change
-would bypass ARC-1 safety controls.
+an unproven database impact, an upgrade re-assessment runs on a system not proven to be at the target
+release, a required gate is degraded without accepted fallback, or a change would bypass ARC-1 safety
+controls.

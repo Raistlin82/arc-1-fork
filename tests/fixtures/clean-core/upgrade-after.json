@@ -1,0 +1,132 @@
+{
+  "upgrade": {
+    "sourceRelease": "SAP S/4HANA 2021",
+    "targetRelease": "SAP S/4HANA 2023",
+    "phase": "after",
+    "targetReleaseConfirmed": true,
+    "targetLevel": "A"
+  },
+  "landscape": "s4_on_premise",
+  "units": [
+    {
+      "type": "CLAS",
+      "name": "ZCL_SD_PRICE",
+      "package": "ZSD",
+      "facts": {
+        "sourceLevel": "C",
+        "upgradeEvidenceComplete": true,
+        "releasedSuccessor": true,
+        "deterministicFindingsOnly": true
+      },
+      "successors": [
+        {
+          "of": "TABL KONV",
+          "successor": "DDLS I_SLSPRCGCONDITIONRECORD",
+          "state": "notToBeReleased -> successor",
+          "source": "objectReleaseInfo_PCE2023_3.json (SAP/abap-atc-cr-cv-s4hc), read 2026-11-14"
+        }
+      ],
+      "evidence": [
+        "read_api_state: every SAP touchpoint re-read on SAP S/4HANA 2023",
+        "ATC Usage of APIs quick fix available"
+      ]
+    },
+    {
+      "type": "CLAS",
+      "name": "ZCL_MM_STOCK",
+      "package": "ZMM",
+      "facts": {
+        "sourceLevel": "C",
+        "upgradeEvidenceComplete": true,
+        "releasedSuccessor": true,
+        "deterministicFindingsOnly": false
+      },
+      "successors": [
+        {
+          "of": "TABL MARD",
+          "successor": "DDLS I_PRODUCTSTORAGELOCATIONBASIC",
+          "state": "notToBeReleased -> successor",
+          "source": "objectReleaseInfo_PCE2023_3.json (SAP/abap-atc-cr-cv-s4hc), read 2026-11-14"
+        }
+      ]
+    },
+    {
+      "type": "CLAS",
+      "name": "ZCL_HR_ABSENCE",
+      "package": "ZHR",
+      "facts": {
+        "sourceLevel": "B",
+        "upgradeEvidenceComplete": true,
+        "releasedSuccessor": true,
+        "deterministicFindingsOnly": false
+      },
+      "evidence": [
+        "read_api_state on the target release: every classic API the class calls now has a released successor"
+      ]
+    },
+    {
+      "type": "PROG",
+      "name": "ZSD_ORDER_EXIT",
+      "package": "ZSD",
+      "facts": {
+        "sourceLevel": "D",
+        "upgradeEvidenceComplete": true,
+        "releasedSuccessor": false,
+        "releasedExtensionPoint": true,
+        "deterministicFindingsOnly": false
+      },
+      "evidence": ["released BAdI in the target release covers the user-exit logic"]
+    },
+    {
+      "type": "PROG",
+      "name": "ZMM_REPORT",
+      "package": "ZMM",
+      "facts": {
+        "sourceLevel": "D",
+        "upgradeEvidenceComplete": true,
+        "releasedSuccessor": false,
+        "releasedExtensionPoint": false,
+        "classicApiAvailable": true,
+        "deterministicFindingsOnly": true
+      },
+      "evidence": ["objectClassifications_SAP.json: the remaining touchpoints are classicAPI"]
+    },
+    {
+      "type": "FUGR",
+      "name": "ZSD_UTIL",
+      "package": "ZSD",
+      "facts": {
+        "sourceLevel": "C",
+        "upgradeEvidenceComplete": false,
+        "releasedSuccessor": true
+      }
+    },
+    {
+      "type": "CLAS",
+      "name": "ZCL_FI_KEEP",
+      "package": "ZFI",
+      "facts": {
+        "sourceLevel": "C",
+        "upgradeEvidenceComplete": true,
+        "releasedSuccessor": false,
+        "classicApiAvailable": false
+      }
+    },
+    {
+      "type": "CLAS",
+      "name": "ZCL_ALREADY_A",
+      "package": "ZFI",
+      "facts": {
+        "sourceLevel": "A"
+      }
+    },
+    {
+      "type": "DDLS",
+      "name": "Z_I_UNKNOWN",
+      "package": "ZFI",
+      "facts": {
+        "sourceLevel": "Unknown"
+      }
+    }
+  ]
+}

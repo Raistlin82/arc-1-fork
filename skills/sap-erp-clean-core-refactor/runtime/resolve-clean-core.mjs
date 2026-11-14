@@ -341,6 +341,15 @@ export function resolveCleanCorePlan(chain, aemModel, facts) {
     );
     decision = decisionById(chain, 'ANY_TO_RESEARCH');
   }
+  // The requested target level (--target-level) is a constraint, never a selector: it does not pick a decision,
+  // it refuses one that lands below it.
+  let targetLevel = checkTargetLevel(chain, facts.targetLevel, decision.targetLevel);
+  if (targetLevel?.status === 'invalid') planConflicts.push(targetLevel.reason);
+  if (targetLevel?.status === 'below') {
+    planConflicts.push(targetLevel.reason);
+    decision = decisionById(chain, 'ANY_TO_RESEARCH');
+    targetLevel = { ...targetLevel, decisionAfter: decision.id };
+  }
   if (planConflicts.length && decision.id !== 'ANY_TO_RESEARCH') {
     decision = decisionById(chain, 'ANY_TO_RESEARCH');
   }
@@ -357,8 +366,196 @@ export function resolveCleanCorePlan(chain, aemModel, facts) {
       action: decision.action,
       evidenceRequired: decision.evidenceRequired,
     },
+    ...(targetLevel ? { targetLevelCheck: targetLevel } : {}),
     conflicts: planConflicts,
     actions,
     writeBlocked: actions.some((action) => action.writeBlocked),
   };
+}
+
+/**
+ * Compare the level a decision reaches with the requested target level (chain.targetLevelContract). Returns undefined
+ * when no target level was requested; otherwise { requested, decided, status: met|composite|unverified|below|invalid }.
+ */
+export function checkTargetLevel(chain, requested, decided) {
+  if (requested === undefined || requested === null) return undefined;
+  const contract = chain.targetLevelContract ?? {};
+  if (!(contract.values ?? []).includes(requested)) {
+    return {
+      requested,
+      decided,
+      status: 'invalid',
+      reason: `targetLevel ${JSON.stringify(requested)} is not one of ${(contract.values ?? []).join(', ')}.`,
+    };
+  }
+  if ((contract.satisfiedBy?.[requested] ?? []).includes(decided)) return { requested, decided, status: 'met' };
+  if ((contract.composite?.[requested] ?? []).includes(decided)) {
+    return { requested, decided, status: 'composite', reason: 'The consumer reaches the target; the wrapper keeps its own level and stays governed.' };
+  }
+  if ((contract.unverified ?? []).includes(decided)) {
+    return { requested, decided, status: 'unverified', reason: 'The decided level depends on the architecture or on missing evidence.' };
+  }
+  return {
+    requested,
+    decided,
+    status: 'below',
+    reason: `The decided level ${decided} is below the requested target level ${requested}.`,
+  };
+}
+
+function ruleMatches(rule, facts) {
+  return (rule.sourceLevels ?? []).includes(facts.sourceLevel) && matchesConditions(rule.conditions ?? [], facts);
+}
+
+function effortOf(after, facts) {
+  const bandName = facts[after.effortFact] === true ? 'deterministic_remediation' : 'rewrite_on_stack';
+  const band = after.effortBands?.[bandName];
+  if (!band) throw new Error(`upgradeContract.after.effortBands is missing ${bandName}`);
+  return { band: bandName, lowPd: band.lowPd, highPd: band.highPd };
+}
+
+const round = (value) => Math.round(value * 100) / 100;
+
+/**
+ * The upgrade mode (chain.upgradeContract): before the release upgrade, rank the units whose debt costs upgrade effort
+ * and resolve each with the existing decisions; after it, re-read every unit at B, C or D against the target release
+ * and propose which can rise to A or to B. The result is machine-readable for the program that imports it.
+ *
+ * input: { upgrade: { sourceRelease, targetRelease, phase, targetReleaseConfirmed, targetLevel? }, landscape?,
+ *          units: [{ type, name, package?, facts: {...}, evidence?: [], successors?: [] }] }
+ */
+export function resolveUpgradeAssessment(chain, aemModel, input) {
+  const contract = chain.upgradeContract;
+  if (!contract) throw new Error('chain.json has no upgradeContract');
+  const upgrade = input?.upgrade ?? {};
+  const phase = upgrade.phase;
+  const conflicts = [];
+  const phaseValues = chain.decisionFactCatalog?.[contract.phaseFact]?.values ?? [];
+  if (!phaseValues.includes(phase)) conflicts.push(`upgrade.phase ${JSON.stringify(phase)} is not one of ${phaseValues.join(', ')}.`);
+  for (const field of contract.releaseFields ?? []) {
+    if (typeof upgrade[field] !== 'string' || !upgrade[field].trim()) conflicts.push(`upgrade.${field} is required.`);
+  }
+  if (upgrade.sourceRelease && upgrade.sourceRelease === upgrade.targetRelease) {
+    conflicts.push('upgrade.sourceRelease and upgrade.targetRelease are the same release: there is no upgrade.');
+  }
+  if (input?.landscape !== undefined && !(contract.landscapes ?? []).includes(input.landscape)) {
+    conflicts.push(`landscape ${JSON.stringify(input.landscape)} has no release upgrade in this mode (${(contract.landscapes ?? []).join(', ')}).`);
+  }
+  const units = Array.isArray(input?.units) ? input.units : [];
+  if (!units.length) conflicts.push('units[] is empty.');
+  const header = {
+    version: 1,
+    kind: 'clean-core-upgrade-assessment',
+    orchestrator: chain.orchestrator,
+    phase: phaseValues.includes(phase) ? phase : null,
+    sourceRelease: upgrade.sourceRelease ?? null,
+    targetRelease: upgrade.targetRelease ?? null,
+    landscape: input?.landscape ?? null,
+    targetLevel: upgrade.targetLevel ?? null,
+    action: phase === 'before' ? contract.before.action : phase === 'after' ? contract.after.action : null,
+  };
+  if (phase === 'after') {
+    const facts = { targetReleaseConfirmed: upgrade.targetReleaseConfirmed };
+    if (!matchesConditions(contract.after.requires ?? [], facts)) {
+      conflicts.push('The system re-read is not proven to run the target release (targetReleaseConfirmed): no proposal is made.');
+    }
+  }
+  if (conflicts.length) return { ...header, status: 'research_required', conflicts, counts: null, units: [] };
+
+  const label = (unit) => `${unit?.type ?? '?'} ${unit?.name ?? '?'}`;
+  const unitFacts = (unit) => ({ landscape: input.landscape, ...(unit.facts ?? {}), upgradePhase: phase });
+  const base = (unit) => ({
+    type: unit.type,
+    name: unit.name,
+    package: unit.package ?? null,
+    levelNow: unit.facts?.sourceLevel ?? null,
+  });
+  for (const unit of units) {
+    if (typeof unit?.type !== 'string' || typeof unit?.name !== 'string') conflicts.push(`unit ${label(unit)} needs type and name.`);
+    else if (!['A', 'B', 'C', 'D', 'Unknown'].includes(unit.facts?.sourceLevel)) {
+      conflicts.push(`unit ${label(unit)} needs facts.sourceLevel (A, B, C, D or Unknown).`);
+    }
+  }
+  if (conflicts.length) return { ...header, status: 'research_required', conflicts, counts: null, units: [] };
+
+  if (phase === 'before') {
+    const drivers = contract.before.drivers;
+    const driverValues = chain.decisionFactCatalog?.[contract.before.driverFact]?.values ?? [];
+    const out = units.map((unit) => {
+      const facts = unitFacts(unit);
+      const driverValue = facts[contract.before.driverFact];
+      const driver = drivers.find((candidate) => candidate.value === driverValue);
+      const plan = resolveCleanCorePlan(chain, aemModel, facts);
+      const defer = matchesConditions([contract.before.deferWhen], facts) && plan.decision.id !== 'ANY_TO_RESEARCH';
+      return {
+        ...base(unit),
+        driver: driverValues.includes(driverValue) ? driverValue : 'unknown',
+        rank: driver?.rank ?? null,
+        reason: driver?.reason ?? 'upgradeEffortDriver was not evidenced: the unit is not ranked before the upgrade',
+        decision: plan.decision.id,
+        action: plan.decision.action,
+        targetLevel: plan.decision.targetLevel,
+        phaseFit: defer || !driver?.rank ? 'after' : 'before',
+        deferReason: defer ? contract.before.deferWhen.reason : null,
+        conflicts: plan.conflicts,
+        evidence: unit.evidence ?? [],
+      };
+    });
+    out.sort(
+      (left, right) =>
+        (left.phaseFit === 'before' ? 0 : 1) - (right.phaseFit === 'before' ? 0 : 1) ||
+        (left.rank ?? 99) - (right.rank ?? 99) ||
+        `${left.type} ${left.name}`.localeCompare(`${right.type} ${right.name}`),
+    );
+    out.forEach((unit, index) => {
+      unit.order = index + 1;
+    });
+    const counts = { units: out.length, before: out.filter((u) => u.phaseFit === 'before').length };
+    counts.after = counts.units - counts.before;
+    for (const driver of drivers) counts[driver.value] = out.filter((u) => u.driver === driver.value).length;
+    counts.unknown = out.filter((u) => u.driver === 'unknown').length;
+    return { ...header, status: 'resolved', conflicts: [], counts, units: out };
+  }
+
+  const after = contract.after;
+  const out = [];
+  let skipped = 0;
+  for (const unit of units) {
+    const facts = unitFacts(unit);
+    if (!after.sourceLevels.includes(facts.sourceLevel)) {
+      skipped++;
+      continue;
+    }
+    const rule = after.rules.find((candidate) => ruleMatches(candidate, facts));
+    const proposal = rule.proposal;
+    const effort = proposal === 'stay' ? null : effortOf(after, facts);
+    const missing = facts[after.unitEvidenceFact] !== true;
+    const targetCheck = proposal === 'stay' ? null : checkTargetLevel(chain, upgrade.targetLevel, proposal);
+    out.push({
+      ...base(unit),
+      proposal,
+      rule: rule.id,
+      stayReason: proposal !== 'stay' ? null : missing ? 'evidence_missing' : 'no_successor_in_target',
+      successors: unit.successors ?? [],
+      evidence: unit.evidence ?? [],
+      evidenceRequired: rule.evidenceRequired,
+      effort,
+      confidence: proposal === 'stay' ? null : facts[after.effortFact] === true ? 'high' : 'medium',
+      ...(targetCheck ? { targetLevelCheck: targetCheck.status } : {}),
+    });
+  }
+  const counts = {
+    reread: out.length,
+    riseToA: out.filter((u) => u.proposal === 'A').length,
+    riseToB: out.filter((u) => u.proposal === 'B').length,
+    stay: out.filter((u) => u.proposal === 'stay').length,
+    evidenceMissing: out.filter((u) => u.stayReason === 'evidence_missing').length,
+    notReread: skipped,
+  };
+  const rising = out.filter((u) => u.effort);
+  const effort = {
+    lowPd: round(rising.reduce((sum, u) => sum + u.effort.lowPd, 0)),
+    highPd: round(rising.reduce((sum, u) => sum + u.effort.highPd, 0)),
+  };
+  return { ...header, status: 'resolved', conflicts: [], counts, effort, units: out };
 }

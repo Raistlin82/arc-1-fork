@@ -2,7 +2,7 @@
   "version": 2,
   "orchestrator": "sap-erp-clean-core-refactor",
   "aemModel": "aem-model.json",
-  "modes": ["discover", "estimate", "plan", "execute", "govern"],
+  "modes": ["discover", "estimate", "plan", "execute", "govern", "upgrade"],
   "decisionStages": [
     "standard_first",
     "unused_code",
@@ -120,6 +120,11 @@
     "fullProductionRapTarget": { "type": "boolean", "collectedBy": "approved full production RAP stack decision" },
     "prototypeRequested": { "type": "boolean", "collectedBy": "explicit operator prototype request (MAY-only, never a production default)" },
     "ddicChangeRequired": { "type": "boolean", "collectedBy": "delta between the as-found definitions (read_source on TABL, structures, DOMA, DTEL, TTYP) and the approved target of the unit" },
+    "upgradePhase": { "type": "enum", "values": ["before", "after"], "collectedBy": "operator flag --upgrade-phase, with --upgrade-from and --upgrade-to: before the release upgrade (SUM still ahead) or after it, on the development system at the target release" },
+    "targetReleaseConfirmed": { "type": "boolean", "collectedBy": "system_probe/read_system on the system being re-read: its SAP_BASIS/S4CORE release is the target release of the upgrade, never assumed from the plan" },
+    "upgradeEvidenceComplete": { "type": "boolean", "collectedBy": "read_dependencies over the whole unit plus read_api_state of every SAP touchpoint ON THE TARGET RELEASE (and the Cloudification Repository file of that release when the system is not reachable); one touchpoint not re-read makes it false" },
+    "successorAvailableInSource": { "type": "boolean", "collectedBy": "before phase: read_api_state on the source release, or the Cloudification Repository file of the source release, for the successor the unit's decision relies on; false defers the unit to the after phase" },
+    "upgradeEffortDriver": { "type": "enum", "values": ["business_modification", "implicit_enhancement", "changed_internal_dependency", "unverified_internal_dependency", "none"], "collectedBy": "before phase: the modification inventory (SMODILOG business modifications), the enhancement inventory (implicit enhancement implementations), the SAP object changelog against the target release (an incompatible change of a used internal object) or its absence (C unverified)" },
     "ddicDbImpact": { "type": "enum", "values": ["no_db_change", "add_columns", "db_adjustment", "capability_gap", "unknown"], "collectedBy": "PATTERNS §15 classification of every DDIC change in the unit from read_source, read_ddic_structure and a complete find_references; the most severe class wins and incomplete evidence is unknown" }
   },
   "skillCoverage": {
@@ -188,6 +193,7 @@
     "ddic_change_classified": { "severity": "must", "executor": "agent", "fallback": "research" },
     "ddic_database_plan_approved": { "severity": "must", "executor": "human", "fallback": "block" },
     "ddic_target_state_verified": { "severity": "must", "executor": "arc-1", "fallback": "block" },
+    "target_release_confirmed": { "severity": "must", "executor": "arc-1", "fallback": "block" },
     "governance_baseline": { "severity": "should", "executor": "agent", "fallback": "degraded" }
   },
   "actions": {
@@ -399,6 +405,18 @@
         "accept": ["ddic_target_state_verified"]
       },
       "operationIds": ["read_source", "read_ddic_structure", "find_references"]
+    },
+    "prioritize_before_upgrade": {
+      "execution": "read_only",
+      "localSkills": ["sap-clean-core-atc", "sap-unused-code"],
+      "gates": ["governance_baseline"],
+      "operationIds": ["read_dependencies", "find_references", "read_api_state", "atc_batch_assessment"]
+    },
+    "reassess_after_upgrade": {
+      "execution": "read_only",
+      "localSkills": ["sap-clean-core-atc"],
+      "gates": ["target_release_confirmed", "released_touchpoints", "governance_baseline"],
+      "operationIds": ["read_dependencies", "read_api_state", "atc_batch_assessment"]
     }
   },
   "decisions": [
@@ -642,6 +660,56 @@
     { "condition": "full production RAP stack", "conditions": [{ "fact": "fullProductionRapTarget", "equals": true }], "parentActions": ["rewrite_on_stack_abap_cloud"], "action": "rap_full_stack_researched" },
     { "condition": "small greenfield CRUD prototype, never a production refactor default", "conditions": [{ "fact": "prototypeRequested", "equals": true }], "mode": "mayOnly", "parentActions": [], "action": "greenfield_rap_may" }
   ],
+  "targetLevelContract": {
+    "fact": "targetLevel",
+    "values": ["A", "B"],
+    "satisfiedBy": {
+      "A": ["A", "Removed"],
+      "B": ["A", "B", "A+B", "Removed"]
+    },
+    "composite": {
+      "A": ["A+B", "A+C"],
+      "B": ["A+C"]
+    },
+    "unverified": ["ArchitectureDependent", "ResearchRequired"],
+    "onBelow": "research_required"
+  },
+  "upgradeContract": {
+    "mode": "upgrade",
+    "phaseFact": "upgradePhase",
+    "releaseFields": ["sourceRelease", "targetRelease"],
+    "landscapes": ["s4_private_cloud", "s4_on_premise"],
+    "before": {
+      "action": "prioritize_before_upgrade",
+      "driverFact": "upgradeEffortDriver",
+      "drivers": [
+        { "value": "business_modification", "rank": 1, "reason": "SPDD/SPAU re-propose every modification at the upgrade; business modifications are the ones SAP expects to need significant adaptation" },
+        { "value": "implicit_enhancement", "rank": 2, "reason": "SPAU_ENH re-proposes enhancement implementations, and implicit enhancement points carry no stability contract" },
+        { "value": "changed_internal_dependency", "rank": 3, "reason": "the SAP object changelog reports an incompatible change of a used internal object between the source and the target release" },
+        { "value": "unverified_internal_dependency", "rank": 4, "reason": "the unit uses internal objects and no changelog proves them unchanged (Level C unverified)" },
+        { "value": "none", "rank": null, "reason": "no upgrade effort driver: the unit can wait for the after phase" }
+      ],
+      "deferWhen": { "fact": "successorAvailableInSource", "equals": false, "reason": "the successor the decision needs exists only in the target release: the unit moves to the after phase" }
+    },
+    "after": {
+      "action": "reassess_after_upgrade",
+      "sourceLevels": ["B", "C", "D"],
+      "requires": [{ "fact": "targetReleaseConfirmed", "equals": true }],
+      "unitEvidenceFact": "upgradeEvidenceComplete",
+      "proposals": ["A", "B", "stay"],
+      "rules": [
+        { "id": "RISE_TO_A_RELEASED_SUCCESSOR", "proposal": "A", "sourceLevels": ["B", "C", "D"], "conditions": [{ "fact": "upgradeEvidenceComplete", "equals": true }, { "fact": "releasedSuccessor", "equals": true }], "evidenceRequired": ["read_api_state on the target release: released (C1) successor for every non-released touchpoint"] },
+        { "id": "RISE_TO_A_RELEASED_EXTENSION_POINT", "proposal": "A", "sourceLevels": ["D"], "conditions": [{ "fact": "upgradeEvidenceComplete", "equals": true }, { "fact": "releasedExtensionPoint", "equals": true }], "evidenceRequired": ["a released extension point in the target release covers the modification or the non-recommended enhancement"] },
+        { "id": "RISE_TO_B_CLASSIC_API", "proposal": "B", "sourceLevels": ["C", "D"], "conditions": [{ "fact": "upgradeEvidenceComplete", "equals": true }, { "fact": "classicApiAvailable", "equals": true }, { "fact": "landscape", "in": ["s4_private_cloud", "s4_on_premise"] }], "evidenceRequired": ["objectClassifications_SAP.json (classicAPI) for every remaining non-released touchpoint"] },
+        { "id": "STAY", "proposal": "stay", "sourceLevels": ["B", "C", "D"], "conditions": [{ "always": true }], "evidenceRequired": ["what is still missing in the target release, or which evidence was not re-read"] }
+      ],
+      "effortFact": "deterministicFindingsOnly",
+      "effortBands": {
+        "deterministic_remediation": { "lowPd": 0.25, "highPd": 2, "patternsRow": "Deterministic remediation" },
+        "rewrite_on_stack": { "lowPd": 2, "highPd": 20, "patternsRow": "Rewrite on-stack" }
+      }
+    }
+  },
   "governance": {
     "mandatoryBaseline": ["clean_core_share", "technical_debt_score", "unused_code_share", "business_modifications"],
     "continuousControls": ["atc_regression", "wrapper_successor_watch", "exception_expiry", "unused_code_refresh", "sap_api_changelog_review"]

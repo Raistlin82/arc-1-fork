@@ -511,6 +511,35 @@ flowchart TD
 Never place the wrapper in the ABAP Cloud software component. Do not wrap SAP GUI technology,
 uncontrolled commits/rollbacks or an API whose semantics cannot be stabilized.
 
+## Release upgrade sequence
+
+Upgrade mode, read-only, around a release upgrade of SAP S/4HANA Private Edition or on-premise
+(`chain.json` `upgradeContract`, PATTERNS §16):
+
+1. Record `--upgrade-from`, `--upgrade-to` and `--upgrade-phase`. The two releases must differ.
+2. **Before** (SUM still ahead), on the development system at the source release:
+   - collect `upgradeEffortDriver` per unit: business modifications from the modification inventory,
+     implicit enhancement implementations, internal objects the SAP object changelog reports as
+     changed incompatibly for the target release, internal objects without changelog evidence;
+   - resolve every unit with `runtime/resolve-plan.mjs`; record `successorAvailableInSource` when the
+     decision relies on a successor;
+   - run `runtime/resolve-upgrade.mjs --units <file>`: the units come back ranked, with their
+     decision and `phaseFit` (`before`, or `after` when the successor exists only in the target);
+   - plan the before-upgrade waves from the ranked list: retirement, standard replacement,
+     modifications moved to extension points, changes valid on both releases.
+3. **After** (SUM done, SPDD/SPAU closed), on the development system at the target release:
+   - confirm the release with `system_probe` and `read_system` (`targetReleaseConfirmed`);
+   - for every unit at B, C or D: `read_dependencies`, `read_api_state` on every SAP touchpoint,
+     `atc_batch_assessment` with the Clean Core variant confirmed by `atc_variants`; record
+     `releasedSuccessor`, `releasedExtensionPoint`, `classicApiAvailable`, `deterministicFindingsOnly`
+     and `upgradeEvidenceComplete`;
+   - run `runtime/resolve-upgrade.mjs --units <file>` and keep the result file
+     (`kind: clean-core-upgrade-assessment`, `counts.reread`, `riseToA`, `riseToB`, `stay`);
+   - a person approves proposals per unit; approved units enter after-upgrade waves and are planned
+     there with `plan` mode.
+4. Exit code 2 (`research_required`) means the input is not an upgrade, the landscape has no
+   customer-run upgrade, or the target release is not proven: fix the evidence, never import it.
+
 ## Governance loop
 
 | Control | Frequency | Output |
@@ -519,6 +548,7 @@ uncontrolled commits/rollbacks or an API whose semantics cannot be stabilized.
 | Development/transport ATC gate | Every changed transport | `atc_ci_gate` over the package tree: `fail` against the `failOnSeverity` threshold under the governed variant |
 | Package unit-test gate | Every changed transport | `unittest_ci_gate`: ABAP Unit over the package tree, incomplete runs fail |
 | Wrapper successor watch | Every SAP upgrade/release review | replace/retain decision and retirement date |
+| Upgrade re-assessment | After every release upgrade (`upgrade --upgrade-phase after`) | units at B, C, D that can rise to A or B, with evidence and effort band |
 | Exception expiry | Monthly or release cycle | renew, remediate or close |
 | Unused-code refresh | Quarterly | removal candidates and Unused Code Share |
 | KPI review | Release or quarterly | Clean Core Share, Technical Debt Score, Unused Code Share, Business Modifications |

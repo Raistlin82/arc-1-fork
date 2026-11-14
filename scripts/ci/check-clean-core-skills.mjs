@@ -9,6 +9,7 @@ import {
   resolveDecision,
   resolveDispatches,
   resolveExecutionPlan,
+  resolveUpgradeAssessment,
 } from '../resolve-clean-core-decision.mjs';
 
 const SKILLS_DIR = 'skills';
@@ -32,6 +33,8 @@ const DECISION_MATRIX = join(CLEAN_CORE_DIR, 'DECISION_MATRIX.md');
 const README = join(CLEAN_CORE_DIR, 'README.md');
 const WORKFLOW = join(CLEAN_CORE_DIR, 'WORKFLOW.md');
 const SKILL_MD = join(CLEAN_CORE_DIR, 'SKILL.md');
+const PATTERNS_MD = join(CLEAN_CORE_DIR, 'PATTERNS.md');
+const UPGRADE_CLI = join(CLEAN_CORE_DIR, 'runtime', 'resolve-upgrade.mjs');
 const TOOL_FIXTURES = 'tests/fixtures/tool-definitions';
 const errors = [];
 
@@ -94,6 +97,7 @@ for (const required of [
   AEM_MODEL,
   RUNTIME_RESOLVER,
   RUNTIME_CLI,
+  UPGRADE_CLI,
   ACTION_CATALOG,
   DECISION_SCENARIOS,
   KNOWLEDGE_RULES,
@@ -431,6 +435,17 @@ if (chain) {
   for (const fact of usedConditionFacts) {
     if (!factCatalog[fact]) fail(`condition fact ${fact} is missing from decisionFactCatalog`);
   }
+  // The upgrade mode decides on its own rules (upgradeContract): their facts are condition facts too.
+  const upgrade = chain.upgradeContract;
+  for (const fact of [upgrade?.phaseFact, upgrade?.before?.driverFact, upgrade?.after?.unitEvidenceFact, upgrade?.after?.effortFact]) {
+    if (fact) usedConditionFacts.add(fact);
+  }
+  for (const condition of [upgrade?.before?.deferWhen, ...(upgrade?.after?.requires ?? []), ...(upgrade?.after?.rules ?? []).flatMap((rule) => rule.conditions ?? [])]) {
+    if (condition?.fact) usedConditionFacts.add(condition.fact);
+  }
+  for (const fact of usedConditionFacts) {
+    if (!factCatalog[fact]) fail(`condition fact ${fact} is missing from decisionFactCatalog`);
+  }
   const aemFactNames = new Set([
     ...Object.keys(aemModel?.requiredFacts ?? {}),
     ...Object.values(aemModel?.conditionalFacts ?? {}).flatMap((definitions) => Object.keys(definitions)),
@@ -621,6 +636,85 @@ if (chain && scenarios) {
     if (dispatch.mode === 'mayOnly') continue;
     if (!coveredDispatchConditions.has(dispatch.condition)) {
       fail(`specialized dispatch "${dispatch.condition}" is exercised by no decision/runtime scenario`);
+    }
+  }
+}
+
+// Upgrade mode (upgradeContract): the before ranking and the after re-assessment decide on data, so the data must be
+// closed: read-only actions that exist, driver values equal to the catalog enum, proposals that only rise, a STAY
+// fallback, effort bands that are PATTERNS §13 rows, and the target-level contract the resolver applies.
+if (chain) {
+  const upgrade = chain.upgradeContract;
+  const facts = chain.decisionFactCatalog ?? {};
+  if (!chain.modes?.includes('upgrade')) fail('chain.json modes[] is missing upgrade');
+  if (!upgrade) fail('chain.json needs an upgradeContract for the upgrade mode');
+  else {
+    for (const phase of ['before', 'after']) {
+      const action = chain.actions?.[upgrade[phase]?.action];
+      if (!action) fail(`upgradeContract.${phase}.action ${upgrade[phase]?.action} is not an action`);
+      else if (action.execution !== 'read_only') fail(`upgradeContract.${phase}.action must be read_only: proposals never write`);
+    }
+    if (JSON.stringify(facts[upgrade.phaseFact]?.values) !== JSON.stringify(['before', 'after'])) {
+      fail(`upgradeContract.phaseFact ${upgrade.phaseFact} must be the enum [before, after]`);
+    }
+    const driverValues = facts[upgrade.before?.driverFact]?.values ?? [];
+    const drivers = (upgrade.before?.drivers ?? []).map((driver) => driver.value);
+    if (JSON.stringify([...driverValues].sort()) !== JSON.stringify([...drivers].sort())) {
+      fail('upgradeContract.before.drivers must cover exactly the values of its driverFact');
+    }
+    const ranks = (upgrade.before?.drivers ?? []).map((driver) => driver.rank).filter((rank) => rank !== null);
+    if (new Set(ranks).size !== ranks.length) fail('upgradeContract.before.drivers has duplicate ranks');
+    const levelOrder = { A: 0, B: 1, C: 2, D: 3 };
+    const rules = upgrade.after?.rules ?? [];
+    if (rules.at(-1)?.proposal !== 'stay' || !rules.at(-1)?.conditions?.some((condition) => condition.always === true)) {
+      fail('upgradeContract.after.rules must end with an unconditional stay rule');
+    }
+    for (const rule of rules) {
+      if (!(upgrade.after.proposals ?? []).includes(rule.proposal)) fail(`upgrade rule ${rule.id} has unknown proposal ${rule.proposal}`);
+      if (!Array.isArray(rule.evidenceRequired) || !rule.evidenceRequired.length) fail(`upgrade rule ${rule.id} needs evidenceRequired[]`);
+      for (const level of rule.sourceLevels ?? []) {
+        if (!(upgrade.after.sourceLevels ?? []).includes(level)) fail(`upgrade rule ${rule.id} re-reads level ${level} outside after.sourceLevels`);
+        if (rule.proposal !== 'stay' && !(levelOrder[rule.proposal] < levelOrder[level])) {
+          fail(`upgrade rule ${rule.id} proposes ${rule.proposal} from ${level}: a proposal only rises`);
+        }
+      }
+      if (rule.proposal !== 'stay' && !rule.conditions?.some((condition) => condition.fact === upgrade.after.unitEvidenceFact && condition.equals === true)) {
+        fail(`upgrade rule ${rule.id} must require ${upgrade.after.unitEvidenceFact}=true: no proposal without re-read evidence`);
+      }
+    }
+    const patterns = existsSync(PATTERNS_MD) ? readText(PATTERNS_MD) : '';
+    for (const [name, band] of Object.entries(upgrade.after?.effortBands ?? {})) {
+      const row = new RegExp(`\\|\\s*${band.patternsRow}\\s*\\|\\s*${band.lowPd}-${band.highPd}\\s*\\|`);
+      if (!row.test(patterns)) fail(`effort band ${name} (${band.lowPd}-${band.highPd}) is not the PATTERNS §13 row ${band.patternsRow}`);
+    }
+  }
+  const target = chain.targetLevelContract;
+  if (!target || JSON.stringify(target.values) !== JSON.stringify(['A', 'B'])) fail('chain.json needs targetLevelContract.values [A, B]');
+}
+
+if (chain && aemModel && scenarios) {
+  for (const scenario of scenarios.upgradeScenarios ?? []) {
+    try {
+      const result = resolveUpgradeAssessment(chain, aemModel, scenario.input);
+      if (result.status !== scenario.expectedStatus) {
+        fail(`upgrade scenario ${scenario.id} expected status ${scenario.expectedStatus}, got ${result.status}`);
+      }
+      if (scenario.expectedCounts && JSON.stringify(result.counts) !== JSON.stringify(scenario.expectedCounts)) {
+        fail(`upgrade scenario ${scenario.id} expected counts ${JSON.stringify(scenario.expectedCounts)}, got ${JSON.stringify(result.counts)}`);
+      }
+      if (scenario.expectedUnits) {
+        const actual = result.units.map((unit) => `${unit.name}:${unit.proposal ?? `${unit.driver}/${unit.phaseFit}`}`);
+        if (JSON.stringify(actual) !== JSON.stringify(scenario.expectedUnits)) {
+          fail(`upgrade scenario ${scenario.id} expected units ${JSON.stringify(scenario.expectedUnits)}, got ${JSON.stringify(actual)}`);
+        }
+      }
+    } catch (error) {
+      fail(`upgrade scenario ${scenario.id} failed: ${error.message}`);
+    }
+  }
+  for (const phase of ['before', 'after']) {
+    if (!(scenarios.upgradeScenarios ?? []).some((scenario) => scenario.input?.upgrade?.phase === phase && scenario.expectedStatus === 'resolved')) {
+      fail(`decision-scenarios.json needs a resolved upgrade scenario for the ${phase} phase`);
     }
   }
 }

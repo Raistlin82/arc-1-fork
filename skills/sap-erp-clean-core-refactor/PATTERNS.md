@@ -483,3 +483,46 @@ The unit's writes wait for `ddic_target_state_verified`: code is never written a
 definition that does not exist yet. On SAP-managed landscapes (Public Cloud, BTP ABAP Environment)
 there is no database utility; the adjustment runs under SAP's import, and the handoff records and
 verifies it.
+
+## 16. Release upgrade
+
+A release upgrade of SAP S/4HANA (Private Edition or on-premise) is the moment the Clean Core level of
+existing units can move without anyone touching them, both ways: SAP releases new APIs, may reclassify
+an internal object as a classic API or as not recommended, and may change an internal object
+incompatibly. The upgrade mode splits the work in two phases of the same program.
+
+### Before the upgrade
+
+Reduce what SUM and SPDD/SPAU will cost, with the decisions of this chain, in this order
+(`upgradeContract.before.drivers`):
+
+| Rank | Driver | Why it costs upgrade effort |
+|---:|---|---|
+| 1 | `business_modification` | SPDD/SPAU re-propose every modification; SAP counts business modifications as the critical ones for upgrade effort, unlike note corrections and technical modifications |
+| 2 | `implicit_enhancement` | SPAU_ENH re-proposes enhancement implementations; implicit points carry no stability contract |
+| 3 | `changed_internal_dependency` | the SAP object changelog reports an incompatible change of a used internal object between the two releases |
+| 4 | `unverified_internal_dependency` | internal objects used without a changelog that proves them unchanged (Level C unverified) |
+
+Retire unused units first (`ANY_TO_REMOVED`), replace with standard where parity is accepted, then
+move modifications to released or classic extension points. A change made before SUM must be valid
+on both releases: when the released successor a decision needs exists only in the target release,
+the unit moves to the after phase.
+
+### After the upgrade
+
+Re-read every unit at B, C or D on the development system at the target release
+(`reassess_after_upgrade`): its dependencies, the API state of every SAP touchpoint, and ATC under
+the Clean Core variant. The proposal per unit:
+
+| Proposal | Rule | Evidence |
+|---|---|---|
+| A | `RISE_TO_A_RELEASED_SUCCESSOR` | a released (C1) successor for every non-released touchpoint, in the target release |
+| A | `RISE_TO_A_RELEASED_EXTENSION_POINT` | a D unit whose modification or non-recommended enhancement a released extension point now covers |
+| B | `RISE_TO_B_CLASSIC_API` | C or D unit whose remaining touchpoints are classic APIs (Private Edition and on-premise only) |
+| stay | `STAY` | nothing new in the target release, or the unit was not completely re-read |
+
+The effort band is the §13 row: *Deterministic remediation* when every finding has an SAP quick fix
+or a bounded mechanical correction (`deterministicFindingsOnly`), *Rewrite on-stack* otherwise. A
+proposal is never an approval: the approved ones enter waves, where the unit is decided with the
+normal decisions, and wrappers whose released successor appeared go to wrapper retirement (§7).
+

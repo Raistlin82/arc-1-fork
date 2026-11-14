@@ -48,11 +48,14 @@ sap-erp-clean-core-refactor ZPKG estimate
 sap-erp-clean-core-refactor ZPKG plan
 sap-erp-clean-core-refactor ZPKG execute
 sap-erp-clean-core-refactor ZPKG govern
+sap-erp-clean-core-refactor ZPKG upgrade --upgrade-from <release> --upgrade-to <release> --upgrade-phase before|after
 ```
 
 `discover`, `estimate` and `plan` are read-only. `execute` requires an approved plan and runs only
 actions whose capabilities are available. `govern` measures regression, KPIs, wrapper successors
-and exception expiry.
+and exception expiry. `upgrade` is read-only: before a release upgrade it ranks the units whose debt
+costs upgrade effort, after it re-reads the units at B, C and D against the target release and
+proposes which can rise to A or B ([`WORKFLOW.md`](./WORKFLOW.md#release-upgrade-sequence)).
 
 ## Decision model
 
@@ -140,6 +143,7 @@ Level is a compliance dimension, not the architecture selector. Wrapper results 
 | [`knowledge/clean-core-extensibility/ARC1_RUNTIME_ACTION_MAP.md`](./knowledge/clean-core-extensibility/ARC1_RUNTIME_ACTION_MAP.md) | Knowledge-to-runtime bridge |
 | [`knowledge/clean-core-extensibility/graphify-out/graph.curated.json`](./knowledge/clean-core-extensibility/graphify-out/graph.curated.json) | Alias-merged graph with curated bridges and no zero-degree nodes |
 | [`runtime/resolve-plan.mjs`](./runtime/resolve-plan.mjs) | Installed runtime resolver for AEM, decisions, recursive actions, operations and gates |
+| [`runtime/resolve-upgrade.mjs`](./runtime/resolve-upgrade.mjs) | Upgrade mode: before-upgrade ranking and after-upgrade re-assessment, as a machine-readable result |
 
 ## Validation
 
@@ -148,6 +152,7 @@ npm run check:clean-core-skills
 npm run check:skill-refs
 npm run clean-core:query -- wrapper on-stack
 npm run --silent clean-core:resolve -- --facts /path/to/facts.json
+npm run --silent clean-core:upgrade -- --units /path/to/units.json
 ```
 
 The first check validates the chain contract, local skill coverage, knowledge rules, operation IDs

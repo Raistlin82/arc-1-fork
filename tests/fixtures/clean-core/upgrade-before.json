@@ -1,0 +1,126 @@
+{
+  "upgrade": {
+    "sourceRelease": "SAP S/4HANA 2021",
+    "targetRelease": "SAP S/4HANA 2023",
+    "phase": "before"
+  },
+  "landscape": "s4_on_premise",
+  "units": [
+    {
+      "type": "PROG",
+      "name": "ZSD_ORDER_EXIT",
+      "package": "ZSD",
+      "facts": {
+        "sourceLevel": "D",
+        "standardParity": "acceptable",
+        "upgradeEffortDriver": "business_modification"
+      },
+      "evidence": ["SMODILOG: business modification of SAPMV45A, include MV45AFZZ (user exit) excluded"]
+    },
+    {
+      "type": "ENHO",
+      "name": "ZMM_PO_IMPLICIT",
+      "package": "ZMM",
+      "facts": {
+        "sourceLevel": "D",
+        "standardParity": "gap",
+        "unusedProven": true,
+        "upgradeEffortDriver": "implicit_enhancement"
+      },
+      "evidence": [
+        "implicit enhancement implementation at the end of a SAP function module",
+        "SCMON/SUSG: no execution in 13 months"
+      ]
+    },
+    {
+      "type": "CLAS",
+      "name": "ZCL_FI_POSTING",
+      "package": "ZFI",
+      "facts": {
+        "standardParity": "gap",
+        "unusedProven": false,
+        "businessRequirement": "Extend sales-order processing",
+        "touchpoints": ["sales-order-save"],
+        "targetUsers": "sap_internal",
+        "keyUserFit": false,
+        "releasedExtensionPoint": false,
+        "transactionConsistencyRequired": true,
+        "mostDataInS4": true,
+        "extendExistingS4Application": true,
+        "highVolumeLocalDataRequired": false,
+        "saasOrPartnerProduct": false,
+        "independentOperationsRequired": false,
+        "independentLifecycleRequired": false,
+        "multiSystemOrchestrationRequired": false,
+        "mobileOrFreestyleUxRequired": false,
+        "responsibilitySplitDefined": false,
+        "classicRetentionApproved": false,
+        "implementationModel": "undecided",
+        "sideBySideRuntime": "undecided",
+        "sourceLevel": "C",
+        "landscape": "s4_on_premise",
+        "releasedSuccessor": true,
+        "abapCloudTargetPackageApproved": true,
+        "abapCloudLanguageVersionProven": true,
+        "upgradeEffortDriver": "changed_internal_dependency",
+        "successorAvailableInSource": false
+      },
+      "evidence": ["changelog: incompatible change of an internal function module used by the class"]
+    },
+    {
+      "type": "CLAS",
+      "name": "ZCL_SD_PRICING",
+      "package": "ZSD",
+      "facts": {
+        "standardParity": "gap",
+        "unusedProven": false,
+        "businessRequirement": "Extend sales-order processing",
+        "touchpoints": ["sales-order-save"],
+        "targetUsers": "sap_internal",
+        "keyUserFit": false,
+        "releasedExtensionPoint": false,
+        "transactionConsistencyRequired": true,
+        "mostDataInS4": true,
+        "extendExistingS4Application": true,
+        "highVolumeLocalDataRequired": false,
+        "saasOrPartnerProduct": false,
+        "independentOperationsRequired": false,
+        "independentLifecycleRequired": false,
+        "multiSystemOrchestrationRequired": false,
+        "mobileOrFreestyleUxRequired": false,
+        "responsibilitySplitDefined": false,
+        "classicRetentionApproved": false,
+        "implementationModel": "undecided",
+        "sideBySideRuntime": "undecided",
+        "sourceLevel": "C",
+        "landscape": "s4_on_premise",
+        "releasedSuccessor": true,
+        "abapCloudTargetPackageApproved": true,
+        "abapCloudLanguageVersionProven": true,
+        "upgradeEffortDriver": "changed_internal_dependency",
+        "successorAvailableInSource": true
+      }
+    },
+    {
+      "type": "FUGR",
+      "name": "ZPP_UTIL",
+      "package": "ZPP",
+      "facts": {
+        "sourceLevel": "C",
+        "standardParity": "gap",
+        "upgradeEffortDriver": "unverified_internal_dependency"
+      }
+    },
+    {
+      "type": "CLAS",
+      "name": "ZCL_HR_REPORT",
+      "package": "ZHR",
+      "facts": {
+        "sourceLevel": "B",
+        "standardParity": "gap",
+        "unusedProven": false,
+        "upgradeEffortDriver": "none"
+      }
+    }
+  ]
+}

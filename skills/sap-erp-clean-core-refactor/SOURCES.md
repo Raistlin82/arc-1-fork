@@ -179,6 +179,24 @@ Prefer official search/fetch capabilities when exposed. Use page crawling only f
 needed and cache the result with retrieval date; do not perform broad recurring crawls as part of a
 normal plan.
 
+## Release upgrade sources
+
+Read on 2026-11-14 for the upgrade mode (PATTERNS §16). Anything not confirmed there is marked *to verify*.
+
+| Fact | Source | State |
+|---|---|---|
+| SAP's level model: A = ABAP Cloud and released APIs (no ATC finding); B = classic APIs and classic extension points listed in the Cloudification Repository classification (priority 3 finding); C = internal SAP objects, conditionally clean with the changelog for SAP objects (priority 2); D = not recommended objects, `noAPI`, modifications (priority 1). SAP may reclassify an internal object as a classic API or as not recommended, which moves the level | SAP Cloud ALM, *Extensibility* — https://help.sap.com/docs/CloudALM/877c96cf971648b09ee0d0a64f7f4fef/eaa61d6ae6744ccdb0d18820fb8998c9.html | verified |
+| Released objects per release: `src/objectReleaseInfo_PCE<release>_<FPS>.json` (on 2026-11-14: `PCE2022`, `PCE2022_1`, `PCE2022_2`, `PCE2023_0`…`PCE2023_3`, `PCE2025_0`…`PCE2025_2`, `PCELatest`), for SAP Cloud ERP Private *or on-premise*; files per feature pack stack only, no support-package updates. Fields: `state` (`released`, `deprecated`, `notToBeReleased`, `notToBeReleasedStable`), `successorClassification`, `successors[]`, `successorConceptName`. The README's example name `objectReleaseInfo_PCE2025.json` does not exist (HTTP 404); the files carry the FPS suffix | https://github.com/SAP/abap-atc-cr-cv-s4hc (README and `src/` listing at commit of 2026-11-12) | verified |
+| Classic APIs (Level B): one file, `src/objectClassifications_SAP.json`, states `classicAPI` and `noAPI`, `labels` (for example `transactional-consistent`), `successors`; it is not split per release | same repository | verified |
+| The delta of released objects between two releases is not published by SAP: it is the difference of two release files. Computed here: `PCE2025_2` releases 4,530 objects that `PCE2023_3` does not (36 of them were `notToBeReleasedStable` and 1 `deprecated` there); 67 objects released in `PCE2023_3` are not released in `PCE2025_2` (47 absent, 20 `deprecated`) | computed from the two files on 2026-11-14 | computed, not an SAP statement |
+| ATC: *Clean Core → Usage of APIs (Cloudification Repository)* with the PCE file for Private Edition and on-premise (Notes 3565942 for "Usage of APIs" and "Allowed Enhancement Technologies", 3449860 for classic APIs); *Cloud Readiness → Usage of Released APIs (Cloudification Repository)* for SAP Cloud ERP (Notes 3284711, 3377462) | repository README | verified as cited by SAP there; the notes themselves not re-read |
+| Successors per finding: SAP's *ABAP Clean Core Adaptation Agent* identifies C1-released successor APIs for each ATC finding (default variant `ABAP_CLEAN_CORE_READINESS`; limits in Note 3809815) | https://help.sap.com/docs/ABAP_Cloud/d165a95020e94e419319f02c21874ffb/dc092d1bd30b475c8ac3072b9a4cbc10.html | verified; whether the plain ATC finding text names the successor is *to verify* |
+| Release contracts C0–C4 and `CL_ABAP_DOCU_RELEASED_APIS` (the released objects of the current system) | https://help.sap.com/doc/abapdocu_latest_index_htm/latest/en-US/ABENABAP_RELEASE_CONTRACTS.html | verified |
+| Business modifications are the critical modifications for upgrades ("likely require significant adaptation"); note corrections and legacy enhancement technologies are anticipated and cause minimal effort | SAP Cloud ALM, *Business Modifications* — https://help.sap.com/docs/CloudALM/877c96cf971648b09ee0d0a64f7f4fef/90b9a4309c02485ea1b8006e6d022f63.html | verified |
+| Combine the upgrade with custom-code housekeeping and remove unused code | *Upgrade Guide for SAP S/4HANA 2025*, 2.2 — https://help.sap.com/doc/760ce610a2af4174a329d2d8315378e2/2025/en-US/UPGR_OP2025.pdf | verified |
+| Impact Analysis for Clean Core Developments Level C (incompatible changes of used internal APIs), planned with SAP S/4HANA 2023 SPS07 and 2025 SPS03 | *SAP S/4HANA and SAP S/4HANA Cloud Private Edition Roadmap Information* — https://help.sap.com/docs/ABAP_PLATFORM_CROSS/f2afdaf444844c38909aefc7bc792cdb/696ec787abb2469b9c76ef1d3933b2c1.html | planned; availability *to verify* |
+| An ordering "remove upgrade debt before SUM, raise the level after it" is not an SAP prescription: it is this skill's design, derived from the facts above | — | design decision |
+
 ## Authenticated/manual sources
 
 | Source | Use | Plan behavior |

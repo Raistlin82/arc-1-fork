@@ -75,6 +75,8 @@ Primary actions are shown in the decision rows. Specialized dispatches remain ex
 | `verify_cap_solution` | Compiles and tests CAP contracts, authorization, events and parity; unresolved 501/TODO handlers fail |
 | `adjust_ddic_in_place` | Executes a unit's DDIC change through ARC-1 only when it needs no database adjustment in any system: `ddicDbImpact` `no_db_change` or `add_columns` |
 | `ddic_database_handoff` | Owned handoff for a DDIC change that needs a database adjustment, exceeds ARC-1 or is unproven; the unit's writes wait until the target definition is verified |
+| `prioritize_before_upgrade` | Upgrade mode, before the release upgrade: ranks the units whose debt costs upgrade effort and resolves each with the decisions above; it never writes |
+| `reassess_after_upgrade` | Upgrade mode, after the release upgrade: re-reads every unit at B, C or D against the target release and proposes A, B or stay; it never writes |
 
 ## Contract notes
 
@@ -117,6 +119,21 @@ Primary actions are shown in the decision rows. Specialized dispatches remain ex
 - **`create_wrapper_package` and `scaffold_rap_handlers` are not source writes**: the first creates a
   package, the second (with `autoApply=false`) returns skeletons. The syntax gate applies to the call
   that carries source — `create_wrapper_class` and `edit_method` respectively.
+
+## Upgrade mode and target level
+
+The upgrade mode (`chain.json` `upgradeContract`, [`WORKFLOW.md`](./WORKFLOW.md#release-upgrade-sequence),
+[`PATTERNS.md`](./PATTERNS.md) §16) adds no decision row. It orders and re-reads units; the rows above still decide
+each one when it enters a wave.
+
+| Phase | Action | What it produces |
+|---|---|---|
+| `before` | `prioritize_before_upgrade` | Units ranked by `upgradeEffortDriver` (business modification, implicit enhancement, changed internal dependency, unverified internal dependency), each with its decision; a unit whose successor exists only in the target release (`successorAvailableInSource=false`) moves to `after` |
+| `after` | `reassess_after_upgrade` | Per unit at B, C or D: `A` (released successor, or a released extension point for a D unit), `B` (classic API, Private Edition and on-premise only) or `stay`, with the evidence and a PATTERNS §13 effort band; nothing without `targetReleaseConfirmed` and the unit's `upgradeEvidenceComplete` |
+
+`--target-level` is a constraint, not a selector (`targetLevelContract`): the resolver keeps the decision when it
+reaches the target (`met`), reports a wrapper as `composite`, reports `ArchitectureDependent` as `unverified`, and
+turns a decision below the target into `ANY_TO_RESEARCH` with the reason in `conflicts`.
 
 ## Non-negotiable evidence
 
