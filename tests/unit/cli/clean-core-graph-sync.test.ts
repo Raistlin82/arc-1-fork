@@ -9,6 +9,7 @@ import {
   KNOWLEDGE_DIR,
   loadManifest,
   MANIFEST,
+  runCli,
   syncGraph,
 } from '../../../scripts/ci/sync-clean-core-graph.mjs';
 
@@ -130,5 +131,92 @@ describe('Clean Core graph sync', () => {
     writeManifest(overrides, file);
     expect(() => loadManifest(root)).toThrow(GraphSyncError);
     expect(() => loadManifest(root)).toThrow(message);
+  });
+});
+
+describe('Clean Core graph sync CLI modes', () => {
+  const offline = () =>
+    vi.fn(async () => {
+      throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } });
+    });
+
+  async function run(
+    argv: string[],
+    env: Record<string, string> = {},
+    fetchImpl: (url: string, init?: object) => Promise<unknown> = offline(),
+  ) {
+    const lines: string[] = [];
+    const code = await runCli(argv, { root, env, fetchImpl, stderr: (line: string) => lines.push(line) });
+    return { code, lines };
+  }
+
+  it('never fails a build or git install when the graph cannot be downloaded (one line, exit 0)', async () => {
+    writeManifest();
+    const { code, lines } = await run([]);
+    expect(code).toBe(0);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(
+      /^Clean Core graph not fetched: Cannot download .*ECONNREFUSED.*; the MCP server works without it; run npm run clean-core:graph-sync$/,
+    );
+    expect(existsSync(destination())).toBe(false);
+  });
+
+  it('stays best effort for prepack during a git-dependency install', async () => {
+    writeManifest();
+    expect((await run(['--pack'], { npm_command: 'install' })).code).toBe(0);
+    expect((await run(['--pack'], { npm_command: 'exec' })).code).toBe(0);
+  });
+
+  it('a mismatch in best-effort mode writes nothing and removes the stale copy', async () => {
+    writeManifest();
+    mkdirSync(join(root, KNOWLEDGE_DIR, 'graphify-out'), { recursive: true });
+    writeFileSync(destination(), 'stale graph');
+    const { code, lines } = await run(
+      [],
+      {},
+      vi.fn(async () => response(Buffer.from('tampered'))),
+    );
+    expect(code).toBe(0);
+    expect(lines[0]).toMatch(/^Clean Core graph not fetched: Integrity check failed/);
+    expect(existsSync(destination())).toBe(false);
+  });
+
+  it.each([
+    [['--require'], {}],
+    [['--check'], {}],
+    [['--pack'], { npm_command: 'pack' }],
+    [['--pack'], { npm_command: 'publish' }],
+  ])('fails closed for %j %j (CI, offline check, npm pack / publish)', async (argv, env) => {
+    writeManifest();
+    const { code, lines } = await run(argv, env);
+    expect(code).toBe(1);
+    expect(lines.join('\n')).not.toContain('the MCP server works without it');
+    expect(existsSync(destination())).toBe(false);
+  });
+
+  it('succeeds in the required mode once the pinned bytes download', async () => {
+    writeManifest();
+    const { code } = await run(
+      ['--require'],
+      {},
+      vi.fn(async () => response(BODY)),
+    );
+    expect(code).toBe(0);
+    expect(readFileSync(destination())).toEqual(BODY);
+  });
+
+  it('rejects unknown arguments', async () => {
+    expect((await run(['--force'])).code).toBe(2);
+  });
+});
+
+describe('Clean Core graph sync wiring', () => {
+  it('builds best effort, while the explicit sync, prepack and CI require the graph', () => {
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+    expect(pkg.scripts.build).toMatch(/node scripts\/ci\/sync-clean-core-graph\.mjs$/);
+    expect(pkg.scripts['clean-core:graph-sync']).toBe('node scripts/ci/sync-clean-core-graph.mjs --require');
+    expect(pkg.scripts['check:clean-core-graph']).toBe('node scripts/ci/sync-clean-core-graph.mjs --check');
+    expect(pkg.scripts.prepack).toBe('node scripts/ci/sync-clean-core-graph.mjs --pack');
+    expect(readFileSync('.github/workflows/test.yml', 'utf8')).toContain('run: npm run clean-core:graph-sync');
   });
 });

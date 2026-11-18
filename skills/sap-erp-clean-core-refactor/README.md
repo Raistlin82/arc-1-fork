@@ -142,7 +142,7 @@ Level is a compliance dimension, not the architecture selector. Wrapper results 
 | [`knowledge/clean-core-extensibility/decision-rules.json`](./knowledge/clean-core-extensibility/decision-rules.json) | Compact runtime knowledge index |
 | [`knowledge/clean-core-extensibility/ARC1_RUNTIME_ACTION_MAP.md`](./knowledge/clean-core-extensibility/ARC1_RUNTIME_ACTION_MAP.md) | Knowledge-to-runtime bridge |
 | [`knowledge/clean-core-extensibility/UPSTREAM.json`](./knowledge/clean-core-extensibility/UPSTREAM.json) | Pin of the full Clean Core graph of `sap-clean-core-expert` v0.3.1 (531 nodes, 1062 links, all five principles): commit and sha256 per file |
-| `knowledge/clean-core-extensibility/graphify-out/graph.curated.json` | The curated graph itself, downloaded and sha256-verified by `npm run build` (`npm run clean-core:graph-sync`); not committed, shipped in the npm package. For open questions about Clean Core, use `/clean-core-ask` of `sap-clean-core-expert` |
+| `knowledge/clean-core-extensibility/graphify-out/graph.curated.json` | The curated graph itself, downloaded and sha256-verified by `npm run clean-core:graph-sync` (required in CI and before `npm pack`/`npm publish`; best effort in `npm run build`, which never fails the MCP server install for it); not committed, shipped in the npm package. For open questions about Clean Core, use `/clean-core-ask` of `sap-clean-core-expert` |
 | [`runtime/resolve-plan.mjs`](./runtime/resolve-plan.mjs) | Installed runtime resolver for AEM, decisions, recursive actions, operations and gates |
 | [`runtime/resolve-upgrade.mjs`](./runtime/resolve-upgrade.mjs) | Upgrade mode: before-upgrade ranking and after-upgrade re-assessment, as a machine-readable result |
 
@@ -157,7 +157,7 @@ npm run --silent clean-core:resolve -- --facts /path/to/facts.json
 npm run --silent clean-core:upgrade -- --units /path/to/units.json
 ```
 
-The sync downloads the pinned graph (a no-op when it is already present and verified). The next check
+The sync downloads the pinned graph and fails without it (a no-op when it is already present and verified). The next check
 verifies the graph against `UPSTREAM.json` and validates the chain contract, local skill coverage, knowledge rules, operation IDs
 and every canonical operation payload against the frozen ARC-1 schemas. It also enforces three
 closures that keep the contract executable: each MUST gate must have the ARC-1 operation that can

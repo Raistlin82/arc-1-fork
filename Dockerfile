@@ -21,7 +21,7 @@ RUN npm ci
 # Copy source and build
 COPY tsconfig.json ./
 COPY src/ ./src/
-# `npm run build` ends with the Clean Core graph sync. The image ships no skills/, so the script finds
+# `npm run build` ends with the best-effort Clean Core graph sync. The image ships no skills/, so it finds
 # no UPSTREAM.json here and exits 0 without network access; the npm package carries the graph.
 COPY scripts/ci/sync-clean-core-graph.mjs ./scripts/ci/
 RUN npm run build

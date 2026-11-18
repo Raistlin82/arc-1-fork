@@ -7,12 +7,22 @@
  * exactly those bytes from raw.githubusercontent.com at that commit. It is data only: nothing
  * downloaded is ever executed.
  *
- *   node scripts/ci/sync-clean-core-graph.mjs          # download what is missing or different (npm run build)
- *   node scripts/ci/sync-clean-core-graph.mjs --check  # offline: fail unless every file matches its pin
+ *   node scripts/ci/sync-clean-core-graph.mjs            # best effort (npm run build, prepare, npx github:)
+ *   node scripts/ci/sync-clean-core-graph.mjs --require  # fail closed (CI, npm run clean-core:graph-sync)
+ *   node scripts/ci/sync-clean-core-graph.mjs --pack     # prepack: fail closed under npm pack / npm publish
+ *   node scripts/ci/sync-clean-core-graph.mjs --check    # offline: fail unless every file matches its pin
  *
- * Fail closed: a hash or size mismatch, a redirect, a non-200 answer or no network ends with exit 1
- * and no file left at the destination. Without UPSTREAM.json (for example the Docker build stage,
- * which copies only src/) there is nothing to sync and the script exits 0 with a notice.
+ * Integrity never depends on the mode: bytes are written only after their size and sha256 match the
+ * pin, and a local file that differs from the pin is removed before the download, so a stale or
+ * tampered graph is never left behind. The mode only decides the exit code when the graph cannot be
+ * obtained (no network, proxy refusal, HTTP error, mismatch):
+ * - best effort: one line on stderr and exit 0. Installing or building ARC-1 from git must never fail
+ *   for this, because the MCP server does not read the graph; only the skill does.
+ * - --require, --check, and --pack under `npm pack` / `npm publish`: exit 1, so CI and a published
+ *   package can never go without the graph. (`--pack` stays best effort when npm runs prepack while
+ *   installing a git dependency, where `npm_command` is not pack or publish.)
+ * Without UPSTREAM.json (for example the Docker build stage, which copies only src/) there is nothing
+ * to sync and the script exits 0 with a notice.
  */
 
 import { createHash } from 'node:crypto';
@@ -25,7 +35,7 @@ export const MANIFEST = join(KNOWLEDGE_DIR, 'UPSTREAM.json');
 export const RAW_ORIGIN = 'https://raw.githubusercontent.com';
 export const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const TIMEOUT_MS = 60_000;
-const SYNC_HINT = 'Run `npm run clean-core:graph-sync` (or `npm run build`) with access to raw.githubusercontent.com.';
+const SYNC_HINT = 'Run `npm run clean-core:graph-sync` with access to raw.githubusercontent.com.';
 
 export class GraphSyncError extends Error {}
 
@@ -183,27 +193,41 @@ export async function syncGraph({ root = process.cwd(), check = false, fetchImpl
   return { skipped: false, repository: manifest.repository, commit: manifest.commit, files: results };
 }
 
-async function main(argv) {
-  const check = argv.includes('--check');
-  const unknown = argv.filter((arg) => arg !== '--check');
+const FLAGS = new Set(['--check', '--require', '--pack']);
+
+/**
+ * CLI behaviour, exported for tests. Returns the exit code.
+ *
+ * @param {string[]} argv
+ * @param {{ root?: string, env?: Record<string, string | undefined>, fetchImpl?: (url: string, init?: object) => Promise<any>,
+ *   stderr?: (line: string) => void }} [options]
+ */
+export async function runCli(argv, { root = process.cwd(), env = process.env, fetchImpl, stderr = console.error } = {}) {
+  const unknown = argv.filter((arg) => !FLAGS.has(arg));
   if (unknown.length) {
-    console.error(`sync-clean-core-graph: unknown argument(s) ${unknown.join(' ')} (only --check is supported)`);
+    stderr(`sync-clean-core-graph: unknown argument(s) ${unknown.join(' ')} (supported: ${[...FLAGS].join(', ')})`);
     return 2;
   }
+  const check = argv.includes('--check');
+  const packing = argv.includes('--pack') && ['pack', 'publish'].includes(env.npm_command ?? '');
+  const required = check || argv.includes('--require') || packing;
   try {
-    const result = await syncGraph({ check, log: (line) => console.error(`sync-clean-core-graph: ${line}`) });
+    const result = await syncGraph({ root, check, fetchImpl, log: (line) => stderr(`sync-clean-core-graph: ${line}`) });
     if (result.skipped) {
-      console.error(`sync-clean-core-graph: ${MANIFEST} not present; nothing to sync`);
+      stderr(`sync-clean-core-graph: ${MANIFEST} not present; nothing to sync`);
       return 0;
     }
-    console.error(
-      `sync-clean-core-graph: OK — ${result.files.length} file(s) match ${result.repository}@${result.commit.slice(0, 12)}`,
-    );
+    stderr(`sync-clean-core-graph: OK — ${result.files.length} file(s) match ${result.repository}@${result.commit.slice(0, 12)}`);
     return 0;
   } catch (error) {
-    if (!(error instanceof GraphSyncError)) throw error;
-    console.error(`sync-clean-core-graph: ${error.message}`);
-    return 1;
+    const reason = String(error instanceof Error ? error.message : error).replace(/\s+/g, ' ').trim();
+    if (required) {
+      stderr(`sync-clean-core-graph: ${reason}`);
+      return 1;
+    }
+    const short = reason.replace(SYNC_HINT, '').trim().replace(/\.$/, '');
+    stderr(`Clean Core graph not fetched: ${short}; the MCP server works without it; run npm run clean-core:graph-sync`);
+    return 0;
   }
 }
 
@@ -220,5 +244,5 @@ function isEntryPoint() {
 }
 
 if (isEntryPoint()) {
-  process.exitCode = await main(process.argv.slice(2));
+  process.exitCode = await runCli(process.argv.slice(2));
 }

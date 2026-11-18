@@ -49,10 +49,15 @@ README and `CURATION.md` record.
 `npm run build` runs `scripts/ci/sync-clean-core-graph.mjs`, which downloads each file listed in
 [`UPSTREAM.json`](./knowledge/clean-core-extensibility/UPSTREAM.json) from
 `raw.githubusercontent.com` at the pinned commit, refuses redirects, and writes it only when size and
-sha256 match. Any mismatch or network failure fails the build and leaves no file behind;
-`npm run check:clean-core-graph` verifies the files offline and `check:clean-core-skills` repeats that
-check before it validates the graph contract. The downloaded files are gitignored and ship in the
-npm package. A checkout that has not run the build has no graph: run `npm run clean-core:graph-sync`.
+sha256 match; a local file that differs from the pin is removed first, so a stale or tampered graph is
+never left behind. In `npm run build` (also `prepare` when ARC-1 is installed from git, for example
+`npx github:…`) the download is best effort: when the graph cannot be fetched, the build prints one
+line, *Clean Core graph not fetched: … the MCP server works without it*, and succeeds, because the MCP
+server never reads the graph. Where the graph must be present the same failure stops the run:
+`npm run clean-core:graph-sync` (`--require`, used by CI), `prepack` under `npm pack` and
+`npm publish`, `npm run check:clean-core-graph` (offline) and `check:clean-core-skills`, which repeats
+that check before it validates the graph contract. The downloaded files are gitignored and ship in
+the npm package. A checkout without the graph: run `npm run clean-core:graph-sync`.
 To move to a newer expert release, change the commit, sizes and hashes in `UPSTREAM.json` in one
 reviewed commit (take them from `git show <commit>:<path>` in the expert repository).
 
