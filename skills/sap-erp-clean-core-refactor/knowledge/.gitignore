@@ -6,3 +6,8 @@
 **/graphify-out/cache/
 **/graphify-out/cost.json
 **/.graphify_python
+# Downloaded at build from the pin in clean-core-extensibility/UPSTREAM.json
+# (scripts/ci/sync-clean-core-graph.mjs); never committed, always packaged (.npmignore governs npm here).
+clean-core-extensibility/graphify-out/graph.curated.json
+clean-core-extensibility/graphify-out/CURATION.md
+**/graphify-out/*.download-*

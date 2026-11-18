@@ -1,0 +1,21 @@
+{
+  "description": "Pinned source of the Clean Core knowledge graph. scripts/ci/sync-clean-core-graph.mjs downloads each file from raw.githubusercontent.com at this commit during npm run build and refuses any byte that does not match sha256 and bytes. The downloaded files are gitignored.",
+  "repository": "Raistlin82/sap-clean-core-expert",
+  "tag": "v0.3.1",
+  "commit": "39846273dae1891fd4ef744c37a8068c12f56333",
+  "license": "Derived from SAP SE publications (copyright SAP SE); not covered by this repository's MIT license. See SOURCES.md.",
+  "files": [
+    {
+      "source": "skills/sap-clean-core-expert/knowledge/clean-core-extensibility/graphify-out/graph.curated.json",
+      "target": "graphify-out/graph.curated.json",
+      "sha256": "4dcc8d7e64638904a29ab0dec4a09eeafb32ba3674f429b6b378d57fdefb609d",
+      "bytes": 648375
+    },
+    {
+      "source": "skills/sap-clean-core-expert/knowledge/clean-core-extensibility/graphify-out/CURATION.md",
+      "target": "graphify-out/CURATION.md",
+      "sha256": "ff1fcbd3dac425a4817ceb6fff1f32a1f98d5a3133b0769ef0f1dc17d0761a5e",
+      "bytes": 5995
+    }
+  ]
+}

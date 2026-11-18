@@ -8,3 +8,4 @@
 **/graphify-out/.graphify_python
 **/.graphify_python
 **/graphify-out/manifest.json
+**/graphify-out/*.download-*

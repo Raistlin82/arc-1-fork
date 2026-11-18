@@ -11,6 +11,7 @@ import {
   resolveExecutionPlan,
   resolveUpgradeAssessment,
 } from '../resolve-clean-core-decision.mjs';
+import { GraphSyncError, KNOWLEDGE_DIR as GRAPH_KNOWLEDGE_DIR, fileState, loadManifest } from './sync-clean-core-graph.mjs';
 
 const SKILLS_DIR = 'skills';
 const CLEAN_CORE_DIR = join(SKILLS_DIR, 'sap-erp-clean-core-refactor');
@@ -101,7 +102,6 @@ for (const required of [
   ACTION_CATALOG,
   DECISION_SCENARIOS,
   KNOWLEDGE_RULES,
-  CURATED_GRAPH,
   DECISION_MATRIX,
   README,
   WORKFLOW,
@@ -115,6 +115,24 @@ const aemModel = existsSync(AEM_MODEL) ? readJson(AEM_MODEL) : undefined;
 const catalog = existsSync(ACTION_CATALOG) ? readJson(ACTION_CATALOG) : undefined;
 const scenarios = existsSync(DECISION_SCENARIOS) ? readJson(DECISION_SCENARIOS) : undefined;
 const knowledge = existsSync(KNOWLEDGE_RULES) ? readJson(KNOWLEDGE_RULES) : undefined;
+// The graph is downloaded at build from the pin in UPSTREAM.json (scripts/ci/sync-clean-core-graph.mjs):
+// validate the pin, require every pinned file at its pinned bytes, then check the graph contract below.
+try {
+  const upstream = loadManifest();
+  if (!upstream) fail(`${join(GRAPH_KNOWLEDGE_DIR, 'UPSTREAM.json')} is missing: the Clean Core graph has no pinned source`);
+  for (const file of upstream?.files ?? []) {
+    const state = fileState(file);
+    if (state !== 'ok') {
+      fail(
+        `${join(GRAPH_KNOWLEDGE_DIR, file.target)} is ${state === 'missing' ? 'missing' : 'not the pinned version'}; ` +
+          'run `npm run clean-core:graph-sync` (it downloads and sha256-verifies the pinned graph)',
+      );
+    }
+  }
+} catch (error) {
+  if (!(error instanceof GraphSyncError)) throw error;
+  fail(error.message);
+}
 const curatedGraph = existsSync(CURATED_GRAPH) ? readJson(CURATED_GRAPH) : undefined;
 
 if (chain) {

@@ -31,12 +31,39 @@ Path: `knowledge/clean-core-extensibility/`
 |---|---|
 | `decision-rules.json` | Compact, curated rules with topics, source pages and confidence |
 | `ARC1_RUNTIME_ACTION_MAP.md` | Mapping from knowledge concepts to decisions and validated ARC-1 operations |
-| `graphify-out/graph.json` | Full concept/relation graph for exploration and future index refinement |
-| `graphify-out/graph.curated.json` | Deterministic alias-merged graph with explicit curated bridges and no zero-degree nodes |
-| `graphify-out/CURATION.md` | Curation metrics and the explicit non-executable bridges added to the source graph |
-| `graphify-out/GRAPH_REPORT.md` | Communities, quality observations and graph summary |
-| `graphify-out/graph.html` | Interactive human exploration |
+| `UPSTREAM.json` | Pin of the graph source: repository, tag, full commit SHA, and path, size and sha256 of every downloaded file |
+| `graphify-out/graph.curated.json` | **Downloaded at build, not committed.** The full curated graph of `sap-clean-core-expert` (all five principles): alias-merged, explicit `CURATED` bridges, no zero-degree nodes |
+| `graphify-out/CURATION.md` | **Downloaded at build, not committed.** The expert's curation record: alias merges, restored nodes and the non-executable `CURATED` bridges |
 | `raw/*.md` | **Local only, never committed.** Page-bounded source extraction used to audit a rule without loading the full document; present only in private installs (see [Private raw corpus](#private-raw-corpus)) |
+
+### Graph provenance
+
+The graph has one source: [`Raistlin82/sap-clean-core-expert`](https://github.com/Raistlin82/sap-clean-core-expert),
+tag `v0.3.1`, commit `39846273dae1891fd4ef744c37a8068c12f56333` (curated graph: 531 nodes, 1062 links,
+30 communities, 41 hyperedges; 935 `EXTRACTED`, 124 `INFERRED`, 3 `CURATED` links). It is derived from
+six SAP publications: *Clean Core Extensibility for Architects* (2026-07), the Clean Core L200 deck,
+the Governance & Operational Practices Maturity deck, the Measurement Criteria for Clean Core KPIs deck,
+the Clean Core Data white paper and the Clean core integration white paper (2026-08), as the expert's
+README and `CURATION.md` record.
+
+`npm run build` runs `scripts/ci/sync-clean-core-graph.mjs`, which downloads each file listed in
+[`UPSTREAM.json`](./knowledge/clean-core-extensibility/UPSTREAM.json) from
+`raw.githubusercontent.com` at the pinned commit, refuses redirects, and writes it only when size and
+sha256 match. Any mismatch or network failure fails the build and leaves no file behind;
+`npm run check:clean-core-graph` verifies the files offline and `check:clean-core-skills` repeats that
+check before it validates the graph contract. The downloaded files are gitignored and ship in the
+npm package. A checkout that has not run the build has no graph: run `npm run clean-core:graph-sync`.
+To move to a newer expert release, change the commit, sizes and hashes in `UPSTREAM.json` in one
+reviewed commit (take them from `git show <commit>:<path>` in the expert repository).
+
+**License.** The graph is SAP SE copyright material in derived form (labels, short rationales and
+page/slide references taken from the publications above). The expert's MIT license covers its plugin
+software only, not its knowledge base, and the same holds here: this repository's MIT license does
+not cover the downloaded graph.
+
+Precedence is unchanged: live ARC-1 evidence first, then `decision-rules.json` and the structured
+AEM facts, then the graph. Only the extensibility part of the graph maps to runtime decisions; the
+other four principles explain and never authorize an action.
 
 Outside the knowledge directory, [`aem-model.json`](./aem-model.json) operationalizes the AEM
 selection criteria and `runtime/resolve-plan.mjs` combines them with `chain.json`. The knowledge
@@ -78,7 +105,7 @@ During repository work, query the compact layer with:
 ```text
 npm run clean-core:query -- wrapper on-stack
 npm run clean-core:query -- atc exemption --json
-npm run clean-core:graph
+npm run clean-core:graph-sync
 npm run --silent clean-core:resolve -- --facts docs/refactor/unit-facts.json
 ```
 
@@ -93,9 +120,10 @@ not improvise a rule from graph proximity.
 
 The integration axis has its own source: SAP Note 3690029 and SAP's *Clean core integration* white
 paper (sap.com/documents/1327955), which define an A–D scale for integration technologies
-separate from the extensibility levels above. It is **not** curated into this knowledge base; the
-chain consumes it through the Integration Interfaces section of `sap-migration-dossier`, and no
-rule in `decision-rules.json` cites it yet.
+separate from the extensibility levels above. The white paper's concepts are in the graph (since
+the full expert graph, see [Graph provenance](#graph-provenance)), but no rule in
+`decision-rules.json` cites it yet: the chain still consumes the integration axis through the
+Integration Interfaces section of `sap-migration-dossier`.
 
 Important curated page groups:
 

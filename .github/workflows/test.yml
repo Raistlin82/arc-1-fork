@@ -112,6 +112,11 @@ jobs:
       - name: Check size and schema budgets
         run: npm run check:sizes
 
+      # The Clean Core graph is not vendored: download the pinned files (sha256-verified, fail closed)
+      # before the skill checks read them. A no-op when `npm ci` already ran the build.
+      - name: Sync pinned Clean Core graph
+        run: npm run clean-core:graph-sync
+
       - name: Check skill tool references
         run: npm run check:skill-refs
 

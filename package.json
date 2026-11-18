@@ -48,7 +48,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc && node -e \"const fs=require('fs');fs.cpSync('src/aff/schemas','dist/aff/schemas',{recursive:true});if(fs.existsSync('public/ui'))fs.cpSync('public/ui','dist/public/ui',{recursive:true})\"",
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc && node -e \"const fs=require('fs');fs.cpSync('src/aff/schemas','dist/aff/schemas',{recursive:true});if(fs.existsSync('public/ui'))fs.cpSync('public/ui','dist/public/ui',{recursive:true})\" && node scripts/ci/sync-clean-core-graph.mjs",
     "dev": "tsx src/index.ts",
     "dev:http": "npm run build && tsx src/index.ts --transport http-streamable",
     "docs:build": "mkdocs build --strict",
@@ -79,8 +79,9 @@
     "check:sizes": "node scripts/ci/check-file-sizes.mjs && tsx scripts/ci/check-tool-schema-budget.ts",
     "check:skill-refs": "node scripts/ci/check-skill-tool-refs.mjs",
     "check:clean-core-skills": "node scripts/ci/check-clean-core-skills.mjs",
+    "check:clean-core-graph": "node scripts/ci/sync-clean-core-graph.mjs --check",
     "clean-core:query": "node scripts/query-clean-core-knowledge.mjs",
-    "clean-core:graph": "node scripts/refine-clean-core-graph.mjs",
+    "clean-core:graph-sync": "node scripts/ci/sync-clean-core-graph.mjs",
     "clean-core:resolve": "node skills/sap-erp-clean-core-refactor/runtime/resolve-plan.mjs",
     "clean-core:upgrade": "node skills/sap-erp-clean-core-refactor/runtime/resolve-upgrade.mjs",
     "cli": "tsx src/cli.ts",

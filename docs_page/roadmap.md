@@ -1,6 +1,6 @@
 # ARC-1 Idea Roadmap
 
-**Last reviewed:** 2026-11-12
+**Last reviewed:** 2026-11-18
 
 This page is ARC-1's idea parking lot. It records worthwhile work that is **not implemented now** so
 it does not disappear, but it is not a delivery schedule and it does not answer "what should we do
@@ -119,6 +119,7 @@ sequence.
 | [FEAT-88](#feat-88) | Application-log discovery and wider qualification | P3 | M | Needs research | Data access |
 | [FEAT-89](#feat-89) | Additional typed data-cluster use cases | P3 | M | Needs research | Data access |
 | [FEAT-90](#feat-90) | Historical transport scope beyond source | P2 | M | Needs research | Developer workflow |
+| [FEAT-97](#feat-97) | Clean Core integration-axis decision rule | P3 | S | Revisit on trigger | Clean Core skill |
 | [FEAT-36](#feat-36) | Type information | P3 | S | Blocked | Code intelligence |
 | [FEAT-79](#feat-79) | DDIC-aware dependency context | P2 | M | Needs research | Code intelligence |
 | [FEAT-42](#feat-42) | Additional CI output formats | P3 | XS | Revisit on trigger | CI |
@@ -715,6 +716,25 @@ with the exact advertised media types. [Research and family matrix](https://gith
 **Resume with.** A real review needs one specific missing family and a read-only probe returns
 two retrievable historical payloads, transport attribution and the native content contract.
 Start with that family; no generic serializer, guessed URL or ABAP/RFC helper fallback.
+
+<a id="feat-97"></a>
+### FEAT-97 — Clean Core integration-axis decision rule
+
+- **Priority / effort / status:** P3 / S / Revisit on trigger
+- **Category:** Clean Core skill
+
+**Idea.** A `derived` rule in `decision-rules.json` for the integration axis: an RFC or IDoc
+touchpoint of a unit that moves side-by-side becomes a released API, with the page references of
+SAP's *Clean core integration* white paper.
+
+**Why it remains.** `sap-erp-clean-core-refactor` now downloads the full graph of
+`sap-clean-core-expert` (all five principles, pinned in `UPSTREAM.json`), so the white paper's concepts
+are in the graph. The runtime rules stay extensibility-only on purpose: the integration axis
+(SAP Note 3690029) is consumed through `sap-migration-dossier`, and `decision-scenarios.json` must keep
+its results.
+
+**Resume with.** A real unit whose plan needs the integration decision inside the chain, the white
+paper's page numbers checked against the source, and a new decision scenario that pins the rule.
 
 ## Integration and localization
 

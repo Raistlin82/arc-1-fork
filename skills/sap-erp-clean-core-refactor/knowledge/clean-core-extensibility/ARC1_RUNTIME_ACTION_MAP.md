@@ -8,11 +8,16 @@ those operations into governed actions.
 No graph node writes to SAP. A graph/rule match proposes evidence and candidate decisions; only an
 approved chain action may invoke ARC-1 writes.
 
+The graph is the full Clean Core graph of `sap-clean-core-expert` (all five principles, pinned in
+[`UPSTREAM.json`](./UPSTREAM.json)). Only its extensibility concepts lead to ARC-1 actions, through
+`decision-rules.json` and `chain.json`; Business Processes, Data, Integration and Operations nodes
+explain and never execute.
+
 ## Runtime layers
 
 | Layer | Question | Artifact |
 |---|---|---|
-| Strategy | What does SAP Clean Core guidance require? | graph, `decision-rules.json`, raw source chunks (private installs only, never committed) |
+| Strategy | What does SAP Clean Core guidance require? | graph (downloaded at build, see `UPSTREAM.json`), `decision-rules.json`, raw source chunks (private installs only, never committed) |
 | Decision | Which standard, use case, domain, level and action apply? | `chain.json`, `DECISION_MATRIX.md` |
 | Capability | Can the current environment execute the action? | system probe, available skills/MCPs, action executor |
 | Execution | Which exact tool payloads and gates apply? | `action-catalog.json` plus live substituted inputs |
