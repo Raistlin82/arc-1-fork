@@ -16,9 +16,9 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 export const KNOWLEDGE_DIR = join('skills', 'sap-erp-clean-core-refactor', 'knowledge', 'clean-core-extensibility');
 export const MANIFEST = join(KNOWLEDGE_DIR, 'UPSTREAM.json');
@@ -207,6 +207,18 @@ async function main(argv) {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+// Run as a CLI whenever this file is the entry point, also through a symlink or another path spelling:
+// a silent no-op here would let `npm run build` pass without the graph.
+function isEntryPoint() {
+  if (!process.argv[1]) return false;
+  try {
+    const normalize = (path) => (process.platform === 'win32' ? path.toLowerCase() : path);
+    return normalize(realpathSync(process.argv[1])) === normalize(realpathSync(fileURLToPath(import.meta.url)));
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryPoint()) {
   process.exitCode = await main(process.argv.slice(2));
 }

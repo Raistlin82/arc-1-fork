@@ -90,8 +90,10 @@ HAS_RAW=$([ -d "$KB/raw" ] && echo yes || echo no)
 ```
 
 - `HAS_RAW=no` (any clone of the public repository): work from `decision-rules.json`, the curated
-  graph and the page references, and cite the source as *Clean Core Extensibility for Architects*
-  (2026-07), PDF page N. Never fabricate a quotation you cannot see.
+  graph and the page references. Cite a rule as *Clean Core Extensibility for Architects* (2026-07),
+  PDF page N; cite a graph node by its own `source_file` and `source_location` (PDF page or slide of
+  the publication it came from, which may be a deck or a white paper). Never fabricate a quotation
+  you cannot see.
 - `HAS_RAW=yes` (private install): open the cited `raw/*.md` chunk to audit the exact wording
   before relying on it.
 

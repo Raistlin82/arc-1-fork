@@ -1,7 +1,8 @@
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   GraphSyncError,
@@ -51,6 +52,17 @@ describe('Clean Core graph sync', () => {
   it('skips cleanly when the tree has no UPSTREAM.json (Docker build stage)', async () => {
     expect(loadManifest(root)).toBeUndefined();
     await expect(syncGraph({ root, fetchImpl: vi.fn() })).resolves.toEqual({ skipped: true, files: [] });
+  });
+
+  it('runs as a CLI when invoked through a symlinked path, never as a silent no-op', () => {
+    const link = join(root, 'linked-ci');
+    symlinkSync(resolve('scripts/ci'), link, 'dir');
+    const run = spawnSync(process.execPath, [join(link, 'sync-clean-core-graph.mjs'), '--check'], {
+      cwd: root,
+      encoding: 'utf8',
+    });
+    expect(run.status).toBe(0);
+    expect(run.stderr).toContain('not present; nothing to sync');
   });
 
   it('downloads the pinned file from the commit URL without following redirects, then verifies offline', async () => {
