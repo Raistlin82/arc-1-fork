@@ -17,14 +17,14 @@ import {
   normalizeAdtLanguage,
   rewriteKtdDocument,
 } from '../../adt/ddic-xml.js';
-import { activate, activateBatch } from '../../adt/devtools.js';
+import { ACTIVATION_NOT_EXECUTED, activate, activateBatch } from '../../adt/devtools.js';
 import { badiContainerXml, hasBadiImplementations } from '../../adt/enhancement-impl.js';
-import { AdtApiError, AdtSafetyError } from '../../adt/errors.js';
+import { AdtApiError, type AdtError, AdtSafetyError } from '../../adt/errors.js';
 import { type FmParameter, findFmHeader, spliceFmSignature } from '../../adt/fm-signature.js';
 import { checkOperation, checkPackage, OperationType } from '../../adt/safety.js';
 import { isServerDrivenObjectType } from '../../adt/server-driven.js';
 import { getTransport } from '../../adt/transport.js';
-import { escapeXmlAttr, parseFunctionModuleProperties } from '../../adt/xml-parser.js';
+import { escapeXmlAttr, getNestedArray, parseFunctionModuleProperties, parseXml } from '../../adt/xml-parser.js';
 import { validateAffHeader } from '../../aff/validator.js';
 import { activationDetailMatchesObject } from '../activation-results.js';
 import { guardCdsSyntax } from '../cds-hints.js';
@@ -77,6 +77,7 @@ import {
 } from './batch-results.js';
 import type { SapWriteContext } from './context.js';
 import { resolveCreateTransport } from './create-transport.js';
+import { postCreateError } from './post-create-error.js';
 
 const FUNCTION_MODULE_MEDIA_TYPE = /^application\/vnd\.sap\.adt\.functions\.fmodules(?:\.v\d+)?\+xml\b/i;
 
@@ -169,60 +170,70 @@ function rewriteFunctionModuleProcessingMetadata(
   return `${xml.slice(0, rootMatch.index)}${rewrittenRoot}${xml.slice(rootMatch.index + rootMatch[0].length)}`;
 }
 
+/** A confirmed create is not undone by a later write, verification, or unlock failure. */
+function functionModuleCreateError(
+  ctx: SapWriteContext,
+  cause: unknown,
+  step: 'source' | 'processing metadata',
+  object = { name: ctx.name, group: ctx.args.group },
+): AdtError {
+  const identity = `type="FUNC", name="${object.name}", group="${object.group}"`;
+  const recovery =
+    step === 'source'
+      ? `Resume source changes with SAPWrite(action="update", ${identity}).`
+      : `Source writing has not started. Update cannot change processing attributes. If they match the request, continue with SAPWrite(action="update", ${identity}); otherwise repair them in SAP GUI or explicitly delete and recreate after inspection.`;
+  const hint =
+    `FUNC ${object.name} was created, but its ${step} step failed. Saved state is unconfirmed. ` +
+    `Inspect SAPRead(${identity}, version="inactive", includeSignature=true); do not repeat create. ${recovery} ` +
+    'If an edit lock remains, release it in ADT/SM12 before retrying.';
+  return postCreateError(ctx, cause, 'FUNC', object.name, hint);
+}
+
 async function persistFunctionModuleProcessingMetadata(
   client: SapWriteContext['client'],
   objectUrl: string,
-  name: string,
   processingType: FunctionProcessingType,
   updateTaskKind: FunctionUpdateTaskKind | undefined,
   transport: string | undefined,
 ): Promise<void> {
-  try {
-    const inactiveUrl = `${objectUrl}?version=inactive`;
-    const current = await client.getObjectMetadata(inactiveUrl);
-    const body = rewriteFunctionModuleProcessingMetadata(current.body, processingType, updateTaskKind);
-    // Send the bare media type: SAP returns "…fmodules.v3+xml; charset=utf-8"
-    // (v2 on 750), and on-prem backends are known to reject vendor media types
-    // carrying parameters — same reason `resolveObjectPackage` strips them.
-    const responseContentType = getHeader(current.headers, 'content-type');
-    const discoveredContentType = client.http.discoveryAcceptFor(objectUrl);
-    const contentType =
-      [responseContentType, discoveredContentType]
-        .find((candidate): candidate is string => candidate !== undefined && FUNCTION_MODULE_MEDIA_TYPE.test(candidate))
-        ?.split(';')[0]
-        ?.trim() ?? vendorContentTypeForType('FUNC');
+  const inactiveUrl = `${objectUrl}?version=inactive`;
+  const current = await client.getObjectMetadata(inactiveUrl);
+  const body = rewriteFunctionModuleProcessingMetadata(current.body, processingType, updateTaskKind);
+  // Send the bare media type: SAP returns "…fmodules.v3+xml; charset=utf-8"
+  // (v2 on 750), and on-prem backends are known to reject vendor media types
+  // carrying parameters — same reason `resolveObjectPackage` strips them.
+  const responseContentType = getHeader(current.headers, 'content-type');
+  const discoveredContentType = client.http.discoveryAcceptFor(objectUrl);
+  const contentType =
+    [responseContentType, discoveredContentType]
+      .find((candidate): candidate is string => candidate !== undefined && FUNCTION_MODULE_MEDIA_TYPE.test(candidate))
+      ?.split(';')[0]
+      ?.trim() ?? vendorContentTypeForType('FUNC');
 
-    await safeUpdateObject(
-      client.http,
-      client.safety,
-      objectUrl,
-      body,
-      contentType,
-      transport,
-      getCachedFeatures()?.abapRelease,
-    );
+  await safeUpdateObject(
+    client.http,
+    client.safety,
+    objectUrl,
+    body,
+    contentType,
+    transport,
+    getCachedFeatures()?.abapRelease,
+  );
 
-    // A 2xx response alone is insufficient evidence: the collection POST accepts
-    // these attributes and still retains `normal` (live-verified on 758).
-    const persisted = await client.getObjectMetadata(inactiveUrl);
-    const { processingType: actualProcessingType, updateTaskKind: actualUpdateTaskKind } =
-      parseFunctionModuleProperties(persisted.body);
-    if (
-      actualProcessingType !== processingType ||
-      (updateTaskKind === undefined ? actualUpdateTaskKind !== undefined : actualUpdateTaskKind !== updateTaskKind)
-    ) {
-      throw new Error(
-        `SAP retained processingType="${actualProcessingType ?? 'unknown'}"${
-          actualUpdateTaskKind === undefined ? '' : ` and updateTaskKind="${actualUpdateTaskKind}"`
-        }.`,
-      );
-    }
-  } catch (cause) {
-    const detail = cause instanceof Error ? cause.message : String(cause);
+  // A 2xx response alone is insufficient evidence: the collection POST accepts
+  // these attributes and still retains `normal` (live-verified on 758).
+  const persisted = await client.getObjectMetadata(inactiveUrl);
+  const { processingType: actualProcessingType, updateTaskKind: actualUpdateTaskKind } = parseFunctionModuleProperties(
+    persisted.body,
+  );
+  if (
+    actualProcessingType !== processingType ||
+    (updateTaskKind === undefined ? actualUpdateTaskKind !== undefined : actualUpdateTaskKind !== updateTaskKind)
+  ) {
     throw new Error(
-      `FUNC post-create processing update failed for ${name} after SAP accepted the create POST. ` +
-        `The object may remain as a normal function-module shell. Review it with SAPRead or delete it before retrying. ` +
-        detail,
+      `SAP retained processingType="${actualProcessingType ?? 'unknown'}"${
+        actualUpdateTaskKind === undefined ? '' : ` and updateTaskKind="${actualUpdateTaskKind}"`
+      }.`,
     );
   }
 }
@@ -249,25 +260,25 @@ async function resolveFunctionGroupCreatePackage(
   return actualPackage;
 }
 
-function ttypPostCreateFailureMessage(name: string, cause: unknown): string {
-  const detail = cause instanceof Error ? cause.message : String(cause);
+function ttypPostCreateFailureHint(name: string): string {
   return (
     `TTYP post-create update failed for ${name} after SAP accepted the create POST. ` +
     `The object may remain as SAP's default metadata shell (CHAR). To recover, run ` +
-    `SAPWrite(action="update", type="TTYP", name="${name}", rowType=…) to write the intended row type, ` +
-    `or delete it — a plain re-create fails with "already exists". Verify with SAPRead first. ` +
-    detail
+    `SAPWrite(action="update", type="TTYP", name="${name}", rowType=…). Repeat rowType and any ` +
+    `rowTypeKind, rowTypeLength and rowTypeDecimals from the create request. ` +
+    `Verify with SAPRead first; do not repeat create. If an edit lock remains, release it in ADT/SM12 before retrying.`
   );
 }
 
 async function putTtypMetadataAfterCreate(
-  client: SapWriteContext['client'],
+  ctx: SapWriteContext,
   objectUrl: string,
   name: string,
   body: string,
   contentType: string,
   transport: string | undefined,
 ): Promise<void> {
+  const { client } = ctx;
   try {
     await client.http.withStatefulSession(async (session) => {
       const lock = await lockObject(session, client.safety, objectUrl, 'MODIFY', getCachedFeatures()?.abapRelease);
@@ -279,7 +290,7 @@ async function putTtypMetadataAfterCreate(
       }
     });
   } catch (err) {
-    throw new Error(ttypPostCreateFailureMessage(name, err));
+    throw postCreateError(ctx, err, 'TTYP', name, ttypPostCreateFailureHint(name));
   }
 }
 
@@ -330,6 +341,7 @@ const KTD_REF_OBJECT_TYPES_ROUTABLE_BY_ARC = new Set([
   'BDEF/BVA',
   'DDLS/DF',
   'DEVC/K',
+  'RONT/ROT',
   'SMBC/TYP',
   'SRVB/SVB',
   'SRVD/SRV',
@@ -351,12 +363,11 @@ const KTD_REF_OBJECT_TYPES_SAP_DOCUMENTATION_SCOPE = new Set([
   'EEEC/EVC',
   'EVTB/EVB',
   'PARA/R',
-  'RONT/ROT',
   'SOD1',
   'SOD2',
 ]);
 
-const KTD_REF_OBJECT_TYPES_HINT = 'DDLS/DF, BDEF/BDO, SRVD/SRV, SRVB/SVB, DEVC/K, SMBC/TYP';
+const KTD_REF_OBJECT_TYPES_HINT = 'DDLS/DF, BDEF/BDO, SRVD/SRV, SRVB/SVB, DEVC/K, SMBC/TYP, RONT/ROT';
 const KTD_SAP_DOCUMENTATION_SCOPE_HINT =
   'APIC/TYP, BDEF/*, CFDB/CFB, CFDG/CFG, CFDS/CFS, CHKO/TYP, DDLA/ADF, DDLS/DF, DEVC/K, ' +
   'DRTY/STY, DSFD/SCF, EEEC/EVC, EVTB/EVB, PARA/R, RONT/ROT, SMBC/TYP, SOD1, SOD2, ' +
@@ -494,6 +505,10 @@ function isKtdCreateEndpointUnavailable(err: unknown): err is AdtApiError {
   return combined.includes('resource') && combined.includes('/sap/bc/adt/documentation/ktd/documents');
 }
 
+// SAP (seen on 758) silently truncates a longer MSAG name, leaving an empty class under the shorter name.
+const MSAG_MAX_NAME_LENGTH = 20;
+const MSAG_NAME_TOO_LONG = `MSAG names must be at most ${MSAG_MAX_NAME_LENGTH} characters. Nothing was created.`;
+
 export async function writeActionCreate(ctx: SapWriteContext): Promise<ToolResult> {
   const {
     client,
@@ -513,6 +528,7 @@ export async function writeActionCreate(ctx: SapWriteContext): Promise<ToolResul
   // Discovery gate before any SAP call (the TTYP/DOMA gates live in write.ts, which is at its size budget).
   if (type === 'ENQU' && isLockObjectsEndpointAvailable() === false) return errorResult(ENQU_WRITE_UNAVAILABLE_HINT);
   if (type === 'ENHO' && isEnhoXhbEndpointAvailable() === false) return errorResult(ENHO_WRITE_UNAVAILABLE_HINT);
+  if (type === 'MSAG' && name.length > MSAG_MAX_NAME_LENGTH) return errorResult(MSAG_NAME_TOO_LONG);
   // FUNC and FUGR structural includes both INHERIT the parent group's package — SAP ignores
   // _package for them — so the allowlist must be checked against the group's real package.
   // Gating on args.package here would let a caller write into a disallowed package by claiming $TMP.
@@ -607,6 +623,19 @@ export async function writeActionCreate(ctx: SapWriteContext): Promise<ToolResul
 </sktd:docu>`;
 
     const ktdCreateUrl = '/sap/bc/adt/documentation/ktd/documents';
+    if (refType === 'RONT/ROT') {
+      // Both 758 and 816 advertise KTD and RONT. SAP's wizard checks the parent's DOCUMENTATION handler.
+      checkOperation(client.safety, OperationType.Create, 'CreateObject');
+      const params = new URLSearchParams({ objname: name, package: pkg, refObjType: refType, refObjName: refName });
+      const asXml = 'application/vnd.sap.as+xml';
+      const validation = await client.http.post(`${ktdCreateUrl}/validation?${params}`, '', asXml, { Accept: asXml });
+      const abap = parseXml(validation.body).abap as Record<string, unknown> | undefined;
+      const statuses = getNestedArray(abap ?? {}, 'values', 'DATA');
+      if (statuses.length !== 1 || statuses[0]?.SEVERITY !== 'OK') {
+        const detail = config.minimalErrors ? undefined : statuses[0]?.SHORT_TEXT;
+        return errorResult(`SAP did not approve KTD creation for RONT/ROT ${refName}.${detail ? ` ${detail}` : ''}`);
+      }
+    }
     let ktdResult: string;
     try {
       ktdResult = await createObject(
@@ -650,17 +679,17 @@ export async function writeActionCreate(ctx: SapWriteContext): Promise<ToolResul
           getCachedFeatures()?.abapRelease,
         );
       } catch (err) {
-        // The POST above already succeeded, so the KTD exists. Say so — a generic
-        // read/rewrite/PUT failure invites the same create again, which 409s.
-        invalidateWrittenObject(type, name);
-        const documentationPart = shortTexts?.length ? 'documentation' : 'documentation body';
-        return errorResult(
-          `Created SKTD ${name} in package ${pkg}, but the ${documentationPart} was NOT written: ` +
-            `${err instanceof Error ? err.message : String(err)}\n` +
-            `The object exists — verify it with SAPRead. Inspect the reported cause: correct or remove invalid ` +
-            `${[hasSource && 'source', shortTexts?.length && 'shortTexts'].filter(Boolean).join(' and ')} input, ` +
-            `or wait for a transient read/PUT failure to recover. Then use ` +
-            `SAPWrite(action="update", type="SKTD", name="${name}", …); do not retry create.`,
+        const input = [hasSource && 'source', shortTexts?.length && 'shortTexts'].filter(Boolean).join(' and ');
+        throw postCreateError(
+          ctx,
+          err,
+          type,
+          name,
+          `Created SKTD ${name} in package ${pkg}, but its documentation write state is unconfirmed. ` +
+            `First verify it with SAPRead. To correct or remove invalid ${input} input without writing, use ` +
+            `SAPWrite(action="update", type="SKTD", name="${name}", dryRun=true, …). ` +
+            `When ready, update without dryRun; do not retry create. ` +
+            'If an edit lock remains, release it in ADT/SM12 before retrying.',
         );
       }
       invalidateWrittenObject(type, name);
@@ -747,14 +776,17 @@ export async function writeActionCreate(ctx: SapWriteContext): Promise<ToolResul
   }
 
   if (type === 'FUNC' && metadataProperties.processingType !== undefined) {
-    await persistFunctionModuleProcessingMetadata(
-      client,
-      objectUrl,
-      name,
-      metadataProperties.processingType as FunctionProcessingType,
-      metadataProperties.updateTaskKind as FunctionUpdateTaskKind | undefined,
-      effectiveTransport,
-    );
+    try {
+      await persistFunctionModuleProcessingMetadata(
+        client,
+        objectUrl,
+        metadataProperties.processingType as FunctionProcessingType,
+        metadataProperties.updateTaskKind as FunctionUpdateTaskKind | undefined,
+        effectiveTransport,
+      );
+    } catch (cause) {
+      throw functionModuleCreateError(ctx, cause, 'processing metadata');
+    }
   }
 
   if (isMetadataWriteType(type)) {
@@ -821,7 +853,7 @@ export async function writeActionCreate(ctx: SapWriteContext): Promise<ToolResul
     // TTYP: the POST creates a default-typed (CHAR) shell — a follow-up PUT writes the real row type.
     if (type === 'TTYP') {
       const ct = vendorContentTypeForType(type);
-      await putTtypMetadataAfterCreate(client, objectUrl, name, body, ct, effectiveTransport);
+      await putTtypMetadataAfterCreate(ctx, objectUrl, name, body, ct, effectiveTransport);
     }
     invalidateWrittenObject();
     const followUpHint =
@@ -841,15 +873,20 @@ export async function writeActionCreate(ctx: SapWriteContext): Promise<ToolResul
     // other object types use their supplied source unchanged.
     const createSource = funcPreparation.source;
 
-    await safeUpdateSource(
-      client.http,
-      client.safety,
-      objectUrl,
-      srcUrl,
-      createSource,
-      effectiveTransport,
-      getCachedFeatures()?.abapRelease,
-    );
+    try {
+      await safeUpdateSource(
+        client.http,
+        client.safety,
+        objectUrl,
+        srcUrl,
+        createSource,
+        effectiveTransport,
+        getCachedFeatures()?.abapRelease,
+      );
+    } catch (cause) {
+      if (type === 'FUNC') throw functionModuleCreateError(ctx, cause, 'source');
+      throw cause;
+    }
     const bdefExtensionWarning = bdefExtensionBase
       ? await warnIfBdefExtensionUnconfirmed(client, name, bdefExtensionBase)
       : undefined;
@@ -899,6 +936,9 @@ export async function writeActionBatchCreate(ctx: SapWriteContext): Promise<Tool
       transport: normalizeTransportOverride(obj.transport) ?? transport,
       description: String(obj.description ?? name),
       metadataObject: isMetadataWriteType(type),
+      // SAP creates only a shell for these types; the messages/metadata need a locked PUT.
+      needsMetadataPut:
+        type === 'DTEL' || (type === 'MSAG' && Array.isArray(metadata.messages) && metadata.messages.length > 0),
       body: '',
       contentType: '',
       sourceUrl: '',
@@ -927,6 +967,7 @@ export async function writeActionBatchCreate(ctx: SapWriteContext): Promise<Tool
       if (previous !== undefined)
         errors.push(`Duplicate object: entry ${plan.result.index + 1} repeats entry ${previous + 1}.`);
       else seen.set(key, plan.result.index);
+      if (plan.type === 'MSAG' && plan.name.length > MSAG_MAX_NAME_LENGTH) errors.push(MSAG_NAME_TOO_LONG);
       if (plan.type === 'FUNC' && !plan.group) {
         errors.push(`FUNC ${plan.name} in batch_create requires "group" on the object entry or top-level request.`);
       }
@@ -984,7 +1025,7 @@ export async function writeActionBatchCreate(ctx: SapWriteContext): Promise<Tool
           plan.type === 'FUNC' ? `${plan.objectUrl}/source/main` : sourceUrlForType(plan.type, plan.name);
       }
       if (
-        plan.type === 'DTEL' ||
+        plan.needsMetadataPut ||
         plan.type === 'TTYP' ||
         plan.type === 'ENHO' ||
         (plan.type === 'FUNC' && plan.metadata.processingType !== undefined) ||
@@ -993,7 +1034,7 @@ export async function writeActionBatchCreate(ctx: SapWriteContext): Promise<Tool
         plan.result.write = 'not_attempted';
       }
     } catch (err) {
-      errors.push(batchFailureMessage(err, false));
+      errors.push(batchFailureMessage(err, err instanceof AdtApiError && config.minimalErrors));
     }
     if (errors.length) failBatchEntry(plan.result, 'preflight', errors.join('\n'));
   }
@@ -1108,14 +1149,17 @@ export async function writeActionBatchCreate(ctx: SapWriteContext): Promise<Tool
       phase = 'write';
       if (entry.write !== 'not_required') entry.write = 'unknown';
       if (plan.type === 'FUNC' && plan.metadata.processingType !== undefined) {
-        await persistFunctionModuleProcessingMetadata(
-          client,
-          plan.objectUrl,
-          plan.name,
-          plan.metadata.processingType as FunctionProcessingType,
-          plan.metadata.updateTaskKind as FunctionUpdateTaskKind | undefined,
-          plan.transport,
-        );
+        try {
+          await persistFunctionModuleProcessingMetadata(
+            client,
+            plan.objectUrl,
+            plan.metadata.processingType as FunctionProcessingType,
+            plan.metadata.updateTaskKind as FunctionUpdateTaskKind | undefined,
+            plan.transport,
+          );
+        } catch (cause) {
+          throw functionModuleCreateError(ctx, cause, 'processing metadata', { name: plan.name, group: plan.group });
+        }
       }
       if (plan.type === 'ENHO')
         await saveBadiImplementationsAfterCreate(
@@ -1127,7 +1171,7 @@ export async function writeActionBatchCreate(ctx: SapWriteContext): Promise<Tool
           plan.transport,
           config.minimalErrors,
         );
-      if (plan.type === 'DTEL') {
+      if (plan.needsMetadataPut) {
         await client.http.withStatefulSession(async (session) => {
           const lock = await lockObject(
             session,
@@ -1135,6 +1179,7 @@ export async function writeActionBatchCreate(ctx: SapWriteContext): Promise<Tool
             plan.objectUrl,
             'MODIFY',
             getCachedFeatures()?.abapRelease,
+            systemType,
           );
           try {
             await updateObject(
@@ -1152,14 +1197,7 @@ export async function writeActionBatchCreate(ctx: SapWriteContext): Promise<Tool
         });
       }
       if (plan.type === 'TTYP')
-        await putTtypMetadataAfterCreate(
-          client,
-          plan.objectUrl,
-          plan.name,
-          plan.body,
-          plan.contentType,
-          plan.transport,
-        );
+        await putTtypMetadataAfterCreate(ctx, plan.objectUrl, plan.name, plan.body, plan.contentType, plan.transport);
       if (!plan.metadataObject && plan.source) {
         await safeUpdateSource(
           client.http,
@@ -1189,14 +1227,19 @@ export async function writeActionBatchCreate(ctx: SapWriteContext): Promise<Tool
           );
           break;
         }
-        entry.activation = 'confirmed';
+        entry.activation = outcome.notExecuted ? 'unknown' : 'confirmed';
+        if (outcome.notExecuted) warnings.push(`${plan.name}: ${ACTIVATION_NOT_EXECUTED}`);
       }
       entry.status = 'success';
     } catch (err) {
       failBatchEntry(entry, phase, batchFailureMessage(err, config.minimalErrors));
       break;
     } finally {
-      if (entry.creation !== 'not_attempted') invalidateWrittenObject(plan.type, plan.name);
+      try {
+        if (entry.creation !== 'not_attempted') invalidateWrittenObject(plan.type, plan.name);
+      } catch {
+        // Cache bookkeeping must not replace the batch's recorded persistence outcomes.
+      }
     }
   }
 
@@ -1221,9 +1264,10 @@ export async function writeActionBatchCreate(ctx: SapWriteContext): Promise<Tool
         if (messages.length)
           activationMessages.push(batchFailureMessage([...new Set(messages)].join('; '), config.minimalErrors));
       }
+      if (outcome.notExecuted) warnings.push(ACTIVATION_NOT_EXECUTED);
       for (const plan of writtenPlans) {
         if (outcome.success) {
-          plan.result.activation = 'confirmed';
+          plan.result.activation = outcome.notExecuted ? 'unknown' : 'confirmed';
           continue;
         }
         const errors = outcome.details.filter(
@@ -1239,7 +1283,13 @@ export async function writeActionBatchCreate(ctx: SapWriteContext): Promise<Tool
       for (const plan of writtenPlans)
         failBatchEntry(plan.result, 'activate', batchFailureMessage(err, config.minimalErrors));
     } finally {
-      for (const plan of writtenPlans) invalidateWrittenObject(plan.type, plan.name);
+      for (const plan of writtenPlans) {
+        try {
+          invalidateWrittenObject(plan.type, plan.name);
+        } catch {
+          // Cache bookkeeping must not replace the batch's recorded persistence outcomes.
+        }
+      }
     }
   }
   return report();

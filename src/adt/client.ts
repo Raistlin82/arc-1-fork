@@ -27,6 +27,7 @@ import { readEnhancementImplementation } from './enhancements.js';
 import { AdtApiError, AdtError, AdtSafetyError, isNotFoundError } from './errors.js';
 import { AdtHttpClient, type AdtHttpConfig, type AdtResponse } from './http.js';
 import type { AdtRequestOptions } from './http-deadline.js';
+import { filterIncludeHits, requiresUnfilteredIncludeSearch } from './include-search.js';
 import { getDirectPackageContents } from './package-browser.js';
 import { requirePackageFilteredSearch } from './package-contents.js';
 import { AdtPackageHierarchyResolver, type PackageHierarchyResolver } from './package-hierarchy.js';
@@ -302,6 +303,7 @@ export class AdtClient {
       samlAuthorization: config.samlAuthorization,
       disableSaml: config.disableSaml,
       retryUnauthorized: config.retryUnauthorized,
+      pinnedWrite: config.safety?.multiTargetWrite,
       onUnauthorized: config.onUnauthorized,
       // Prefer the shared server-wide semaphore when provided so all per-user PP clients
       // share one cap. Fall back to a private semaphore for stdio/tests when only maxConcurrent
@@ -536,9 +538,9 @@ export class AdtClient {
     return parseFunctionModuleProperties((await this.http.get(url)).body);
   }
 
-  /** Resolve by URI: some releases decorate search names with "(Function Module)". */
+  /** Resolve by URI (names can carry "(Function Module)"); uppercase: 7.50 search is case-sensitive. */
   async resolveFunctionGroup(fmName: string, request?: AdtRequestOptions): Promise<string | null> {
-    const results = await this.searchObject(fmName, 10, undefined, request);
+    const results = await this.searchObject(fmName.toUpperCase(), 10, undefined, request);
     for (const r of results) {
       const match = r.uri.match(/\/functions\/groups\/([^/]+)\/fmodules\/([^/?#]+)(?:[/?#]|$)/i);
       if (match && decodeURIComponent(match[2]!).toUpperCase() === fmName.toUpperCase()) {
@@ -565,12 +567,12 @@ export class AdtClient {
       // nodes in a flat projectexplorer shape. Note the LOWERCASE query params — objectName/
       // objectType returns 400. Verified live on npl 7.50; §8.3 of the 2026-07-29 dossier.
       if (!isNotFoundError(err)) throw err;
-      const fallback = await this.http.get(
-        `/sap/bc/adt/repository/objectstructure?objectname=${encodeURIComponent(name)}&objecttype=${encodeURIComponent('FUGR/F')}`,
-        { Accept: accept },
-      );
-      // The fallback payload does not carry the group name — pass it through.
-      return parseFunctionGroupNodes(fallback.body, name);
+      const path = `/sap/bc/adt/repository/objectstructure?objectname=${encodeURIComponent(name)}&objecttype=${encodeURIComponent('FUGR/F')}`;
+      const fg = parseFunctionGroupNodes((await this.http.get(path, { Accept: accept })).body, name);
+      // A missing group answers 200 with no nodes; a real one always lists its TOP/UXX includes
+      // (both live on npl 7.50). Not `err`: its "No suitable resource" text draws the SICF hint.
+      if (fg.functions.length + fg.includes.length > 0) return fg;
+      throw new AdtApiError(`Function group ${name} not found`, 404, path);
     }
   }
 
@@ -788,19 +790,20 @@ export class AdtClient {
    *  absent entirely, so transparent tables (TABL/DT) fall through to /structures/
    *  and a PUT there silently sets DD02L-TABCLASS=INTTAB (corruption). Use
    *  `resolveTablObjectUrlForWrite()` instead. See issue #285. */
-  async resolveTablObjectUrl(name: string): Promise<string> {
+  async resolveTablObjectUrl(name: string, options?: AdtRequestOptions): Promise<string> {
+    checkOperation(this.safety, OperationType.Read, 'ResolveTablObjectUrl');
     const upper = name.toUpperCase();
     const cached = this.tablUrlCache.get(upper);
     if (cached) return cached;
     const tableUrl = `/sap/bc/adt/ddic/tables/${encodeURIComponent(name)}`;
     const structUrl = `/sap/bc/adt/ddic/structures/${encodeURIComponent(name)}`;
     try {
-      await this.http.get(tableUrl);
+      await this.http.get(tableUrl, undefined, options);
       this.tablUrlCache.set(upper, tableUrl);
       return tableUrl;
     } catch (err) {
       if (err instanceof AdtApiError && err.statusCode === 404) {
-        await this.http.get(structUrl);
+        await this.http.get(structUrl, undefined, options);
         this.tablUrlCache.set(upper, structUrl);
         return structUrl;
       }
@@ -962,8 +965,8 @@ export class AdtClient {
   }
 
   /** Get enhancement metadata and, for source-code plug-ins, hook locations and ABAP source. */
-  async getEnhancementImplementation(name: string): Promise<EnhancementImplementationInfo> {
-    return readEnhancementImplementation(this, name);
+  async getEnhancementImplementation(name: string, release?: string): Promise<EnhancementImplementationInfo> {
+    return readEnhancementImplementation(this, name, release);
   }
 
   /** Get transaction code metadata (description, package) */
@@ -1068,13 +1071,11 @@ export class AdtClient {
       const params = new URLSearchParams({
         operation: 'quickSearch',
         query: name,
-        maxResults: String(limit),
+        maxResults: String(requiresUnfilteredIncludeSearch(objectType) ? 1000 : limit),
       });
-      if (objectType) {
-        params.set('objectType', objectType);
-      }
+      if (objectType && !requiresUnfilteredIncludeSearch(objectType)) params.set('objectType', objectType);
       const resp = await this.http.get(`/sap/bc/adt/repository/informationsystem/search?${params.toString()}`);
-      return parseSearchResults(resp.body);
+      return filterIncludeHits(parseSearchResults(resp.body), objectType);
     };
 
     const results: AdtObjectLookupResult[] = [];
@@ -1397,10 +1398,8 @@ WHERE d~TABNAME = '${table}' AND d~AS4LOCAL = 'A'`;
   }
 
   /**
-   * Like runQuery, but also returns the datapreview metrics ADT already includes in the response
-   * (totalRows, server-side queryExecutionTimeMs, executedQueryString). Kept separate from runQuery so
-   * these — including the internal generated SQL — only surface where asked (SAPQuery), not in every
-   * runQuery consumer that JSON-stringifies the result.
+   * Also returns SAP's count, timing and SQL echo, only where asked (SAPQuery).
+   * The count is not a result total; the timing may exclude SAP's separate count query.
    */
   async runQueryWithMetrics(
     sql: string,
@@ -1425,7 +1424,7 @@ WHERE d~TABNAME = '${table}' AND d~AS4LOCAL = 'A'`;
    * The whole batch runs inside ONE data-result scope, so the response-memory budget (#739) is
    * cumulative across chunks rather than reset per chunk — N chunks cannot together exceed the limit
    * a single response may consume. Metrics are reported only for a single statement, because an
-   * early break on the row cap would make a summed totalRows misleading.
+   * early break on the row cap would make combined SAP metrics misleading.
    */
   async runQueryBatch(
     statements: string[],
@@ -1440,7 +1439,9 @@ WHERE d~TABNAME = '${table}' AND d~AS4LOCAL = 'A'`;
       const post = (sql: string, limit: number): Promise<string> => this.postFreestyleQuery(sql, limit, budget, signal);
 
       if (statements.length === 1) {
-        return parseDataPreviewResult(await post(statements[0]!, rowLimit));
+        const result = parseDataPreviewResult(await post(statements[0]!, rowLimit));
+        // SAP ignores rowNumber for UNION; keep the returned-row cap independent of backend behavior.
+        return { ...result, rows: result.rows.slice(0, rowLimit) };
       }
       return executeDataPreviewStatements(post, parseTableContents, statements, rowLimit);
     });

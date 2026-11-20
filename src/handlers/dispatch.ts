@@ -40,6 +40,7 @@ import { appendIdeLinks } from '../server/ide-links.js';
 import type { IdeLinkContext } from '../server/ide-request.js';
 import { logger } from '../server/logger.js';
 import { type McpRateLimiter, resolveRateLimitUserKey } from '../server/mcp-rate-limit.js';
+import { multiTargetInvocationDecision } from '../server/multi-target-tools.js';
 import { formatClientInfo } from '../server/trace-context.js';
 import type { ServerConfig } from '../server/types.js';
 import { handleSAPActivate } from './activate.js';
@@ -129,7 +130,11 @@ function formatPossibleDataPreviewWafBlock(err: AdtApiError, minimalErrors: bool
 function getWriteInfrastructureHint(err: AdtApiError, tool: string, args: Record<string, unknown>): string | undefined {
   if (tool !== 'SAPWrite') return undefined;
   const action = String(args.action ?? '').toLowerCase();
-  if (!['create', 'update', 'batch_create', 'edit_method', 'edit_unit', 'add_unit', 'delete'].includes(action))
+  if (
+    !['create', 'update', 'batch_create', 'edit_method', 'edit_unit', 'add_unit', 'edit_content', 'delete'].includes(
+      action,
+    )
+  )
     return undefined;
 
   // These failures happen around ADT session management, often after SAP has
@@ -154,8 +159,9 @@ function formatErrorForLLM(
   tool: string,
   args: Record<string, unknown>,
   config: ServerConfig,
+  isSamlBearer: boolean,
 ): string {
-  const base = buildBaseErrorMessage(err, message, tool, args, config);
+  const base = buildBaseErrorMessage(err, message, tool, args, config, isSamlBearer);
   // Handler-attached remediation hints (e.g., CDS delete blocker list) always
   // appear last so the message reads "what happened → diagnostics → how to fix".
   if (err instanceof AdtError && err.extraHint && !base.includes(err.extraHint)) {
@@ -170,6 +176,7 @@ function buildBaseErrorMessage(
   tool: string,
   args: Record<string, unknown>,
   config: ServerConfig,
+  isSamlBearer: boolean,
 ): string {
   if (err instanceof AdtRequestBudgetError || err instanceof AdtAnalysisDeadlineError) return message;
   if (err instanceof AdtError && err.activationOutcome === 'unknown') {
@@ -219,6 +226,9 @@ function buildBaseErrorMessage(
   if (err instanceof AdtResponseLimitError && err.endpointFamily === 'package-browser') {
     return `${message} Narrow with an advertised objectType or a smaller package. maxResults only caps returned entries, not SAP's response size. No listing was returned.`;
   }
+  if (err instanceof AdtResponseLimitError && err.endpointFamily === 'search-help-metadata') {
+    return `${message} SHLP metadata cannot be narrowed or paged here. Inspect the search help in SAP. No partial metadata was returned.`;
+  }
   if (err instanceof AdtResponseLimitError) {
     const mebibytes = err.limitBytes / (1024 * 1024);
     const displayLimit = Number.isInteger(mebibytes) ? `${mebibytes} MiB` : `${err.limitBytes}-byte`;
@@ -235,7 +245,8 @@ function buildBaseErrorMessage(
       message: hint
         ? `The SAP diagnostic response exceeded the ${displayLimit} limit. ${hint}`
         : `The SAP data-preview result exceeded the ${displayLimit} server limit. ` +
-          'Submit a new request with lower maxRows, fewer columns, or a restrictive non-overlapping key-range WHERE clause.',
+          'Submit a new request with lower maxRows, fewer columns, or a restrictive non-overlapping key-range WHERE clause. ' +
+          'For UNION, maxRows may not reduce the transfer; narrow each branch with WHERE.',
       limitBytes: err.limitBytes,
       retryable: false,
       requestId: err.requestId ?? getCurrentContext()?.requestId,
@@ -292,6 +303,7 @@ function buildBaseErrorMessage(
     }
 
     if (err.isNotFound) {
+      if (err.creationOutcome === 'confirmed') return enriched;
       if (err.resourceExistenceAfterDelete === 'exists') {
         return (
           `${enriched}\n\n` +
@@ -311,6 +323,9 @@ function buildBaseErrorMessage(
       return `${enriched}\n\nHint: Object "${name}" (type ${type}) was not found. Use SAPSearch with query "${name}" to verify the name exists and check the correct type.`;
     }
     if (err.isUnauthorized || err.isForbidden) {
+      if (isSamlBearer && err.isUnauthorized) {
+        return `${enriched}\n\nHint: SAP rejected the SAML bearer assertion. Check the trusted issuer, audience, recipient, certificate, and unique SAP NameID mapping in SAML2/SU01. ARC-1 did not fall back to SAP_USER.`;
+      }
       if (config.cookieFile || config.cookieString) {
         return (
           `${enriched}\n\n` +
@@ -328,6 +343,14 @@ function buildBaseErrorMessage(
     }
     if (tool === 'SAPRead' && argType === 'TABLE_CONTENTS' && err.statusCode === 400) {
       const combined = `${err.message}\n${err.responseBody ?? ''}`;
+      // 758 and 816 answer every condition-only body this way, so the sqlFilter shape hint below
+      // would send the caller round in circles.
+      if (/only select statement is allowed/i.test(combined)) {
+        return (
+          `${enriched}\n\nHint: this SAP system's DDIC data preview does not accept a TABLE_CONTENTS sqlFilter. ` +
+          `Use type="TABLE_QUERY" with where=[{"field":"MANDT","op":"=","value":"100"}] instead.`
+        );
+      }
       if (hasSqlParserSignature(combined)) {
         return (
           `${enriched}\n\nHint: TABLE_CONTENTS sqlFilter must be a condition expression only ` +
@@ -364,7 +387,8 @@ function buildBaseErrorMessage(
       action === 'batch_create' ||
       action === 'edit_method' ||
       action === 'edit_unit' ||
-      action === 'add_unit';
+      action === 'add_unit' ||
+      action === 'edit_content';
     if ((err.statusCode === 400 || err.statusCode === 409) && DDIC_SAVE_HINT_TYPES.has(argType) && isSaveAction) {
       return (
         `${enriched}\n\nHint: DDIC save failed. Check the diagnostic details above for specific field or annotation errors. ` +
@@ -679,7 +703,9 @@ export function getToolRegistry(): ToolRegistry {
     if (!policy) throw new Error(`Built-in tool '${name}' has no ACTION_POLICY entry`);
     r.register({ name, source: 'builtin', policy, invoke });
   };
-  reg('SAPRead', (ctx) => handleSAPRead(ctx.client, ctx.args, ctx.cache, ctx.cacheSecurity, ctx.config.minimalErrors));
+  reg('SAPRead', (ctx) =>
+    handleSAPRead(ctx.client, ctx.args, ctx.cache, ctx.cacheSecurity, ctx.config.minimalErrors, ctx.config.abapRelease),
+  );
   reg('SAPSearch', (ctx) => handleSAPSearch(ctx.client, ctx.args, ctx.config.minimalErrors));
   reg('SAPQuery', (ctx) => handleSAPQuery(ctx.client, ctx.args, ctx.config.minimalErrors));
   reg('SAPWrite', (ctx) => handleSAPWrite(ctx.client, ctx.args, ctx.config, ctx.cache, ctx.cacheSecurity));
@@ -692,7 +718,13 @@ export function getToolRegistry(): ToolRegistry {
       : handleSAPNavigate(ctx.client, ctx.args, ctx.config.minimalErrors),
   );
   reg('SAPLint', (ctx) => handleSAPLint(ctx.client, ctx.args, ctx.config));
-  reg('SAPDiagnose', (ctx) => handleSAPDiagnose(ctx.client, ctx.args, ctx.config.minimalErrors));
+  reg('SAPDiagnose', (ctx) =>
+    handleSAPDiagnose(ctx.client, ctx.args, ctx.config.minimalErrors, {
+      configuredAbapRelease:
+        ctx.config.multiTargetEndpoints || ctx.config.targetId ? undefined : ctx.config.abapRelease,
+      configuredSystemType: ctx.config.systemType === 'auto' ? undefined : ctx.config.systemType,
+    }),
+  );
   reg('SAPTransport', (ctx) => handleSAPTransport(ctx.client, ctx.args, ctx.config));
   reg('SAPGit', (ctx) => handleSAPGit(ctx.client, ctx.args, ctx.authInfo));
   reg('SAPContext', (ctx) => handleSAPContext(ctx.client, ctx.args, ctx.cache, ctx.cacheSecurity));
@@ -750,8 +782,18 @@ export function classifyMultiTargetSapError(
   target: string,
   toolName: string,
   identity: 'per-user' | 'shared' = 'per-user',
+  mutation = false,
 ): MultiTargetSapFailure | undefined {
+  const readBack =
+    'ARC-1 cannot confirm whether the change was applied. Do not retry blindly; read the object back, including its inactive version, before any replay.';
   if (error instanceof AdtNetworkError) {
+    if (mutation) {
+      return {
+        code: 'SAP_REQUEST_FAILED',
+        message: `ARC-1 could not complete the request to SAP target ${target} while running ${toolName}. Check Cloud Connector and SAP availability. ${readBack}`,
+        retryable: false,
+      };
+    }
     return {
       code: 'SAP_REQUEST_FAILED',
       message: `ARC-1 could not reach SAP target ${target} while running ${toolName}. Check Cloud Connector and SAP availability, then try again now.`,
@@ -790,8 +832,10 @@ export function classifyMultiTargetSapError(
       message:
         identity === 'shared'
           ? `SAP denied this operation for the shared technical user on target ${target}. Ask an SAP administrator to grant only the required read authorization before trying again.`
-          : `SAP denied this operation for the propagated user on target ${target}. Grant the required SAP authorization, then try again now.`,
-      retryable: identity !== 'shared',
+          : error.isServerError && mutation
+            ? `SAP denied this operation for the propagated user on target ${target}. Grant the required SAP authorization. ${readBack}`
+            : `SAP denied this operation for the propagated user on target ${target}. Grant the required SAP authorization, then try again now.`,
+      retryable: identity !== 'shared' && !(error.isServerError && mutation),
     };
   }
   if (error.statusCode === 401 || (error.statusCode === 403 && identity === 'per-user')) {
@@ -813,6 +857,42 @@ export function classifyMultiTargetSapError(
     };
   }
   if (error.isServerError) {
+    // Deterministic refusals; only structured SAP exception types qualify at 5xx, never free text.
+    const typeId = classification?.details?.exceptionType;
+    let refusal: string | undefined;
+    if (
+      classification?.category === 'object-exists' &&
+      error.creationOutcome === 'unknown' &&
+      typeId === 'ExceptionResourceCreationFailure'
+    ) {
+      refusal =
+        'SAP reports that an object with this name already exists, so this create request did not create it. It may be your own from an earlier attempt. Do not retry the create; read the existing object and check its package and source before deciding the next step.';
+    } else if (typeId === 'ExceptionResourceLockedByAnotherUser') {
+      refusal = 'SAP reports that the object is locked by another user or session. Do not retry until it is released.';
+    } else if (classification?.category === 'method-not-supported') {
+      refusal = 'SAP does not support this operation on this target. Do not retry it unchanged.';
+    } else if (classification?.category === 'include-not-initialized') {
+      refusal =
+        'SAP reports that the class test include is not initialized. Write it with SAPWrite update include="testclasses" instead of retrying.';
+    }
+    if (refusal) {
+      const suffix =
+        mutation && classification?.category !== 'object-exists'
+          ? ' Read the object back before repeating the change.'
+          : '';
+      return {
+        code: 'SAP_REQUEST_FAILED',
+        message: `SAP target ${target} refused ${toolName}. ${refusal}${suffix}`,
+        retryable: false,
+      };
+    }
+    if (mutation) {
+      return {
+        code: 'SAP_REQUEST_FAILED',
+        message: `SAP target ${target} returned a server error while running ${toolName}. ${readBack}`,
+        retryable: false,
+      };
+    }
     return {
       code: 'SAP_REQUEST_FAILED',
       message: `SAP target ${target} returned a server error while running ${toolName}. Retry once; if it persists, check SAP health and short dumps.`,
@@ -996,6 +1076,24 @@ export async function handleToolCall(
     );
   }
 
+  // Multi-target: the HTTP gate decides first; repeat the same decision so direct dispatch cannot bypass it.
+  if (config.targetId && multiTargetInvocationDecision(toolName, normalizedArgs, config) !== 'allowed') {
+    logger.emitAudit({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      event: 'safety_blocked',
+      requestId: reqId,
+      user,
+      clientId,
+      clientAgent,
+      target: config.targetId,
+      identity,
+      operation: `${toolName}${actionOrType ? `.${actionOrType}` : ''}`,
+      reason: 'Operation unavailable for this multi-target route',
+    });
+    return errorResult('This tool, input, or operation is not enabled for this multi-target connection.');
+  }
+
   // Validate tool arguments with Zod schema (runs AFTER scope + deny check).
   const isBtp = config.systemType === 'btp';
   const schema = getToolSchema(toolName, isBtp);
@@ -1167,6 +1265,9 @@ export async function handleToolCall(
             config.targetId,
             toolName,
             config.ppEnabled ? 'per-user' : 'shared',
+            // Multi-target requires standard tools, so read-scoped hyperfocused delegators never reach here.
+            !['read', 'data', 'sql'].includes(policy?.scope ?? 'read') ||
+              Boolean(err.creationOutcome || err.activationOutcome || err.pluginPostOutcome),
           );
           if (failure) {
             if (failure.event) {
@@ -1196,7 +1297,9 @@ export async function handleToolCall(
           }
         }
 
-        return errorResult(formatErrorForLLM(err, message, toolName, args, config));
+        return errorResult(
+          formatErrorForLLM(err, message, toolName, args, config, isPerUserClient === true && !!config.samlIdpKeyFile),
+        );
       } finally {
         if (ownsDataResultScope) dataResultScope.release();
       }

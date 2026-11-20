@@ -50,6 +50,9 @@ nav:
   - Home: index.md
   - Newsletter: newsletter.md
   - Quickstart: quickstart.md
+  - Security:
+      - Security Review: security.md
+      - Hardening Guide: security-guide.md
   - Agent Plugin: agent-plugin.md
   - Install in Claude: install-in-claude.md
   - Deployment:
@@ -78,6 +81,7 @@ nav:
       - Other Authentication Methods:
           - API Key: api-key-setup.md
           - OAuth / JWT: oauth-jwt-setup.md
+          - Experimental Local SSO (SAML bearer, no BTP): local-sso-experimental.md
   - Using ARC-1:
       - Tools Reference: tools.md
       - Extensions (Custom Tools): extensions.md
@@ -94,7 +98,6 @@ nav:
       - Configuration Precedence: configuration-precedence.md
       - SAP API Policy & Architecture: sap-api-policy-and-architecture.md
       - vs SAP ABAP MCP Server: arc-1-vs-sap-abap-mcp-server.md
-      - Security: security-guide.md
       - Operations:
           - Overview: operations.md
           - Log Analysis: log-analysis.md

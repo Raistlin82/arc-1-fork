@@ -22,8 +22,9 @@ Distributed as npm package (`arc-1`) and Docker image (`ghcr.io/arc-mcp/arc-1`).
 6. **Safe defaults, opt-in power** — read-only by default; free SQL blocked; package allowlist defaults to `$TMP`; everything forbidden until the admin allows it.
 7. **Single target by default; explicit BTP exceptions** — ADR-0006 permits default-off discovered
    pinned/aggregate targets; ADR-0007 keeps shared Basic mutation-free and one-instance. ADR-0010
-   permits only scoped CLAS/INTF writes and whole-owner activation on pinned strict-PP routes with
-   destination restrictions and exact verified write grants. Aggregate/Copilot remain mutation-free.
+   permitted scoped CLAS/INTF writes on pinned strict-PP routes with destination restrictions and
+   exact verified write grants; ADR-0011 replaces its adapter with the shared handlers for
+   the listed `SAPWrite` actions and activation. Aggregate/Copilot remain mutation-free.
    Broader writes or another discovery/auth model require a new ADR/security review.
 8. **ABAP execution and RFC belong in extensions** — no built-in report/class execution, direct RFC,
    or installed/temporary ABAP helpers. Core uses existing SAP APIs and TypeScript; user ABAP
@@ -64,6 +65,9 @@ TEST_BTP_SERVICE_KEY_FILE=~/.config/arc-1/btp-abap-service-key.json npm run test
 ```
 
 Pre-commit: Husky runs `lint-staged` → Biome auto-fixes staged `*.{ts,js,json}`. Never hand-fix formatting.
+
+Pre-push: Husky runs `check:sizes`, `validate:policy` and `typecheck` on the working tree, not the pushed
+commits. Tests, full lint and build are not included; CI remains authoritative.
 
 ## Deploying ARC-1 (not developing it)
 
@@ -111,6 +115,7 @@ Full per-option details (defaults, clamps, layer interactions): [docs_page/confi
 | `ARC1_OAUTH_DCR_TTL_SECONDS` | DCR client_id lifetime (default `0` = no expiry; positive opts into expiry, clamped 60s–90d) |
 | `ARC1_DCR_SIGNING_SECRET` | Dedicated HMAC secret so `cf deploy` doesn't invalidate cached client_ids |
 | `ARC1_ALLOWED_ORIGINS` | CORS allowlist for browser MCP clients (empty = CORS off) |
+| `ARC1_ALLOWED_CLIENT_IPS` | Default-off BTP CF-routed IP/CIDR allowlist on `x-cf-true-client-ip` (never XFF); `/health` exempt; refused when `VCAP_APPLICATION` is absent, but direct C2C callers can forge the header |
 | `ARC1_PUBLIC_URL` | Advertised OAuth-metadata URL when behind a reverse proxy |
 | `SAP_BTP_SERVICE_KEY[_FILE]` / `SAP_BTP_OAUTH_CALLBACK_PORT` | BTP ABAP service key / OAuth callback port |
 | `SAP_SYSTEM_TYPE` | `auto` (default), `btp`, `onprem` |
@@ -128,10 +133,11 @@ Full per-option details (defaults, clamps, layer interactions): [docs_page/confi
 | `ARC1_MAX_DATAPREVIEW_RESPONSE_BYTES` / `ARC1_MAX_CONCURRENT_DATA_RESULTS` | Cumulative successful data-preview body cap per tool call (default 2 MiB, after decompression/before string conversion) / process-wide data-result cap held through parse + serialization + audit (default 2); positive integers only, `0` does not disable; on BTP use the [RAM sizing table](docs_page/btp-administration.md#data-preview-ram-sizing) before raising either value |
 | `ARC1_AUTH_RATE_LIMIT` / `ARC1_MCP_HTTP_RATE_LIMIT` / `ARC1_RATE_LIMIT` | Per-IP OAuth cap (20/min), optional shared MCP HTTP/IP override (unset derives `max(OAuth×30,600)`; 0 disables), and per-user MCP cap (default 0 = off; ADR-0004) |
 | `SAP_BTP_DESTINATION` / `SAP_BTP_PP_DESTINATION` | BTP Destination names (PP = PrincipalPropagation type) |
-| `ARC1_MULTI_TARGET_ENDPOINTS` | Experimental/default-off BTP CF mode: marked subaccount destinations → pinned `/<SYSTEM-OR-ALIAS>/<CLIENT>/mcp` plus mutation-free `/multi/mcp`; scoped pinned PP writes require ADR-0010 gates; requires XSUAA, cache none, standard tools, UI/plugins off; PP targets are strict. |
+| `ARC1_MULTI_TARGET_ENDPOINTS` | Experimental/default-off BTP CF mode: marked subaccount destinations → pinned `/<SYSTEM-OR-ALIAS>/<CLIENT>/mcp` plus mutation-free `/multi/mcp`; pinned PP writes require ADR-0011 gates; requires XSUAA, cache none, standard tools, UI/plugins off; PP targets are strict. |
 | `ARC1_MULTI_TARGET_ALLOW_BASIC_AUTH` | Default false. Permits shared BasicAuthentication targets in multi mode; never PP fallback, credentials stay request-local, and v1 requires exactly one CF instance. |
 | `ARC1_MULTI_TARGET_AUTHORIZATION` | Default/unset `standard` = standard access. Opt-in `xsuaa-attribute` filters IAM-assigned targets, not discovered SAP accounts; multi-only, never fallback. Admin diagnostics do not grant execution. Contract/readiness: ADR-0008 + `docs/plans/xsuaa-target-authorization.md`. |
 | `SAP_PP_ENABLED` / `SAP_PP_STRICT` / `SAP_PP_ALLOW_SHARED_COOKIES` | Principal propagation + strict mode + cookie-coexistence escape hatch |
+| `SAP_PP_SAML_*` | Experimental single-target OIDC→SAP SAML bearer issuer; explicit trusted NameID claim, RSA key/cert, audience and issuer required. See docs_page/local-sso-experimental.md. |
 | `SAP_DISABLE_SAML` | Disable SAML redirect — never on BTP ABAP / S/4 Public Cloud |
 | `ARC1_MINIMAL_ERRORS` | Hide SAP diagnostic details from client-facing tool errors; keep request correlation for operators |
 | `ARC1_LOG_HTTP_DEBUG` | HTTP debug fields in audit; bodies are centrally redacted before sink writes |
@@ -210,16 +216,19 @@ tests/                          # helpers/ unit/ integration/ e2e/ evals/ fixtur
 Terse routing only — full gotchas per row in [docs/dev-guide.md](docs/dev-guide.md).
 
 For opt-in target authorization, also read [ADR-0008](docs/adr/0008-opt-in-xsuaa-target-authorization.md)
-and [its contract](docs/plans/xsuaa-target-authorization.md); [ADR-0010](docs/adr/0010-pinned-pp-multi-target-writes.md) adds the scoped pinned-write qualification.
+and [its contract](docs/plans/xsuaa-target-authorization.md); [ADR-0011](docs/adr/0011-broader-pinned-pp-mutations.md) defines pinned writes.
 
 | Task | Files (+ key gotcha) |
 |------|------|
 | BTP deployment/docs guidance | `docs_page/btp-overview.md` → one canonical runbook or task reference; per-user targets: `docs_page/multi-target-authorization.md`. Use the deployed artifact's source revision; research/specs are not shipped settings. Maintenance and optional walkthrough checks: `docs/dev-guide.md#btp-documentation`. |
-| Multi-target ADR-0006/0007 work | Read `docs/adr/0006-experimental-read-only-multi-target.md` and `docs/adr/0007-shared-basic-identity-for-read-only-multi-target.md`, then the normative `docs/plans/destination-discovered-multi-target-v1.md`, `docs_page/multi-target-setup.md`, and `docs_page/multi-target-administration.md`; code is `src/server/{destination-discovery,destination-registry,multi-target-*,server,http}.ts`, `src/authz/policy.ts`, and `src/handlers/{dispatch,feature-cache}.ts`; focused tests are `tests/unit/server/{destination-discovery,destination-registry,multi-target-*,http-destinations,http-multi-target-routes,mta-descriptor}.test.ts`, `tests/unit/authz/policy.test.ts`, and `tests/unit/handlers/multi-target-errors.test.ts`. For writes also read ADR-0010, `docs/plans/2026-10-22-multi-target-pinned-writes.md` and `docs_page/multi-target-writes.md`; pipeline/tests: `src/handlers/write/pinned*.ts`, `src/adt/pinned-write-policy.ts`, `tests/unit/handlers/pinned-writes.test.ts`. Keep aggregate/Basic mutation-free and explicit action/type/input allowlists; ATC/Unit are workload-producing reads. Basic is default-off/shared/one-instance and never PP fallback. `SAPTargets` is aggregate-only. Real `sap-sysid`/`sap-client` remain mandatory. |
+| Multi-target ADR-0006/0007 work | Read `docs/adr/0006-experimental-read-only-multi-target.md` and `docs/adr/0007-shared-basic-identity-for-read-only-multi-target.md`, then the normative `docs/plans/destination-discovered-multi-target-v1.md`, `docs_page/multi-target-setup.md`, and `docs_page/multi-target-administration.md`; code is `src/server/{destination-discovery,destination-registry,multi-target-*,server,http}.ts`, `src/authz/policy.ts`, and `src/handlers/{dispatch,feature-cache}.ts`; focused tests are `tests/unit/server/{destination-discovery,destination-registry,multi-target-*,http-destinations,http-multi-target-routes,mta-descriptor}.test.ts`, `tests/unit/authz/policy.test.ts`, and `tests/unit/handlers/multi-target-errors.test.ts`. For writes also read ADR-0011 (supersedes ADR-0010's adapter), `docs/plans/2026-11-12-pinned-writes-shared-handlers.md` and `docs_page/multi-target-writes.md`; code/tests: `src/server/multi-target-write-surface.ts`, the `pinnedWrite` barrier in `src/adt/http.ts`, the `targetId` recheck in `dispatch.ts`, `tests/unit/handlers/pinned-shared-{handlers,families}.test.ts`. Keep aggregate/Basic mutation-free and an explicit action allowlist (types/inputs come from the single-target schema); ATC/Unit are workload-producing reads. Basic is default-off/shared/one-instance and never PP fallback. `SAPTargets` is aggregate-only. Real `sap-sysid`/`sap-client` remain mandatory. |
 | Add new read operation | `src/adt/client.ts`, `src/handlers/read.ts`, `src/handlers/tools.ts` (+ `src/adt/xml-parser.ts`, `src/adt/types.ts` for structured) |
+| Shared mutation lifecycle | `src/adt/crud.ts` (`withLockedMutation`), `src/adt/http.ts` (`pinnedWrite` barrier); pinned targets use the single-target handlers — never add a per-resource pinned adapter. See `docs/dev-guide.md#shared-mutation-lifecycle`. |
+| SHLP partial metadata | `src/adt/search-help.ts`, `src/handlers/search-help*.ts`, read/context registry + schemas — active only; discovery presence is independent of Accept MIME entries |
 | Stored SAPscript text (`SAPQuery action=long_text`) | `src/adt/stored-text/`, `src/handlers/{query-input,query-tool,long-text,long-text-input}.ts`, `tests/evals/scenarios/stored-text.ts` — exact-key classic ITF only; data scope/preview, no RFC/helper/free-SQL fallback. See `docs/research/2026-10-17-stored-text-integration-evals.md`. |
 | Add ADT slash alias to `SLASH_TYPE_MAP` | `src/handlers/object-types.ts`, `tests/unit/handlers/slash-type-map.test.ts` — needs `docs/research/abap-types/types/<short>.md` evidence, verify live `<adtcore:type>` first (#218) |
 | SAPWrite TABL subtype routing (TABL/DT vs /DS, #285) | `src/handlers/object-types.ts`, `src/handlers/write-helpers.ts`, `src/handlers/write/create.ts`, `src/handlers/{schemas,tools}.ts` — reads collapse to bare `TABL` |
+| Service binding OData info (`SAPRead type=SRVB include=service_info`) | `src/adt/service-info.ts`, `src/handlers/{read,schemas,tools}.ts`, `tests/unit/handlers/service-info.test.ts` — uncached; unpublished means no entity-set evidence, not an empty service. Contract: `docs/research/abap-types/types/srvb.md` |
 | AUTH/FEATURE_TOGGLE/ENHO/VERSIONS/MSAG-style reads | `src/adt/client.ts`, `src/adt/xml-parser.ts`, `src/adt/types.ts`, `src/handlers/read.ts`, `src/handlers/{schemas,tools}.ts` |
 | Add fix proposal / quickfix | `src/adt/devtools.ts`, `src/handlers/diagnose.ts`, `src/handlers/{schemas,tools}.ts`, tests — proposal POST URIs stay exact; SAP context uses headers (#993) |
 | OData-based read (non-ADT) / FLP ops | `src/adt/ui5-repository.ts` → `src/handlers/read.ts` / `src/adt/flp.ts` → `src/handlers/manage.ts` |
@@ -250,7 +259,7 @@ and [its contract](docs/plans/xsuaa-target-authorization.md); [ADR-0010](docs/ad
 | ENQU (lock object) read/write (on-prem + BTP) | `src/adt/lock-object.ts`, `src/handlers/{read,write-helpers}.ts`, `src/handlers/write/create.ts` — `source` is the SAPRead JSON; a table change needs explicit `lockParameters` (details: dev-guide) |
 | ENHO/XHB (BAdI implementation) write | `src/adt/enhancement-impl.ts`, `src/handlers/write-helpers.ts`, `src/handlers/write/create.ts`, `src/handlers/object-types.ts` — `src/adt/enho-filter.ts` — `source` is the SAPRead JSON; create = container POST, then locked PUT of the implementations (implementations in the POST fail in transportable packages; details: dev-guide) |
 | Master language on create (#343) | `src/adt/ddic-xml.ts`, `src/handlers/write-helpers.ts`, `src/handlers/write/create.ts` — see docs/research/2026-06-04-issue-343-masterlanguage-on-create.md |
-| ADT discovery / MIME types | `src/adt/discovery.ts`, `src/adt/http.ts`, `src/adt/accept-fallback.ts`, `src/adt/legacy-content-handler.ts` — #907 7.40 wildcard-400 retry; never cache it (the subtree cache leaks it into /source). |
+| ADT discovery / MIME types | `src/adt/discovery.ts`, `src/adt/http.ts`, `src/adt/accept-fallback.ts`, `src/adt/legacy-content-handler.ts` — negotiated 406/415 headers apply to the exact normalized path; the #907 7.40 wildcard-400 retry stays uncached. |
 | SAP error classification + hints | `src/adt/errors.ts`, `src/handlers/dispatch.ts` — ground hints in verified SAP Notes; release-aware via `src/adt/release.ts` (#293) |
 | SAP error text (entity decoding) | `src/adt/errors.ts` (`findElements`), `src/adt/xml-entities.ts` — extracted text is decoded once, never decode it again; regexes on the raw `responseBody` still see `&amp; &lt; &gt;` |
 | Release-gated content-type fallback | `src/adt/crud.ts` (`CONTENT_TYPE_FALLBACKS` — narrow allowlist, 415-only retry) |
@@ -259,7 +268,7 @@ and [its contract](docs/plans/xsuaa-target-authorization.md); [ADR-0010](docs/ad
 | Live ADT type probe | `scripts/probe-adt-types.ts` (`npm run probe`), `src/probe/`, `tests/unit/probe/replay.test.ts` |
 | CDS impact classifier | `src/adt/cds-impact.ts`, `src/adt/codeintel.ts`, tests |
 | Inactive syntax check / post-save check | `src/adt/devtools.ts`, `src/handlers/write-helpers.ts` (`tryPostSaveSyntaxCheck`) |
-| Procedural unit surgery (`edit_unit` / `add_unit`) | `src/context/unit-surgery.ts`, `src/handlers/write/unit-surgery.ts` — PROG/INCL only; lock before read; `add_unit` appends at physical EOF without moving INCLUDEs; incomplete MODULEs are refused. |
+| Procedural edits (`edit_unit` / `add_unit` / `edit_content`) | `src/context/{unit-surgery,content-splice}.ts`, `src/handlers/write/unit-surgery.ts` — PROG/INCL only; `edit_content` requires a fresh hash and unique exact match; lock before read; `add_unit` appends at physical EOF without moving INCLUDEs; incomplete MODULEs are refused. |
 | Method-level surgery | `src/context/method-surgery.ts` — `<localclass>~<method>` specifiers; ambiguous bare names error |
 | Program text-pool activation (`REPT` / `PROG/PX`, #940) | `src/handlers/{object-types,activate}.ts`, `src/adt/text-elements.ts` — use the pool URI and its packageRef. Evidence and limitations: `docs/research/abap-types/types/rept.md`. |
 | SAPRead method for class-local includes | `src/handlers/read.ts`, `src/handlers/object-types.ts`, `tests/unit/handlers/read.test.ts` — explicit `include=` wins (including `main`); otherwise `lhc_*`/`lcl_*`→implementations, `ltc_*`→testclasses, global/bare→MAIN; raw include reads bypass the MAIN-only cache key |
@@ -287,7 +296,7 @@ and [its contract](docs/plans/xsuaa-target-authorization.md); [ADR-0010](docs/ad
 | Experimental live relations | `src/handlers/{live-relations,relation-input,relation-tool}.ts`, `src/adt/{repository-relations,relation-objects}.ts`, `src/context/relation-walk.ts` — automatic capability/deny-action projection, no result cache; docs_page/live-relations.md |
 | Experimental data-source blocklist | `src/adt/{data-source-name,sql-source-analyzer,data-source-policy,internal-data-operations}.ts` + `client.ts` — one canonicalizer for every policy input; blank=off but a stray comma fails startup (details: dev-guide) |
 | Dump feed filters | `src/adt/feed-schema.ts`, `src/handlers/dump-filter-inputs.ts`, `src/adt/diagnostics.ts` — discovery is optional; preserve the legacy unfiltered request shape. See `docs/dev-guide.md#dump-feed-filters`. |
-| Runtime + source-state diagnostics | `src/adt/diagnostics.ts`, `src/adt/dump-feed-detail.ts`, `src/handlers/diagnose.ts`, `{schemas,tools}.ts` — 7.50 has no dump-detail resource: a detail 404 is answered from the dump feed's HTML summary, which covers 24 hours (details: dev-guide) |
+| Runtime + source-state diagnostics | `src/adt/{diagnostics,dump-feed-detail,dump-list-window}.ts`, `src/handlers/diagnose.ts`, `{schemas,tools}.ts` — the older dump feed can cover only 24 hours (verified on 7.50): 7.50 answers a detail 404 from the feed's HTML summary, and lists get a window note (details: dev-guide) |
 | Authorization trace (`SAPDiagnose authorization_trace`) | `src/adt/authorization-trace.ts` (`getAuthorizationTrace`/`decodeAuthTraceRows`), `diagnostics.ts` re-export, `diagnose.ts`, `{schemas,tools}.ts`, `policy.ts` — data scope + `SAP_ALLOW_DATA_PREVIEW`; on-prem `SUAUTHVALTRC` via `runTableQuery`, TOBJ decode, client-side sort; not SU53/STAUTHTRACE (details: `docs/research/2026-07-09-su53-authorization-analysis-adt-surface.md`) |
 | OData/SQL perf insight (`SAPDiagnose odata_perf`/`cds_sql`) + ICF-inactive guard | `src/adt/diagnostics.ts` (`probeODataPerformance`/`verdictFromStatistics`, `getCdsCreateStatements`/`parseCdsCreateStatements`), `diagnose.ts`, `{schemas,tools}.ts`, `policy.ts`, `errors.ts` (`icf-service-inactive` = 403 "Service cannot be reached" HTML) — odata_perf=data scope (host-relative path only, SSRF guard; `gwhub`→framework on 7.50); `cds_sql` POST createstatements + CSRF + `Accept: …ddl.createStatements+xml`; `statement` is an ARRAY_TAG (read `node.statement` as array). Verified 750/758/816 |
 | ST05 SQL-trace control (`SAPDiagnose sql_trace_state`/`set_sql_trace_state`/`sql_trace_directory`) | `src/adt/diagnostics.ts` (`getSqlTraceState`/`setSqlTraceState`/`getSqlTraceDirectory` + `parseSqlTraceState`/`parseSqlTraceDirectory`), `diagnose.ts`, `{schemas,tools}.ts`, `policy.ts` — `set`=write/Update GET→edit-raw-XML→PUT `/st05/trace/state` (CT `…perf.trace.state.v1+xml`, flips ALL instances); `sql_trace_directory` returns SAP's TMC deep-link (no ADT SQL-record API). ADT-native record reader = Cross Trace `/sap/bc/adt/crosstrace/*` (follow-up; present on 758, request types incl. OData V4). Verified 758 |
@@ -306,6 +315,7 @@ and [its contract](docs/plans/xsuaa-target-authorization.md); [ADR-0010](docs/ad
 | Scope enforcement / auth scopes | `src/authz/policy.ts` (`ACTION_POLICY`), `src/handlers/dispatch.ts`, `src/server/server.ts`, `xs-security.json` |
 | Auth combination rule | `src/server/config.ts` (`validateConfig`), `src/server/types.ts`, `docs_page/enterprise-auth.md` |
 | Layer B auth mechanism | `src/adt/http.ts` (`applyAuthHeader` — Basic / `samlAuthorization`→`Authorization`+`x-sap-security-session:create`), `src/server/server.ts` (`applyPerUserAuthTokens` sets PP creds incl. SAMLAssertion for S/4HC; `buildAdtConfig` perUser flag — strips shared creds). New Layer B field must also be mapped in `src/adt/client.ts` httpConfig + set only per-user |
+| Local SAML bearer issuer | `src/adt/saml-bearer.ts`, `src/server/saml-bearer-client.ts`, `docs_page/local-sso-experimental.md` — require an explicit administrator-controlled NameID claim; `email` additionally needs boolean `email_verified=true`. |
 | Safety config option | `src/adt/safety.ts`, `src/server/config.ts`, `src/server/types.ts` |
 | AdtClient instance field / `withSafety()` clone | `src/adt/client.ts` — clone is `Object.assign(Object.create(proto), this, {safety})`; new own fields share automatically (use TS `private`, never `#private`) (#333) |
 | `allowedPackages` pattern syntax | `src/adt/safety.ts`, `src/adt/package-hierarchy.ts`, `src/handlers/write-helpers.ts` (`enforceAllowedPackageForObjectUrl`, fail-closed) — details: dev-guide |
@@ -317,6 +327,7 @@ and [its contract](docs/plans/xsuaa-target-authorization.md); [ADR-0010](docs/ad
 | AFF schema / validation | `src/aff/schemas/` + `src/aff/validator.ts` / `src/handlers/write/create.ts` (create/batch_create paths) |
 | CI coverage / reliability reporting | `scripts/ci/coverage-summary.mjs`, `scripts/ci/collect-test-reliability.mjs`, `.github/workflows/test.yml` |
 | Agent skill / clean-core chain | `skills/<name>/SKILL.md` + `skills/README.md`; chain: `skills/sap-erp-clean-core-refactor/{chain.json,WORKFLOW.md,runtime/}` — instructional `SAPTool(...)` refs are CI-validated against `tests/fixtures/tool-definitions` (`check:skill-refs`); changing the tool surface can fail skill-docs CI. A NEW tool action must also be either adopted by an `action-catalog.json` operation or classified in `scripts/ci/clean-core-tool-coverage.json`, else `check:clean-core-skills` fails. The Clean Core graph is not committed: it is downloaded from the pin in `knowledge/clean-core-extensibility/UPSTREAM.json`, sha256-verified — best effort in `npm run build`/`prepare` (never breaks the server install), fail closed in `npm run clean-core:graph-sync` (CI), `prepack` under pack/publish and the checks |
+| Where-used CI / #1057 | `tests/integration/where-used-details.integration.test.ts`, `tests/unit/workflows/where-used-containment.test.ts`, `vitest.where-used-diagnostic.config.ts` — required native reads use the pinned E2E interface/class pair; fresh-activation diagnostics are separately non-blocking. Limits: `docs/dev-guide.md#where-used-ci-containment-1057`. |
 
 ## Architecture: Request Flow
 
@@ -325,7 +336,7 @@ and [its contract](docs/plans/xsuaa-target-authorization.md); [ADR-0010](docs/ad
 3. **SAP client** (`src/server/server.ts`): normally `ppEnabled` + JWT → per-user SAP session; ADR-0007 multi-target Basic resolves one request-local shared credential behind the process guard.
 4. **`handleToolCall`** (`src/handlers/dispatch.ts`): arg normalization (`stripLlmEmptyValues`) → scope check (`ACTION_POLICY`) → Zod validation → per-tool handler → package check for writes. Source reads consult the inactive-list + ETag source cache.
 5. **ADT client** (`src/adt/{client,crud,devtools}.ts`): every endpoint behind `checkOperation(safety, …)`.
-6. **HTTP** (`src/adt/http.ts`): MIME negotiation, conditional GET, CSRF auto-refresh, 406/415 one-retry, cookie hot-reload, stateful lock→modify→unlock sessions. Scoped pinned mutations use only the dedicated pipeline, per-request noReplay, bounded cleanup and whole-owner activation validator.
+6. **HTTP** (`src/adt/http.ts`): MIME negotiation, conditional GET, CSRF auto-refresh, 406/415 one-retry, cookie hot-reload, stateful lock→modify→unlock sessions. Write-enabled pinned clients turn off transient retries for POST/PUT/DELETE, resend a 403 only on the CSRF challenge, and check every `corrNr` and lock request against both transport lists.
 7. **SAP**: native auth (`S_DEVELOP`, `S_ADT_RES`, `S_TRANSPRT`).
 
 **Key invariant:** scope ∧ safety ∧ SAP auth — all must pass; pinned writes additionally require exact verified target capability and destination restrictions.
@@ -402,15 +413,15 @@ never present mocks or skipped tests as live coverage. Documentation-only change
 - Never commit `.env`, `cookies.txt`, `.arc1.json`; sensitive fields are redacted in logs.
 - **Safety config is the server ceiling** — per-user scopes only restrict.
 - **Multi-system boundary** — single target remains the default. ADR-0006/0007/0008 define discovered
-  BTP/XSUAA routes, shared Basic read-only identity and verified target grants. ADR-0010 qualifies
-  only pinned strict-PP CLAS/INTF create/main update, CLAS main method edit and whole-owner activation.
-  Every call requires the server ceiling, destination opt-in/restrictions, read access, raw write scope
+  BTP/XSUAA routes, shared Basic read-only identity and verified target grants. ADR-0011 (
+  superseding ADR-0010's adapter) admits listed `SAPWrite` actions and activation on pinned strict-PP
+  routes through the single-target handlers. Every call requires the server ceiling, destination opt-in/restrictions, read access, raw write scope
   and exact write grant. Aggregate/Copilot and Basic remain mutation-free; no PP fallback. Follow the
   normative plans and R23 in `docs/security-model.md`; broader mutations or another discovery/auth
   model require a new ADR/security review. Separate instances remain the stronger isolation option.
 - **Per-user auth never inherits shared credentials** — `buildAdtConfig(..., { perUser: true })` strips username/password/cookies; any new Layer B field must respect the flag.
 - **All ADT endpoints have safety guards** — no unguarded `http.{get,post,put,delete}`.
-- **Cookie hot-reload**: `SAP_COOKIE_FILE` re-read before the 401 retry, and again on the next request after a persistent 401; `SAP_COOKIE_STRING` cannot hot-reload.
+- **Cookie hot-reload**: `SAP_COOKIE_FILE` re-read during auth recovery and before CSRF bootstrap outside a live stateful context; changed cookies reset the old session, empty/unreadable files preserve known cookies, and `SAP_COOKIE_STRING` cannot hot-reload.
 - **Error types**: `AdtApiError` / `AdtSafetyError` / `AdtNetworkError` / `AdtResponseLimitError`; `dispatch.ts` formats them with LLM-friendly hints.
 - **Stateful sessions** for lock→modify→unlock; CSRF auto-managed (`src/adt/http.ts`).
 - **ADT locks never cross an MCP round-trip** — `lock→modify→unlock` completes inside ONE synchronous tool call; never elicit inside a lock block, never expose writes as async MCP Tasks holding a lock ([ADR-0006](docs/adr/0006-mcp-legacy-era-until-triggers.md)).

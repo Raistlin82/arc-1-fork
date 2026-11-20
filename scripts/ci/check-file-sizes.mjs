@@ -28,7 +28,7 @@ const BUDGETS = {
   // write.ts is now a thin SAPWrite orchestrator (prologue + ctx + action dispatch) after the
   // Stage D split into src/handlers/write/{create,update-delete,class-surgery,rap}.ts. The action
   // submodules ride the default src budget; keep this tight so the dispatcher can't reabsorb them.
-  'src/handlers/write.ts': 300,
+  'src/handlers/write.ts': 302, // +4 for structural include owner lookup and edit_content dispatch.
   // tools.ts holds every tool's JSON schema. The #520 description trim (write-mode tools/list
   // 87→66 KB to clear the Copilot-for-Eclipse gateway limit) shrank it; lowered to match. The
   // CLIENT-SAFETY size guard is scripts/ci/check-tool-schema-budget.ts — trim there before raising this.
@@ -43,11 +43,10 @@ const BUDGETS = {
   // +4: parent function group for SAPTransport check/history.
   // SAPQuery action-dependent schemas now live in query-tool.ts; lower the ratchet after extraction.
   // +references packages/detail: keep two small parameter definitions beside SAPNavigate.
-  // +1 net: SAPDiagnose atc_results/atc_remote enum + description line (W8), offset by trimmed
-  // descriptions; their inputs live in diagnose-fields.ts and the rules in atc-results-input.ts.
-  'src/handlers/tools.ts': 1777, // +5: explicit direct package scope (#1065).
-  // +9: SAPDiagnose atc_results/atc_remote enum, atcResult field and shared objects/timeout refinements (W8).
-  'src/handlers/schemas.ts': 1582, // +31: direct package inputs and mode validation (#1065).
+  // Fork: +SAPDiagnose atc_results/atc_remote enum + description line, atcResult field and shared
+  // objects/timeout refinements (W8); their inputs live in diagnose-fields.ts and atc-results-input.ts.
+  'src/handlers/tools.ts': 1789, // Combined SHLP/extension guidance and own-method signature selector.
+  'src/handlers/schemas.ts': 1601, // Includes service-info validation (#1199) and exact-text edit inputs.
   // +shared parseNamedItems relocated here from transport.ts (now used by ATC variants too) +
   // parseAtcSystemCheckVariant (FEAT-68 ATC variant listing) + parseFunctionModuleProperties and
   // the pre-7.52 projectexplorer function-group parser.
@@ -88,13 +87,17 @@ const BUDGETS = {
   // Typed attempt accounting, scoped response ownership, and stateful-context teardown must stay at
   // the transport choke point. Relation parsing/traversal and feature algorithms live elsewhere.
   // +3: classify caller cancellation before generic network wrapping (#1045).
-  'src/adt/http.ts': 1563, // Scoped no-replay options and bounded, observable owning-session cleanup (#1080).
+  // +50: bounded same-cookie local-SAML security-session logoff stays beside the owning cookie jar
+  // and stateful clone lifecycle; no separate transport or cross-user session pool is introduced.
+  // +28: ADR-0011 pinned write barrier (no transient retry, CSRF-only 403 resend, dual request ceiling on corrNr).
+  'src/adt/http.ts': 1644,
+  'tests/unit/adt/http.test.ts': 3008, // Same-cookie logoff must omit SAML Authorization.
   // #817: reject absent CTS documents at the existing list/get parser boundary.
   'src/adt/transport.ts': 1477, // Exhaustive lock-holder parsing extracted to transport-locks.ts (#1080).
   // Target-authorization helpers are extracted; retain shared transport renewal and fail-closed
   // XSUAA startup from main.
   // PP pool wiring and secret-free reuse audit status; logic lives in per-user-transport.ts (#1085).
-  'src/server/server.ts': 1496,
+  'src/server/server.ts': 1497,
 };
 
 const DEFAULT_SRC = 1500;
