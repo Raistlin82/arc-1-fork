@@ -38,9 +38,9 @@ Optionally:
 ### 1a. Find the cube (if the user gave a description, not a name)
 
 ```
-SAPSearch(searchType="object", query="<keyword>*", maxResults=50)
+SAPSearch(searchType="object", query="<keyword>*", objectType="DDLS", maxResults=50)
 ```
-Then keep only `DDLS` results; `objectType` filters `source_code` / `tadir_lookup`, not normal name search.
+A list that reaches `maxResults` is cut: narrow the pattern.
 
 Pick the candidate whose name/description matches an analytical cube. If multiple match, list them and ask.
 

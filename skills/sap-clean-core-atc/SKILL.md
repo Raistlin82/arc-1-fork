@@ -14,12 +14,12 @@ target architecture.
 
 ```text
 <package-or-object> [--landscape=auto|s4-public-cloud|s4-private-cloud|s4-on-premise|btp-abap-environment]
+                    [--assessment-variant=<name>] [--gate-variant=<name>]
+```
 
 CLI flags stay kebab-case; every EMITTED landscape value uses the machine contract's snake_case
 identifiers (`s4_public_cloud`, `s4_private_cloud`, `s4_on_premise`, `btp_abap_environment`) so the
 classification JSON feeds `chain.json`/`aem-model.json` and the runtime resolver without mapping.
-                    [--assessment-variant=<name>] [--gate-variant=<name>]
-```
 
 Do not silently default to Public Cloud. Probe the landscape or ask once. Landscape constrains the
 acceptable target; it does not change the factual current classification.
@@ -78,11 +78,15 @@ it. Same letters, different axis: never merge the two into one score. Emit the l
 Use `ABAP_CLOUD_READINESS` once step 1 confirmed it exists on this system:
 
 ```text
-SAPDiagnose(action="atc", type="CLAS", name="ZCL_EXAMPLE", variant="ABAP_CLOUD_READINESS")
+SAPDiagnose(action="atc", type="CLAS", name="ZCL_EXAMPLE", variant="ABAP_CLOUD_READINESS", resultFormat="structured")
 ```
 
 If unavailable, run the system's configured assessment/default variant, record its exact name and
 mark Level A evidence degraded. Do not claim equivalent coverage without comparing the checks.
+
+If `SAP_DENY_ACTIONS` blocks `SAPDiagnose.atc` (the shipped single-basic BTP profile denies it), the
+ATC gate is blocked, not passed: set `atc.degraded=true` and `classificationStatus=incomplete`, and use
+`atc_results` (a scheduled/central run) or `atc_remote` when the admin has not denied those actions.
 
 When the assessment already ran centrally (a run series scheduled in transaction ATC, for example
 `S4HANA_READINESS_<release>` on a central check system for an SAP ERP conversion), read that result
@@ -137,7 +141,7 @@ exceptions; unresolved exceptions are Unknown.
 Known severity order is A < B < C < D. Aggregate as follows:
 
 1. If every relevant touchpoint is known, the unit level is the worst known level.
-2. If any material touchpoint is Unknown, set `classificationStatus=incomplete`, `level=Unknown`
+2. If any material touchpoint is Unknown, set `classificationStatus=incomplete`, `extensibilityLevel=Unknown`
    and retain `provisionalWorstKnownLevel` for prioritization only.
 3. Report wrapper structures as separate components: consumer A and wrapper B/C. Do not flatten the
    program to A.
@@ -178,7 +182,7 @@ Write a package/object report containing:
   "logicalUnit": "ZCL_EXAMPLE",
   "members": ["ZCL_EXAMPLE"],
   "classificationStatus": "complete",
-  "level": "B",
+  "extensibilityLevel": "B",
   "provisionalWorstKnownLevel": "B",
   "targetCompliance": {
     "landscape": "s4_private_cloud",

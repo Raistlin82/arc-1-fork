@@ -70,9 +70,9 @@ The element list classifies fields. Decide for each:
 For each dimension field, check whether a reusable dimension view already exists before generating a new one:
 
 ```
-SAPSearch(searchType="object", query="*<dimension_keyword>*", maxResults=50)
+SAPSearch(searchType="object", query="*<dimension_keyword>*", objectType="DDLS", maxResults=50)
 ```
-Then keep only `DDLS` rows; normal object-name search does not apply an `objectType` filter.
+A list that reaches `maxResults` is cut: narrow the pattern.
 
 If a released `#DIMENSION` view exists (e.g. `I_Country`, `I_CalendarDate`), reuse it via association. Otherwise generate a new `ZI_<X>_DIM` (extended scope).
 
