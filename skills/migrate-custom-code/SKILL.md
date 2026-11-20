@@ -49,7 +49,7 @@ model, or selecting a released successor whose business parity is not proven.
 3. Run the selected ATC assessment:
 
 ```text
-SAPDiagnose(action="atc", type="CLAS", name="ZCL_EXAMPLE", variant="ABAP_CLOUD_READINESS")
+SAPDiagnose(action="atc", type="CLAS", name="ZCL_EXAMPLE", variant="ABAP_CLOUD_READINESS", resultFormat="structured")
 SAPRead(type="CLAS", name="ZCL_EXAMPLE")
 SAPRead(type="VERSIONS", name="ZCL_EXAMPLE", objectType="CLAS")
 ```
@@ -58,6 +58,10 @@ If the findings come from a central or scheduled ATC run (for example an S/4HANA
 series), read them with `SAPDiagnose(action="atc_results", id="<displayId>", atcResult={objectName:"ZCL_EXAMPLE"})`
 instead of asking the ATC administrator, and re-check after each fix with `atc` (or `atc_remote` on a
 checked system that delegates to the central check system).
+
+This skill writes: it needs `SAP_ALLOW_WRITES=true` and the target package in `SAP_ALLOWED_PACKAGES`.
+When `SAP_DENY_ACTIONS` denies `SAPDiagnose.atc` or `SAPDiagnose.unittest`, the matching gate is blocked:
+report the unit as not verified and stop before release — a denied check is never a pass.
 
 If the requested variant is unavailable, stop for target-relevant findings unless the parent plan
 explicitly accepts a named degraded fallback. No findings is not success until checked-object
@@ -122,7 +126,7 @@ Pass proposal data through exactly:
 SAPDiagnose(action="apply_quickfix", type="CLAS", name="ZCL_EXAMPLE", source="<current_source>", line=17, column=1, proposalUri="<proposal_uri>", proposalUserContent="<opaque_user_content>")
 ```
 
-Pass `userContent` unchanged, including an empty string. Some SAP proposals need additional input or
+Pass the proposal's `userContent` unchanged as `proposalUserContent`, including an empty string. Some SAP proposals need additional input or
 suggest types that require correction: review the returned deltas before they enter the candidate.
 
 For a multi-object proposal, also pass every `proposalAffectedObjects` entry returned by preview,
@@ -170,7 +174,7 @@ Run applicable tests and ATC again:
 
 ```text
 SAPDiagnose(action="unittest", type="CLAS", name="ZCL_EXAMPLE", coverage=true)
-SAPDiagnose(action="atc", type="CLAS", name="ZCL_EXAMPLE", variant="ABAP_CLOUD_READINESS")
+SAPDiagnose(action="atc", type="CLAS", name="ZCL_EXAMPLE", variant="ABAP_CLOUD_READINESS", resultFormat="structured")
 ```
 
 For CDS/RAP logical units, run the available CDS tests, behavior/unit tests and sibling activation

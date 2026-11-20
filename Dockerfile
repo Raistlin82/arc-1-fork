@@ -96,7 +96,6 @@ ENV SAP_SYSTEM_TYPE="auto"
 # ─── Feature Flags ──────────────────────────────────────────────────────────
 ENV SAP_FEATURE_ABAPGIT="auto"
 ENV SAP_FEATURE_RAP="auto"
-ENV SAP_FEATURE_AMDP="auto"
 ENV SAP_FEATURE_UI5="auto"
 ENV SAP_FEATURE_TRANSPORT="auto"
 ENV SAP_FEATURE_HANA="auto"

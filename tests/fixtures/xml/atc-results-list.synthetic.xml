@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SYNTHETIC, not a live capture. Shape inferred from ADT discovery templates and public client code;
-     see docs/research/2026-11-12-remote-atc-and-results.md. Replace with a live capture (roadmap FEAT-95). -->
+     see docs/research/2026-11-12-remote-atc-and-results.md. Replace with a live capture (roadmap FEAT-98). -->
 <atcresult:resultList xmlns:atcresult="http://www.sap.com/adt/atc/result">
   <atcresult:result>
     <atcresult:displayId>005056A62AA91EEF818525AD389CA4BD</atcresult:displayId>

@@ -17,6 +17,7 @@ import { resolveCookies } from '../adt/cookies.js';
 import { AdtApiError } from '../adt/errors.js';
 import { shouldWarnPreStatefulRelease } from '../adt/release.js';
 import { deriveUserSafety, deriveUserSafetyFromProfile } from '../adt/safety.js';
+import type { SamlBearerIdp } from '../adt/saml-bearer.js';
 import { Semaphore } from '../adt/semaphore.js';
 import { hasRequiredScope } from '../authz/policy.js';
 import type { CachingLayer } from '../cache/caching-layer.js';
@@ -77,7 +78,9 @@ import { injectTargetSchema, multiTargetToolDefinitions, sapTargetsDefinition } 
 import { type PerUserClient, PerUserTransportPool } from './per-user-transport.js';
 import { loadPlugins } from './plugin-loader.js';
 import { resolvePpDestinationName, resolveSingleTargetPpBtpConfig } from './pp-destination.js';
+import { strictPpNonJwtError } from './pp-strict.js';
 import { createDataResultSemaphore, runtimeMemoryEnvelope } from './runtime-memory.js';
+import { loadSamlBearerIssuer, runSamlBearerToolCall } from './saml-bearer-client.js';
 import { createCachingLayer } from './server-cache.js';
 import { buildServerInstructions } from './server-instructions.js';
 import { closeHttpServer, registerShutdownHandlers } from './shutdown.js';
@@ -458,12 +461,12 @@ export async function probeClientFeatures(
   fc.abapGit = config.featureAbapGit as 'auto' | 'on' | 'off';
   fc.gcts = config.featureGcts as 'auto' | 'on' | 'off';
   fc.rap = config.featureRap as 'auto' | 'on' | 'off';
-  fc.amdp = config.featureAmdp as 'auto' | 'on' | 'off';
   fc.ui5 = config.featureUi5 as 'auto' | 'on' | 'off';
   fc.transport = config.featureTransport as 'auto' | 'on' | 'off';
   fc.ui5repo = config.featureUi5Repo as 'auto' | 'on' | 'off';
   fc.flp = config.featureFlp as 'auto' | 'on' | 'off';
-  const features = await probeFeatures(client.http, fc, config.systemType);
+  const request = { retryUnavailable: !config.targetId };
+  const features = await probeFeatures(client.http, fc, config.systemType, request);
   // Log authorization probe results
   if (features.authProbe) {
     const ap = features.authProbe;
@@ -667,6 +670,7 @@ export interface CreateServerOptions {
   defaultHttp?: AdtClient['http'];
   /** Single-target PP transports keyed by per-user credential; never consulted for multi-target clients. */
   perUserTransports?: PerUserTransportPool;
+  samlBearerIdp?: SamlBearerIdp;
 }
 
 // Mark startup-401 cookies stale once per transport, preserving cookies refreshed by earlier HTTP calls.
@@ -676,6 +680,7 @@ export const SHARED_TRANSPORT_MAX_AGE_MS = 10 * 60_000;
 
 export function createServer(config: ServerConfig, options: CreateServerOptions = {}): Server {
   const {
+    samlBearerIdp,
     btpProxy,
     btpConfig,
     bearerTokenProvider,
@@ -928,7 +933,16 @@ export function createServer(config: ServerConfig, options: CreateServerOptions 
       });
     }
 
-    if (activeConfig.ppEnabled && isJwt) {
+    if (activeConfig.ppEnabled && isJwt && samlBearerIdp && !multiTarget) {
+      return runSamlBearerToolCall(
+        samlBearerIdp,
+        token,
+        requestId,
+        (extra.authInfo?.extra?.userName ?? extra.authInfo?.clientId) as string | undefined,
+        () => buildAdtConfig(activeConfig, undefined, undefined, { perUser: true }, adtSemaphore, dataResultSemaphore),
+        (samlClient) => dispatchWithClient(samlClient, true),
+      );
+    } else if (activeConfig.ppEnabled && isJwt) {
       const ppUser = (extra.authInfo?.extra?.userName ?? extra.authInfo?.clientId) as string | undefined;
       const ppDest = resolvePpDestinationName(activeConfig) ?? '';
       if (!btpConfig) {
@@ -1018,24 +1032,7 @@ export function createServer(config: ServerConfig, options: CreateServerOptions 
         } as Record<string, unknown>;
       }
     } else if (activeConfig.ppStrictExplicit && activeConfig.ppStrict && activeConfig.ppEnabled && !isJwt) {
-      // Strict mode with non-JWT token (e.g., API key) — reject
-      if (multiTarget) {
-        return multiError(
-          'PP_SETUP_FAILED',
-          'Multi-target routes require an XSUAA JWT for strict principal propagation. Sign in with XSUAA and try again.',
-          { retryable: true },
-          'pp_exchange_failed',
-        );
-      }
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: 'Principal propagation requires a JWT token (SAP_PP_STRICT=true). API key authentication is not supported in strict PP mode.',
-          },
-        ],
-        isError: true,
-      } as Record<string, unknown>;
+      return strictPpNonJwtError(!!multiTarget, multiError);
     }
 
     if (!client) {
@@ -1382,6 +1379,7 @@ export async function createAndStartServer(
     return shared.http;
   };
   const perUserTransports = new PerUserTransportPool(SHARED_TRANSPORT_MAX_AGE_MS); // same bound per PP user
+  const samlBearerIdp = loadSamlBearerIssuer(config);
   const buildDefaultServer = () =>
     createServer(config, {
       btpProxy,
@@ -1395,6 +1393,7 @@ export async function createAndStartServer(
       mcpRateLimiter,
       defaultHttp: defaultHttp(),
       perUserTransports,
+      samlBearerIdp,
     });
   const aggregateConfig = registry
     ? buildAggregateToolSurfaceConfig(

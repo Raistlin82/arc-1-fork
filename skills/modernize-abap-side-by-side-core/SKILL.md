@@ -100,7 +100,7 @@ Every boolean must carry evidence or an explicit not-applicable rationale. Missi
 | Contract fact | Required next skill |
 |---|---|
 | `implementationModel=cap` | `modernize-abap-to-btp-cap` |
-| `dataOwnership=cap|replicated` | `modernize-abap-cap-schema` |
+| `dataOwnership=cap` or `replicated` | `modernize-abap-cap-schema` |
 | `capServiceRequired=true` | `modernize-abap-cap-service` |
 | `uiTarget=cap_fiori_elements` | `scaffold-cap-fiori-elements` |
 | `uiTarget=ui5_freestyle` | `modernize-ui5-app` |

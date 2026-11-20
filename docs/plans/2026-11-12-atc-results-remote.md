@@ -3,7 +3,7 @@
 Approved by the product owner on 2026-11-12 for Nova WOLF. Research and sources:
 [`docs/research/2026-11-12-remote-atc-and-results.md`](../research/2026-11-12-remote-atc-and-results.md).
 Verification: unit tests with mocks and synthetic fixtures only — **live verification pending**
-(roadmap FEAT-95).
+(roadmap FEAT-98).
 
 ## Outcome
 
@@ -64,9 +64,9 @@ Verification: unit tests with mocks and synthetic fixtures only — **live verif
 
 ## Not done / residual
 
-- Live capture and qualification of the list/result XML, age units and SID behavior (FEAT-95).
+- Live capture and qualification of the list/result XML, age units and SID behavior (FEAT-98).
 - Starting a central run series, choosing object provider/RFC destination/system group through
-  ADT: no ADT resource exists (FEAT-96). The ATC administrator or quality expert schedules the run
+  ADT: no ADT resource exists (FEAT-99). The ATC administrator or quality expert schedules the run
   series once in transaction ATC of the central check system; ARC-1 then reads it with
   `atc_results` `scope="central"`.
 - `/atc/results/{executionId}/log`, `/atc/checkfailures/*`, `/atc/result/worklist/…` and

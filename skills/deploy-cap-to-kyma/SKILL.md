@@ -14,7 +14,7 @@ Clean Core level; the ERP boundary and all other touchpoints must already satisf
 <cap-project> --decision=<path>/side-by-side-decision.json [--namespace=<k8s-namespace>] [--apply]
 ```
 
-Require `implementationModel=cap`, `runtime=kyma`, `runtimeFitProven=true`, and evidence that
+Require `implementationModel=cap`, `sideBySideRuntime=kyma`, `runtimeFitProven=true`, and evidence that
 `cap_solution_verified` passed. Without `--apply`, prepare and validate artifacts only.
 
 ## Pre-flight

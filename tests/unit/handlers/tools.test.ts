@@ -59,7 +59,7 @@ describe('Tool Definitions', () => {
         const read = tools.find((tool) => tool.name === 'SAPRead')!.description!;
         const context = tools.find((tool) => tool.name === 'SAPContext')!.description!;
         expect(read).toContain('specs, reviews or pre-change context, prefer SAPContext first');
-        expect(read).toContain('method="NAME" for one body');
+        expect(tools.find((tool) => tool.name === 'SAPRead')!.inputSchema.properties).toHaveProperty('method');
         expect(context).toContain('Primary tool for understanding ABAP/CDS objects');
         expect(context).toContain('KTD when available');
         expect(context).toContain('"What does <object> do?" / "Explain" / "deps before editing"');
@@ -326,7 +326,7 @@ describe('Tool Definitions', () => {
 
     expect(diagnose.description).toContain('CLAS/PROG/FUGR or DEVC');
     expect(schema.properties.type.description).toContain('DEVC');
-    expect(schema.properties.includeSubpackages).toEqual({ type: 'boolean', default: false });
+    expect(schema.properties.includeSubpackages).toEqual({ type: 'boolean' });
   });
 
   it('describes SAPRead sqlFilter as condition-only expression', () => {
@@ -424,9 +424,9 @@ describe('Tool Definitions', () => {
     const onPremTypeEnum: string[] = onPremSchema.properties.type.enum;
     const onPremTypeDescription: string = onPremSchema.properties.type.description;
 
-    for (const type of ['DCLS', 'SRVB', 'SKTD', 'TABL/DT', 'TABL/DS', 'MSAG']) {
+    // As on BTP, the enum is the complete type list; property help no longer repeats it.
+    for (const type of ['DCLS', 'SRVB', 'SKTD', 'TABL/DT', 'TABL/DS', 'MSAG', 'RONT', 'NONT']) {
       expect(onPremTypeEnum).toContain(type);
-      expect(onPremTypeDescription).toContain(type);
     }
     expect(onPremDescription).toContain('DCLS');
     expect(onPremTypeDescription).toContain('change_method_visibility');
@@ -1048,7 +1048,9 @@ describe('Tool Definitions', () => {
 
       expect(sapQuery.description).toContain('ABAP SQL SELECT');
       expect(sapQuery.description).toContain('DD02L/DD03L/TADIR/TFDIR/SWOTLV');
-      expect(sapQuery.description).toContain('Long literal IN-lists auto-chunk in plain projection SELECTs');
+      expect(sapQuery.description).toContain('IN-lists auto-chunk in plain SELECTs');
+      expect(sapQuery.description).toContain('sapReportedTotalRows is not a result total');
+      expect(sapQuery.description).toContain('rowLimitReached: more may exist');
       expect(sapQuery.description).toContain('alias~field');
       expect(sapQuery.description).toContain('alias~*');
       expect(sapQuery.description).toContain('ASCENDING/DESCENDING');

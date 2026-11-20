@@ -29,7 +29,7 @@ approved bounded context; package enumeration is evidence, not consent to migrat
 | `managed` aspect | auto-applied if table has any of `crusr` / `crdat` / `cruzt` / `chusr` / `chdat` / `chuzt` |
 | `temporal` aspect | NOT auto-applied (rare 1:1 mapping; flag for user review) |
 | Key | preserve every DDIC key field; redesign only through an approved migration decision |
-| Currency / Quantity | `@Semantics.amount.currencyCode` / `@Semantics.quantity.unitOfMeasure` |
+| Currency / Quantity | `@Measures.ISOCurrency: <currency_field>` / `@Measures.Unit: <unit_field>` |
 | Comments | DDIC short text + field labels → `@Common.Label` |
 
 ## DDIC → CDS type mapping

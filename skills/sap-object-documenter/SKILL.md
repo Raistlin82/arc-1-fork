@@ -34,7 +34,7 @@ The user provides **one of**:
 
 - **Package** (e.g., `Z_SALES_EXTENSIONS`) — document every custom object in it
 - **Object list** — comma-separated (e.g., `ZCL_SALES_HANDLER, ZR_POSTING_JOB`)
-- **Type + prefix** — e.g., "document all Z* classes" → runs `SAPSearch(searchType="object", query="Z*", maxResults=100)`, then filters returned rows to `CLAS`
+- **Type + prefix** — e.g., "document all Z* classes" → runs `SAPSearch(searchType="object", query="Z*", objectType="CLAS", maxResults=1000)`
 
 And optionally:
 - **Output path** — default: `docs/custom-code/<package_or_group>.md`

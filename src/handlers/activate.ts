@@ -26,10 +26,10 @@ import { activationDetailMatchesObject } from './activation-results.js';
 import { type CacheSecurityContext, invalidateInactiveList } from './cache-security.js';
 import { buildCdsActivationDependencyHint } from './cds-hints.js';
 import { isTablesEndpointAvailable } from './feature-cache.js';
+import { resolveIncludeGroupForMutation } from './include-group.js';
 import { functionGroupIncludeObjectUrl, normalizeObjectType, objectUrlForType } from './object-types.js';
 import { inspectServiceBindingPublishFailure } from './publish-failure.js';
 import { errorResult, type ToolResult, textResult } from './shared.js';
-import { handlePinnedActivation } from './write/pinned-activation.js';
 import {
   enforceAllowedPackageForObjectUrl,
   inactiveSyntaxDiagnostic,
@@ -112,7 +112,6 @@ export async function handleSAPActivate(
   cacheSecurity: CacheSecurityContext,
   ppEnabled: boolean,
 ): Promise<ToolResult> {
-  if (client.safety.multiTargetWrite) return handlePinnedActivation(client, args);
   const action = String(args.action ?? 'activate');
   const name = String(args.name ?? '');
   const version = String(args.version ?? '0001');
@@ -232,6 +231,10 @@ export async function handleSAPActivate(
   // Batch activation: multiple objects at once (for RAP stacks etc.)
   const type = normalizeObjectType(String(args.type ?? ''));
   const preaudit = args.preaudit !== undefined ? Boolean(args.preaudit) : undefined;
+  // Pinned routes keep SAP's preaudit prompt, so activation cannot widen past the requested objects.
+  // Internal exact-URI text-pool activation (text-elements.ts) uses preaudit=false and is not reachable here.
+  if (preaudit === false && client.safety.multiTargetWrite)
+    throw new AdtSafetyError('Multi-target activation requires preaudit.');
   const activateOpts = preaudit !== undefined ? { preaudit } : undefined;
   // Post-activation cache promotion + freshness guard are object-keyed (not user-keyed); disable
   // them whenever several SAP identities share the cache (PP on). See applyActivationToCache.
@@ -286,9 +289,10 @@ export async function handleSAPActivate(
           }
           const groupLc = encodeURIComponent(group.toLowerCase());
           url = `/sap/bc/adt/functions/groups/${groupLc}/fmodules/${encodeURIComponent(objName.toLowerCase())}`;
-        } else if (objType === 'INCL' && String(o.group ?? args.group ?? '').trim()) {
-          const group = String(o.group ?? args.group).trim();
-          url = functionGroupIncludeObjectUrl(group, objName);
+        } else if (objType === 'INCL') {
+          // Omitted group: resolve from the include (fail-closed); a standalone include keeps the flat URL.
+          const group = await resolveIncludeGroupForMutation(client, objName, o.group ?? args.group);
+          url = group ? functionGroupIncludeObjectUrl(group, objName) : objectUrlForType(objType, objName);
         } else {
           url = objectUrlForType(objType, objName);
         }
@@ -307,6 +311,7 @@ export async function handleSAPActivate(
         // Mirror the single-object call: SDO metadata (and its packageRef) is negotiated with
         // the type's own content type rather than relying on discovery-driven negotiation.
         isServerDrivenObjectType(o.type) ? serverDrivenMetadataContentType(o.type) : undefined,
+        { includeGroupHint: true },
       );
     }
 
@@ -337,7 +342,8 @@ export async function handleSAPActivate(
       }
       invalidateInactiveList(cachingLayer, client, cacheSecurity);
       const textPools = objects.filter((o) => o.type === 'REPT');
-      const summary = textPools.length > 0 ? 'Activation request completed for' : 'Successfully activated';
+      const summary =
+        textPools.length > 0 || result.notExecuted ? 'Activation request completed for' : 'Successfully activated';
       const hints = textPools.map((o) => textPoolActivationHint(o.name)).join('');
       return textResult(`${summary} ${objects.length} objects: ${names}.${statusDetails}${globalMessages}${hints}`);
     }
@@ -389,13 +395,15 @@ export async function handleSAPActivate(
     }
     const groupLc = encodeURIComponent(group.toLowerCase());
     objectUrl = `/sap/bc/adt/functions/groups/${groupLc}/fmodules/${encodeURIComponent(name.toLowerCase())}`;
-  } else if (type === 'INCL' && String(args.group ?? '').trim()) {
+  } else if (type === 'INCL') {
     // A function-group structural include must be activated through its FUGR
     // URI. Activating the standalone /programs/includes/ alias fails on NW
     // 7.50 ("Select a master program"), while activating the FUGR container
     // can report success without promoting the include on SAP_BASIS 7.58.
-    // The structural URI is portable across both releases.
-    objectUrl = functionGroupIncludeObjectUrl(String(args.group), name);
+    // The structural URI is portable across both releases. Omitted group: resolve it from the
+    // include (fail-closed); a standalone include falls back to the generic path.
+    const group = await resolveIncludeGroupForMutation(client, name, args.group);
+    objectUrl = group ? functionGroupIncludeObjectUrl(group, name) : objectUrlForType(type, name);
   } else if (isServerDrivenObjectType(type)) {
     // A registered path does not prove the target supports activation for this type.
     if (!(await ensureServerDrivenSupport(client.http, client.safety, type))) {
@@ -416,6 +424,7 @@ export async function handleSAPActivate(
     type === 'TABL/DTT' ? tableSettingsParentUrl(name) : objectUrl,
     `Activation of ${type} '${name}'`,
     isServerDrivenObjectType(type) ? serverDrivenMetadataContentType(type) : undefined,
+    { includeGroupHint: true },
   );
 
   // Capture the inactive draft before activation flips it to active (see captureDraftForPromotion).
@@ -433,7 +442,8 @@ export async function handleSAPActivate(
         `Text-pool activation requested for ${name}.${formatActivationMessages(result)}${textPoolActivationHint(name)}`,
       );
     }
-    return textResult(`Successfully activated ${type} ${name}.${formatActivationMessages(result)}`);
+    const summary = result.notExecuted ? 'Activation request completed for' : 'Successfully activated';
+    return textResult(`${summary} ${type} ${name}.${formatActivationMessages(result)}`);
   }
   // On failure, try to enrich with the actual compiler errors from the inactive version —
   // especially useful when SAP returned <ioc:inactiveObjects> with no <msg> detail.
@@ -515,7 +525,7 @@ export function buildBatchActivationStatuses(
           ? 'unknown'
           : details.some((detail) => detail.severity === 'warning')
             ? 'warning'
-            : obj.type === 'REPT'
+            : obj.type === 'REPT' || result.notExecuted
               ? 'requested'
               : 'active',
       messages,

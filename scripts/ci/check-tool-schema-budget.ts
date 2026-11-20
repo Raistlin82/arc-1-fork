@@ -91,7 +91,6 @@ const ALL_FEATURES_AVAILABLE: ResolvedFeatures = {
   abapGit: availableFeature('abapGit'),
   gcts: availableFeature('gcts'),
   rap: availableFeature('rap'),
-  amdp: availableFeature('amdp'),
   ui5: availableFeature('ui5'),
   transport: availableFeature('transport'),
   ui5repo: availableFeature('ui5repo'),
@@ -129,7 +128,9 @@ const FULL_ACCESS_CONFIG: ServerConfig = {
 // #585 adds two source-window parameters without shortening existing guidance.
 // Full surface: 74,287 bytes; retain a 74,500-byte ceiling.
 // #1018 adds two opt-in fields (+556 bytes); retain existing model guidance per maintainer request.
-const WRITE_WIRE_WALL = 75_000;
+// Exact-text edits with #1199/#1222: measured 75,244 wire bytes / 23,764 for SAPWrite.
+// application_log severities: 75,297 -> 75,384 measured bytes (+87); the old wall had 3 bytes free.
+const WRITE_WIRE_WALL = 75_384;
 const READ_WIRE_WALL = 50_000;
 const PER_TOOL_WIRE_WALL = 23_000;
 
@@ -184,7 +185,15 @@ export const TOOL_SCHEMA_SCENARIOS: ToolSchemaScenario[] = [
   {
     name: 'multi-target-pinned-write', config: PINNED_WRITE_CONFIG, textSearchAvailable: true,
     definitions: multiTargetToolDefinitions(getToolDefinitions(PINNED_WRITE_CONFIG), PINNED_WRITE_CONFIG),
-    budget: { ...MULTI_TARGET_BUDGET, schemaTokenEstimate: 12_800, descriptionCount: 195, maxTotalWireBytes: READ_WIRE_WALL },
+    // ADR-0011: the pinned write surface is the single-target SAPWrite/SAPActivate definition plus one
+    // control sentence, so it uses the write wall; per-tool is SAPWrite's single-target wall + that sentence.
+    budget: {
+      schemaTokenEstimate: 14_800,
+      descriptionTokenEstimate: 9_900,
+      descriptionCount: 222,
+      maxTotalWireBytes: WRITE_WIRE_WALL,
+      maxPerToolWireBytes: 23_650,
+    },
   },
   {
     name: 'standard-default',
@@ -197,7 +206,7 @@ export const TOOL_SCHEMA_SCENARIOS: ToolSchemaScenario[] = [
       // The read wire ceiling is unchanged; source-window growth is recorded above.
       schemaTokenEstimate: 12_000,
       descriptionTokenEstimate: 8_800,
-      descriptionCount: 192, // +1: explicit direct package scope (#1065).
+      descriptionCount: 195, // Combined DDIC extension controls and own-method signature selector.
       maxTotalWireBytes: READ_WIRE_WALL,
       maxPerToolWireBytes: PER_TOOL_WIRE_WALL,
     },
@@ -220,13 +229,13 @@ export const TOOL_SCHEMA_SCENARIOS: ToolSchemaScenario[] = [
       // Raised 17_700 -> 17_800 and descriptions 265 -> 270 for structured KTD shortTexts while
       // retaining refObjectDescription guidance. Wire ceilings remain unchanged.
       // Combined automatic relations + ATC batches; same budgets with explicit discovery below.
-      schemaTokenEstimate: 18_750,
+      schemaTokenEstimate: 18_846,
       descriptionTokenEstimate: 12_800,
       // Includes expectedSourceHash (#853) and SAPRead.source (#855).
       // LONG_TEXT adds eight field descriptions; shorter existing guidance preserves byte/token ceilings.
-      descriptionCount: 293, // +1: explicit direct package scope (#1065).
+      descriptionCount: 298, // Includes the two exact-text edit fields.
       maxTotalWireBytes: WRITE_WIRE_WALL,
-      maxPerToolWireBytes: 23_550,
+      maxPerToolWireBytes: 23_850,
     },
   },
   {
@@ -241,7 +250,7 @@ export const TOOL_SCHEMA_SCENARIOS: ToolSchemaScenario[] = [
       // Combined relations + bounded ATC objects[]; retain a tighter BTP token ratchet.
       schemaTokenEstimate: 17_650,
       descriptionTokenEstimate: 12_200,
-      descriptionCount: 279, // +1: explicit direct package scope (#1065).
+      descriptionCount: 282, // Combined DDIC extension controls and own-method signature selector.
       maxTotalWireBytes: WRITE_WIRE_WALL,
       maxPerToolWireBytes: PER_TOOL_WIRE_WALL,
     },
@@ -269,7 +278,7 @@ export const TOOL_SCHEMA_SCENARIOS: ToolSchemaScenario[] = [
     budget: {
       schemaTokenEstimate: 12_000,
       descriptionTokenEstimate: 8_800,
-      descriptionCount: 192, // +1: explicit direct package scope (#1065).
+      descriptionCount: 195, // Combined DDIC extension controls and own-method signature selector.
       maxTotalWireBytes: READ_WIRE_WALL,
       maxPerToolWireBytes: PER_TOOL_WIRE_WALL,
     },
@@ -280,11 +289,11 @@ export const TOOL_SCHEMA_SCENARIOS: ToolSchemaScenario[] = [
     textSearchAvailable: true,
     resolvedFeatures: LIVE_RELATIONS_FEATURES,
     budget: {
-      schemaTokenEstimate: 18_750,
+      schemaTokenEstimate: 18_846,
       descriptionTokenEstimate: 12_800,
-      descriptionCount: 293, // +1: explicit direct package scope (#1065).
+      descriptionCount: 298, // Includes the two exact-text edit fields.
       maxTotalWireBytes: WRITE_WIRE_WALL,
-      maxPerToolWireBytes: 23_550,
+      maxPerToolWireBytes: 23_850,
     },
   },
   {
@@ -295,7 +304,7 @@ export const TOOL_SCHEMA_SCENARIOS: ToolSchemaScenario[] = [
     budget: {
       schemaTokenEstimate: 17_650,
       descriptionTokenEstimate: 12_200,
-      descriptionCount: 279, // +1: explicit direct package scope (#1065).
+      descriptionCount: 282, // Combined DDIC extension controls and own-method signature selector.
       maxTotalWireBytes: WRITE_WIRE_WALL,
       maxPerToolWireBytes: PER_TOOL_WIRE_WALL,
     },

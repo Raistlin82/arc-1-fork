@@ -45,7 +45,7 @@ independently.
 |---|---|---|
 | 1 | [`../modernize-abap-side-by-side-core/SKILL.md`](../modernize-abap-side-by-side-core/SKILL.md) | Mandatory reviewed architecture contract |
 | 2 | This orchestrator | Runtime-neutral CAP skeleton and `docs/clean-core-gap.md` |
-| 3 | [`../modernize-abap-cap-schema/SKILL.md`](../modernize-abap-cap-schema/SKILL.md) | CAP persistence only for `dataOwnership=cap|replicated` |
+| 3 | [`../modernize-abap-cap-schema/SKILL.md`](../modernize-abap-cap-schema/SKILL.md) | CAP persistence only for `dataOwnership=cap` or `replicated` |
 | 4 | [`../modernize-abap-cap-service/SKILL.md`](../modernize-abap-cap-service/SKILL.md) | CAP service only when `capServiceRequired=true` |
 | 5 | [`../scaffold-cap-fiori-elements/SKILL.md`](../scaffold-cap-fiori-elements/SKILL.md) or `modernize-ui5-app` | Exactly one selected UI branch, or none |
 | 6 | [`../generate-cap-cds-test/SKILL.md`](../generate-cap-cds-test/SKILL.md) | CAP compile, contract, authorization and parity evidence |
@@ -92,7 +92,7 @@ If the source project has a Clean Core CI gate (`scripts/ci/check-s4-compat-cove
 ├── xs-security.json         (runtime packaging)
 ├── mta.yaml                 (CF only)
 ├── chart/ or gen/chart      (Kyma only)
-├── package.json             (Step 1)
+├── package.json             (Step 2)
 ├── docs/
 │   ├── side-by-side-decision.json
 │   ├── clean-core-gap.md    (Step 2)
@@ -157,7 +157,7 @@ capabilities; do not copy their GPL-licensed text into ARC-1 docs.
 - `sap-abap` (recommended) — ABAP source patterns the sub-skills consume
 - `sap-abap-cds` (branch-MUST only for a custom S/4 ABAP CDS/RAP boundary; never for CAP CDS)
 - `sap-cap-capire` (branch-MUST) - CAP CDS, service, test and deployment guidance
-- `sap-btp-developer-guide` (recommended) — BTP deployment for Step 6
+- `sap-btp-developer-guide` (recommended) — BTP deployment for Step 7
 - `sap-btp-best-practices` (SHOULD; branch-MUST for production/high-risk landscapes) — BTP account, security, operations, HA/failover and governance review before deploy hand-off
 - `sap-btp-service-manager` (SHOULD; branch-MUST when service lifecycle is deliverable scope) — BTP service instances and bindings
 - `sap-fiori-app-development` (branch-MUST for FE branches) — Fiori app creation/modification rules for CAP vs standalone and backend metadata ownership

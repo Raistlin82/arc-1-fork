@@ -48,6 +48,7 @@
     "SAPWrite.edit_class_definition": "Class-section surgery.",
     "SAPWrite.edit_method_signature": "Class-section surgery.",
     "SAPWrite.add_unit": "Appends a new FORM/MODULE to classic procedural code. Level A targets put new logic in classes or wrappers; the chain only edits existing units with edit_unit.",
+    "SAPWrite.edit_content": "On-premise exact-snippet replacement in PROG/INCL (ARC-1 1.10.x). The chain replaces whole FORM/MODULE units with edit_unit, so the approved diff and the expectedSourceHash guard cover the unit the decision classified; a snippet path would only save tokens. Candidate for adoption once a pattern needs a sub-unit edit.",
     "SAPWrite.edit_text_symbols": "Text symbols/textpool. On-prem only and irrelevant to Level A classification.",
     "SAPWrite.generate_behavior_implementation": "RAP behavior generation, delegated to generate-rap-logic."
   }

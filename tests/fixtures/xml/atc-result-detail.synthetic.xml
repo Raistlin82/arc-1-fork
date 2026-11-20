@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SYNTHETIC, not a live capture. Header elements per docs/plans/fix-atc-effective-check-variant.md
      (<atcresult:checkVariant>) and public client code; object/finding attributes reuse the live 758
-     worklist shape (atc-worklist-findings.xml). Replace with a live capture (roadmap FEAT-95). -->
+     worklist shape (atc-worklist-findings.xml). Replace with a live capture (roadmap FEAT-98). -->
 <atcresult:resultList xmlns:atcresult="http://www.sap.com/adt/atc/result" xmlns:atcobject="http://www.sap.com/adt/atc/object" xmlns:atcfinding="http://www.sap.com/adt/atc/finding" xmlns:adtcore="http://www.sap.com/adt/core">
   <atcresult:result>
     <atcresult:displayId>005056A62AA91EEF818525AD389CA4BD</atcresult:displayId>

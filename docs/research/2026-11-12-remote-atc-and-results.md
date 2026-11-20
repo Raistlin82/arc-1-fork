@@ -174,9 +174,9 @@ returns the central result through `/atc/results` must be confirmed live.
 
 ## Residual gaps (roadmap)
 
-- **FEAT-95** — Live-qualify `atc_results`/`atc_remote`: capture list and result bodies on a 758+
+- **FEAT-98** — Live-qualify `atc_results`/`atc_remote`: capture list and result bodies on a 758+
   central check system and on a checked system with reference-check-system access, confirm element
   names, `ageMin/ageMax` units, `activeResult`/`centralResult` values, `sysId` behavior, the size of
   a real readiness result and whether delegation leaves a persisted result linked from the run.
-- **FEAT-96** — Starting a remote run series through ADT: blocked until SAP discovery advertises a
+- **FEAT-99** — Starting a remote run series through ADT: blocked until SAP discovery advertises a
   run-series/object-provider resource; until then the administrator schedules it once.

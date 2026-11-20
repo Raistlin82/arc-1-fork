@@ -227,7 +227,7 @@ import, and a change that needs one belongs to `ddic_database_handoff`.
 
 ```text
 SAPDiagnose(action="atc_ci", packageTrees=["ZPKG"], variant="ZCC_ABAP_CLOUD_DEVELOPMENT", failOnSeverity="error")
-SAPDiagnose(action="unittest_ci", packageTrees=["ZPKG"], resultFormat="structured")
+SAPDiagnose(action="unittest_ci", packageTrees=["ZPKG"])
 ```
 
 These run SAP's public ATC and ABAP Unit CI APIs over whole packages (`packages` for exact packages,
