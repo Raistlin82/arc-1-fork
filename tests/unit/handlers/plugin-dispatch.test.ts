@@ -82,3 +82,28 @@ describe('plugin dispatch through handleToolCall (FEAT-61 PR3)', () => {
     expect(res.content[0].text).toMatch(/Unknown tool/);
   });
 });
+
+describe('SAP_DENY_ACTIONS on a plugin tool', () => {
+  it('refuses a denied plugin tool with the same error as other denied actions, without running it', async () => {
+    let ran = false;
+    registerPluginTool(
+      getToolRegistry(),
+      'kit',
+      defineTool({
+        name: 'Custom_PdLaunchReport',
+        description: 'launch',
+        schema: z.object({}),
+        policy: { scope: 'read', opType: 'R' },
+        handler: async () => {
+          ran = true;
+          return { content: [{ type: 'text', text: 'ran' }] };
+        },
+      }),
+    );
+    const denied = { ...config, denyActions: ['SAPDiagnose.odata_perf', 'Custom_PdLaunchReport'] } as ServerConfig;
+    const res = await handleToolCall(fakeClient, denied, 'Custom_PdLaunchReport', {}, auth(['read']));
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toBe("Action 'Custom_PdLaunchReport' is denied by server policy (SAP_DENY_ACTIONS).");
+    expect(ran).toBe(false);
+  });
+});

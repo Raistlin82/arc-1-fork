@@ -474,8 +474,17 @@ Use it for rules like "developers can write, but cannot delete".
 | `Tool` | Deny every action of this tool | `SAPGit` |
 | `Tool.action` | Deny exactly this action | `SAPWrite.delete` |
 | `Tool.glob*` | Glob inside one tool | `SAPManage.flp_*` |
+| `Custom_Name` | Deny a plugin tool, whole, by its exact name | `Custom_LaunchReport` |
 
 Cross-tool wildcards like `*.delete` are rejected at startup.
+
+A plugin tool ([extensions](extensions.md), `ARC1_PLUGINS`) is denied whole: write its exact
+`Custom_*` name, without an action or a glob (`Custom_LaunchReport.run` and `Custom_*` are rejected).
+It can be mixed with built-in patterns, for example
+`SAP_DENY_ACTIONS='SAPDiagnose.odata_perf,Custom_LaunchReport'`. A denied plugin tool is hidden from
+the tool list and refused at call time with the same error as the other denied actions. Plugins load
+after the configuration is parsed, so ARC-1 checks the `Custom_*` names once they are loaded: a name
+that no loaded plugin provides (a typo, or a plugin missing from `ARC1_PLUGINS`) still refuses startup.
 
 ```bash
 # Inline CSV
@@ -488,7 +497,7 @@ SAP_DENY_ACTIONS='./deny-actions.json'  # ["SAPWrite.delete", "SAPManage.flp_*"]
 On Windows, a drive-letter absolute path accepts either separator (`C:\arc1\deny-actions.json`
 or `C:/arc1/deny-actions.json`). For relative paths, use `./deny-actions.json`, not a bare filename.
 
-ARC-1 fails fast if a deny entry references an unknown tool/action, has invalid grammar, or points to an unreadable file. That is intentional: typoed security config should not silently start.
+ARC-1 fails fast if a deny entry references an unknown tool/action, names a plugin tool that no loaded plugin provides, has invalid grammar, or points to an unreadable file. That is intentional: typoed security config should not silently start.
 
 Use intent-level deny rules (for example `SAPRead.INCL`) when a denial must cover both standard
 and hyperfocused calls. A rule such as `SAP.read` applies only to the hyperfocused wrapper;

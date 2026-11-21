@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { isActionDenied, parseDenyActions, validateDenyActions } from '../../../src/server/deny-actions.js';
+import {
+  isActionDenied,
+  parseDenyActions,
+  validateDenyActions,
+  validatePluginDenyActions,
+} from '../../../src/server/deny-actions.js';
 
 describe('parseDenyActions', () => {
   it('parses inline CSV with multiple patterns', () => {
@@ -159,5 +164,78 @@ describe('isActionDenied', () => {
 
   it('tool mismatch returns false', () => {
     expect(isActionDenied('SAPRead', 'PROG', ['SAPWrite.delete'])).toBe(false);
+  });
+});
+
+describe('plugin tool names (Custom_*) in SAP_DENY_ACTIONS', () => {
+  it('accepts a plugin tool name alone', () => {
+    expect(() => validateDenyActions(['Custom_LaunchReport'])).not.toThrow();
+  });
+
+  it('accepts a plugin tool name mixed with built-in patterns', () => {
+    expect(() =>
+      validateDenyActions(['SAPDiagnose.odata_perf', 'Custom_LaunchReport', 'SAPWrite.delete', 'SAPManage.flp_*']),
+    ).not.toThrow();
+  });
+
+  it('parses and validates the inline CSV form', () => {
+    const parsed = parseDenyActions('Custom_LaunchReport,SAPDiagnose.odata_perf');
+    expect(parsed).toEqual(['Custom_LaunchReport', 'SAPDiagnose.odata_perf']);
+    expect(() => validateDenyActions(parsed)).not.toThrow();
+  });
+
+  it('rejects an action or glob on a plugin tool (plugin tools are denied whole)', () => {
+    expect(() => validateDenyActions(['Custom_LaunchReport.run'])).toThrow(/plugin tool.*tool-level only/);
+    expect(() => validateDenyActions(['Custom_*'])).toThrow(/plugin tool.*tool-level only/);
+    expect(() => validateDenyActions(['Custom_'])).toThrow(/plugin tool.*tool-level only/);
+  });
+
+  it('still rejects unknown built-in-style tools and typos', () => {
+    expect(() => validateDenyActions(['SAPDiagnose.odata_prf'])).toThrow(/matches no actions/);
+    expect(() => validateDenyActions(['Custm_LaunchReport'])).toThrow(/invalid pattern/);
+  });
+
+  describe('validatePluginDenyActions (after the plugins are loaded)', () => {
+    it('accepts a pattern naming a loaded plugin tool, ignoring built-in patterns', () => {
+      expect(() =>
+        validatePluginDenyActions(['SAPDiagnose.odata_perf', 'Custom_LaunchReport'], ['Custom_LaunchReport']),
+      ).not.toThrow();
+    });
+
+    it('refuses a plugin tool that no loaded plugin provides (typo)', () => {
+      expect(() => validatePluginDenyActions(['Custom_LaunchReprt'], ['Custom_LaunchReport', 'Custom_Other'])).toThrow(
+        /unknown plugin tool 'Custom_LaunchReprt'.*Loaded plugin tools: Custom_LaunchReport, Custom_Other/,
+      );
+    });
+
+    it('refuses a plugin tool when no plugin is loaded', () => {
+      expect(() => validatePluginDenyActions(['Custom_LaunchReport'], [])).toThrow(/ARC1_PLUGINS/);
+    });
+
+    it('does nothing for built-in patterns only', () => {
+      expect(() => validatePluginDenyActions(['SAPWrite.delete'], [])).not.toThrow();
+    });
+  });
+
+  it('isActionDenied covers the plugin tool, alone and mixed', () => {
+    expect(isActionDenied('Custom_LaunchReport', undefined, ['Custom_LaunchReport'])).toBe(true);
+    expect(isActionDenied('Custom_LaunchReport', undefined, ['SAPDiagnose.odata_perf', 'Custom_LaunchReport'])).toBe(
+      true,
+    );
+    expect(isActionDenied('Custom_Other', undefined, ['Custom_LaunchReport'])).toBe(false);
+    expect(isActionDenied('SAPDiagnose', 'odata_perf', ['SAPDiagnose.odata_perf', 'Custom_LaunchReport'])).toBe(true);
+  });
+});
+
+describe('validatePluginDenyActions with registry entries', () => {
+  it('counts only plugin entries as loaded plugin tools', () => {
+    const entries = [
+      { name: 'SAPRead', source: 'builtin' as const },
+      { name: 'Custom_LaunchReport', source: 'plugin' as const },
+    ];
+    expect(() => validatePluginDenyActions(['Custom_LaunchReport'], entries)).not.toThrow();
+    expect(() => validatePluginDenyActions(['Custom_Missing'], entries)).toThrow(
+      /Loaded plugin tools: Custom_LaunchReport\./,
+    );
   });
 });
