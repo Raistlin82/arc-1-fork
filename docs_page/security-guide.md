@@ -158,6 +158,7 @@ For HTTP-streamable deployments without XSUAA/OIDC, use `ARC1_API_KEYS` with per
 | `viewer-data`     | `[read, data]`                                          | —                         |
 | `viewer-sql`      | `[read, data, sql]`                                     | —                         |
 | `developer`       | `[read, write, transports, git]`                        | `$TMP`                    |
+| `developer-packages` | `[read, write, transports, git]`                     | (server `SAP_ALLOWED_PACKAGES`) |
 | `developer-data`  | `[read, write, data, transports, git]`                  | `$TMP`                    |
 | `developer-sql`   | `[read, write, data, sql, transports, git]`             | `$TMP`                    |
 | `admin`           | all 7 scopes (implies everything)                       | (unrestricted)            |

@@ -1168,11 +1168,12 @@ describe('parseArgs', () => {
 
   // --- API_KEY_PROFILES ---
 
-  it('API_KEY_PROFILES contains all 7 expected profiles', () => {
+  it('API_KEY_PROFILES contains all 8 expected profiles', () => {
     expect(Object.keys(API_KEY_PROFILES).sort()).toEqual([
       'admin',
       'developer',
       'developer-data',
+      'developer-packages',
       'developer-sql',
       'viewer',
       'viewer-data',
@@ -1196,6 +1197,25 @@ describe('parseArgs', () => {
     expect(API_KEY_PROFILES.developer.safety.allowTransportWrites).toBe(true);
     expect(API_KEY_PROFILES.developer.safety.allowGitWrites).toBe(true);
     expect(API_KEY_PROFILES.developer.safety.allowedPackages).toEqual(['$TMP']);
+  });
+
+  it('API_KEY_PROFILES.developer-packages writes like developer, in the packages the server allows', () => {
+    const profile = API_KEY_PROFILES['developer-packages'];
+    expect(profile.scopes.sort()).toEqual(['git', 'read', 'transports', 'write']);
+    expect(profile.safety.allowWrites).toBe(true);
+    expect(profile.safety.allowTransportWrites).toBe(true);
+    expect(profile.safety.allowGitWrites).toBe(true);
+    expect(profile.safety.allowDataPreview).toBe(false);
+    expect(profile.safety.allowFreeSQL).toBe(false);
+    // no package list of its own: the server ceiling (SAP_ALLOWED_PACKAGES) applies, never a $TMP cap
+    expect(profile.safety.allowedPackages).toEqual([]);
+  });
+
+  it('ARC1_API_KEYS accepts the developer-packages profile', () => {
+    expect(parseApiKeys('k1:viewer,k2:developer-packages')).toEqual([
+      { key: 'k1', profile: 'viewer' },
+      { key: 'k2', profile: 'developer-packages' },
+    ]);
   });
 
   it('API_KEY_PROFILES.admin has all 7 scopes', () => {

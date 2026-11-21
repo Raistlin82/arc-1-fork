@@ -274,6 +274,21 @@ export const API_KEY_PROFILES: Record<string, ApiKeyProfile> = {
       allowedPackages: ['$TMP'],
     },
   },
+  /**
+   * Like `developer`, without the `$TMP` cap: an unattended key (a batch of corrections) writes in the packages the
+   * server allows (SAP_ALLOWED_PACKAGES) and in no other. `[]` takes the server ceiling: it never widens it.
+   */
+  'developer-packages': {
+    scopes: ['read', 'write', 'transports', 'git'],
+    safety: {
+      allowWrites: true,
+      allowDataPreview: false,
+      allowFreeSQL: false,
+      allowTransportWrites: true,
+      allowGitWrites: true,
+      allowedPackages: [],
+    },
+  },
   'developer-data': {
     scopes: ['read', 'write', 'data', 'transports', 'git'],
     safety: {
@@ -384,7 +399,7 @@ const LEGACY_ENV_VARS: Record<string, string> = {
   ARC1_PROFILE:
     'Server-side profile presets were removed. Set individual SAP_ALLOW_* flags (see .env.example for recipes).',
   ARC1_API_KEY:
-    'Single API-key mode was removed. Use ARC1_API_KEYS="key:profile" with a profile name (valid: viewer, viewer-data, viewer-sql, developer, developer-data, developer-sql, admin).',
+    'Single API-key mode was removed. Use ARC1_API_KEYS="key:profile" with a profile name (valid: viewer, viewer-data, viewer-sql, developer, developer-packages, developer-data, developer-sql, admin).',
 };
 
 const LEGACY_CLI_FLAGS: Record<string, string> = {

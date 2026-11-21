@@ -17,6 +17,7 @@ import {
   type SafetyConfig,
   unrestrictedSafetyConfig,
 } from '../../../src/adt/safety.js';
+import { API_KEY_PROFILES } from '../../../src/server/config.js';
 
 /** Helper to create a config with overrides on top of UNRESTRICTED. */
 function config(overrides: Partial<SafetyConfig> = {}): SafetyConfig {
@@ -313,6 +314,31 @@ describe('Safety System', () => {
         // entirely (no call to checkPackage on the read path).
         const cfg = defaultSafetyConfig();
         await expect(checkPackage(cfg, 'ZFOO_SUB')).rejects.toThrow(AdtSafetyError);
+      });
+    });
+
+    describe('API-key profiles against the server packages', () => {
+      it('developer is capped to $TMP: with the server on Z packages it writes nowhere', () => {
+        const server = config({ allowedPackages: ['ZSD/**'] });
+        const result = deriveUserSafetyFromProfile(server, API_KEY_PROFILES.developer.safety);
+        expect(isPackageAllowed(result, 'ZSD')).toBe(false);
+        expect(isPackageAllowed(result, '$TMP')).toBe(false);
+      });
+
+      it('developer-packages takes the server packages, and nothing beyond them', () => {
+        const server = config({ allowedPackages: ['ZSD/**', 'ZMM_ORDERS'] });
+        const result = deriveUserSafetyFromProfile(server, API_KEY_PROFILES['developer-packages'].safety);
+        expect(result.allowWrites).toBe(true);
+        expect(result.allowedPackages).toEqual(['ZSD/**', 'ZMM_ORDERS']);
+        expect(isPackageAllowed(result, 'ZMM_ORDERS')).toBe(true);
+        expect(isPackageAllowed(result, 'ZFI')).toBe(false);
+        expect(isPackageAllowed(result, '$TMP')).toBe(false);
+      });
+
+      it('developer-packages never writes where the server does not', () => {
+        const server = config({ allowWrites: false, allowedPackages: ['ZSD/**'] });
+        const result = deriveUserSafetyFromProfile(server, API_KEY_PROFILES['developer-packages'].safety);
+        expect(result.allowWrites).toBe(false);
       });
     });
 

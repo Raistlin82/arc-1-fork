@@ -116,8 +116,9 @@ Profiles are fixed names built into ARC-1. `ARC1_API_KEYS` selects one profile p
 | `$VIEWER_KEY` | `viewer` | Read source, search, navigate, lint, diagnose | Write, data preview, SQL, transports, git |
 | `$DEV_KEY` | `developer` | All of viewer + write source in `$TMP` + transport mutations + gated abapGit workflows/egress if server flags allow them | Data preview, freestyle SQL, writes outside `$TMP`; gCTS mutations remain quarantined |
 | `$SQL_KEY` | `developer-sql` | All of developer + data preview + freestyle SQL | Writes outside `$TMP` (server ceiling still applies) |
+| `$PKG_KEY` | `developer-packages` | All of developer, writing in the packages of `SAP_ALLOWED_PACKAGES` (for example an unattended batch of corrections on transportable `Z*` packages) | Data preview, freestyle SQL, writes outside `SAP_ALLOWED_PACKAGES` |
 
-Important: `developer`, `developer-data`, and `developer-sql` API-key profiles are intentionally capped to `$TMP`. There is no `developer-z` profile and no `key:developer:Z*` syntax. If a key must write to `Z*` packages, use a tightly scoped `admin` key with `SAP_ALLOWED_PACKAGES='Z*,$TMP'`, or use OIDC/XSUAA for per-user authorization.
+Important: `developer`, `developer-data`, and `developer-sql` API-key profiles are intentionally capped to `$TMP`. There is no `key:developer:Z*` syntax. If a key must write to `Z*` packages, use `developer-packages`: it has the scopes of `developer` and no package cap of its own, so it writes exactly in the packages the server allows (`SAP_ALLOWED_PACKAGES`, never `*` for such a key) and nowhere else. Do not use an `admin` key for this, and prefer OIDC/XSUAA where the writes belong to a person.
 
 Some accepted abapGit push/branch operations return error/incomplete because the bridge exposes no
 authoritative postcondition. Inspect repository/remote state before retrying; an API-key profile does
@@ -149,6 +150,7 @@ curl -X POST -H "Authorization: Bearer $DEV_KEY" \
 | `viewer-data`     | `read`, `data`                                          | + named table preview                    |
 | `viewer-sql`      | `read`, `data`, `sql`                                   | + freestyle SQL                          |
 | `developer`       | `read`, `write`, `transports`, `git`                    | Full developer (write + CTS + Git)       |
+| `developer-packages` | `read`, `write`, `transports`, `git`                 | Developer in `SAP_ALLOWED_PACKAGES`, no `$TMP` cap |
 | `developer-data`  | `read`, `write`, `data`, `transports`, `git`            | Developer + data preview                 |
 | `developer-sql`   | `read`, `write`, `data`, `sql`, `transports`, `git`     | Developer + data + SQL                   |
 | `admin`           | all 7 scopes                                            | Admin — implies everything at runtime    |

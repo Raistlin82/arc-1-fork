@@ -435,6 +435,7 @@ Profiles are fixed names built into ARC-1. `ARC1_API_KEYS` only selects one of t
 | `viewer-data` | `read`, `data` | No writes, no SQL, no transports, no Git |
 | `viewer-sql` | `read`, `data`, `sql` | No writes, no transports, no Git |
 | `developer` | `read`, `write`, `transports`, `git` | Writes capped to `$TMP`, no data preview, no SQL |
+| `developer-packages` | `read`, `write`, `transports`, `git` | No profile package cap: writes in `SAP_ALLOWED_PACKAGES` only; no data preview, no SQL |
 | `developer-data` | `read`, `write`, `data`, `transports`, `git` | Writes capped to `$TMP`, no SQL |
 | `developer-sql` | `read`, `write`, `data`, `sql`, `transports`, `git` | Writes capped to `$TMP` |
 | `admin` | all 7 scopes | No profile package cap; server ceiling still applies |
@@ -442,7 +443,8 @@ Profiles are fixed names built into ARC-1. `ARC1_API_KEYS` only selects one of t
 Key implications:
 
 - A `developer` key can write only to `$TMP`, even if the server allows `Z*`.
-- Because API-key profiles are fixed, there is no `developer-z` profile and no `key:developer:Z*` syntax.
+- A `developer-packages` key writes in the packages the server allows (`SAP_ALLOWED_PACKAGES`) and in no other: it is the profile for an unattended key that must write in transportable packages.
+- Because API-key profiles are fixed, there is no `key:developer:Z*` syntax.
 - To give an API key transportable-package write access, use a tightly scoped `admin` key on a server whose `SAP_ALLOWED_PACKAGES` is restricted, or use OIDC/XSUAA for real per-user roles.
 - A profile cannot override the server. If `SAP_ALLOW_WRITES=false`, every API key is effectively read-only.
 
