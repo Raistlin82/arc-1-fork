@@ -13,6 +13,10 @@
  *
  * Fails fast: any read error, JSON error, grammar violation, or unknown tool/action
  * aborts startup with a specific error message.
+ *
+ * Plugin tools (`Custom_*`, FEAT-61) are denied whole, by their exact name. Plugins load after the
+ * config is parsed, so `validateDenyActions` checks only their syntax and `validatePluginDenyActions`
+ * checks, once the plugins are loaded, that each name belongs to a loaded plugin tool.
  */
 
 import { readFileSync } from 'node:fs';
@@ -81,6 +85,13 @@ export function parseDenyActions(raw: string): string[] {
 /** Pattern grammar: Tool | Tool.action | Tool.glob* (glob allowed in action part; leading `*` or `_` ok). */
 const PATTERN_RE = /^[A-Z][A-Za-z]+(?:\.(?:\*|[A-Za-z_][A-Za-z0-9_]*\*?))?$/;
 const CROSS_TOOL_WILDCARD_RE = /^\*/;
+/** Plugin tool pattern: the exact name of a `Custom_*` tool, never an action or a glob. */
+const PLUGIN_TOOL_PREFIX = 'Custom_';
+const PLUGIN_TOOL_PATTERN_RE = /^Custom_[A-Za-z0-9_-]+$/;
+
+function isPluginToolPattern(pattern: string): boolean {
+  return pattern.startsWith(PLUGIN_TOOL_PREFIX);
+}
 
 /**
  * Validate each pattern against the grammar and against ACTION_POLICY.
@@ -93,6 +104,15 @@ export function validateDenyActions(patterns: string[]): void {
         `SAP_DENY_ACTIONS: cross-tool wildcards are not supported ('${pattern}'). ` +
           `Use tool-qualified patterns: 'Tool', 'Tool.action', or 'Tool.glob*'.`,
       );
+    }
+    if (isPluginToolPattern(pattern)) {
+      if (!PLUGIN_TOOL_PATTERN_RE.test(pattern)) {
+        throw new Error(
+          `SAP_DENY_ACTIONS: invalid plugin tool pattern '${pattern}'. A plugin tool is denied whole and is ` +
+            `tool-level only: write its exact name (e.g., Custom_LaunchReport), without an action or a glob.`,
+        );
+      }
+      continue; // checked against the loaded plugin tools by validatePluginDenyActions
     }
     if (!PATTERN_RE.test(pattern)) {
       throw new Error(
@@ -131,6 +151,30 @@ export function validateDenyActions(patterns: string[]): void {
           `Valid actions for ${tool}: ${toolActions.sort().join(', ') || '(none — tool-level only)'}.`,
       );
     }
+  }
+}
+
+/**
+ * Validate the plugin tool patterns (`Custom_*`) against the tools the loaded plugins registered.
+ * Called once at startup, after `loadPlugins`, so a mistyped plugin tool name still refuses start.
+ * `registered` takes plugin tool names, or registry entries (built-in entries are ignored).
+ */
+export function validatePluginDenyActions(
+  patterns: string[],
+  registered: Iterable<string | { readonly name: string; readonly source: 'builtin' | 'plugin' }>,
+): void {
+  const loaded = new Set<string>();
+  for (const entry of registered) {
+    if (typeof entry === 'string') loaded.add(entry);
+    else if (entry.source === 'plugin') loaded.add(entry.name);
+  }
+  for (const pattern of patterns) {
+    if (!isPluginToolPattern(pattern) || loaded.has(pattern)) continue;
+    const known = loaded.size > 0 ? [...loaded].sort().join(', ') : '(none: ARC1_PLUGINS loads no plugin tool)';
+    throw new Error(
+      `SAP_DENY_ACTIONS: unknown plugin tool '${pattern}'. No loaded plugin provides it. ` +
+        `Loaded plugin tools: ${known}.`,
+    );
   }
 }
 

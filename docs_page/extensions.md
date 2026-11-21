@@ -316,9 +316,9 @@ above: ambiguous failures require inspection before another execution.
 
 An extension tool must pass the **user's scope** check (their MCP role/profile). Calls through the
 provided `ctx` APIs also enforce the applicable server opt-ins and use the selected SAP identity,
-including per-user identity for PP calls. These are the extension-specific gates below: built-in
-`SAP_DENY_ACTIONS` rules do not support custom tools, and the package allowlist does not cover raw
-OData/ICF writes. SAP still enforces the selected user's authorizations.
+including per-user identity for PP calls. These are the extension-specific gates below. `SAP_DENY_ACTIONS` can deny a custom tool
+whole by its exact name (for example `Custom_LaunchReport`; no per-action or glob rules), and the
+package allowlist does not cover raw OData/ICF writes. SAP still enforces the selected user's authorizations.
 
 `ctx.client` exposes an explicit set of plain-read methods. Internal session factories,
 metadata/text writers, SQL methods and client internals are absent at runtime and in the public
@@ -345,7 +345,7 @@ Key points:
 - **`custom` scopes are not supported.** Reuse the 7 built-in scopes — XSUAA scopes are deploy-time
   static (`xs-security.json`), so reuse maps cleanly to existing roles. See
   [Authorization & Roles](authorization.md).
-- **Disable extensions through configuration.** Remove the path from `ARC1_PLUGINS` and restart to unload it (clear the setting to unload all plugins). `SAP_DENY_ACTIONS` accepts built-in tool names only; `Custom_*` rules fail startup validation.
+- **Disable extensions through configuration.** Remove the path from `ARC1_PLUGINS` and restart to unload it (clear the setting to unload all plugins). To keep a plugin loaded but refuse one of its tools, add its exact name to `SAP_DENY_ACTIONS` (for example `SAP_DENY_ACTIONS=Custom_LaunchReport`): the tool is hidden from the tool list and refused at call time. A `Custom_*` name that no loaded plugin provides fails startup.
 - **Code execution is opt-in + default off.** `ctx.run.classRun` and `ctx.run.programRun` require
   `SAP_ALLOW_PLUGIN_EXECUTE=true` **and** `SAP_ALLOW_WRITES=true` **and** a `write`-scoped tool (see
   [Executing ABAP](#executing-abap-classes-and-reports)).

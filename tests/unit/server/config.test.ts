@@ -89,6 +89,22 @@ describe('parseArgs', () => {
     expect(() => parseArgs([])).toThrow(/ARC1_MULTI_TARGET_ENDPOINTS/);
   });
 
+  it('accepts a plugin tool name in SAP_DENY_ACTIONS, alone and mixed with built-in patterns', () => {
+    process.env.SAP_DENY_ACTIONS = 'Custom_LaunchReport';
+    expect(parseArgs([]).denyActions).toEqual(['Custom_LaunchReport']);
+    process.env.SAP_DENY_ACTIONS = 'Custom_LaunchReport,SAPDiagnose.odata_perf';
+    expect(parseArgs([]).denyActions).toEqual(['Custom_LaunchReport', 'SAPDiagnose.odata_perf']);
+    expect(parseArgs(['--deny-actions', 'SAPDiagnose.odata_perf,Custom_LaunchReport']).denyActions).toEqual([
+      'SAPDiagnose.odata_perf',
+      'Custom_LaunchReport',
+    ]);
+  });
+
+  it('still refuses a mistyped built-in pattern in SAP_DENY_ACTIONS', () => {
+    process.env.SAP_DENY_ACTIONS = 'Custom_LaunchReport,SAPDiagnose.odata_prf';
+    expect(() => parseArgs([])).toThrow(/matches no actions/);
+  });
+
   it('requires an explicit Eclipse SID and preserves CLI precedence', () => {
     expect(parseArgs([]).ideLinks).toBe('off');
     process.env.ARC1_IDE_LINKS = 'eclipse';
