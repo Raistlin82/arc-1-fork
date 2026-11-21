@@ -445,7 +445,7 @@ Key implications:
 - A `developer` key can write only to `$TMP`, even if the server allows `Z*`.
 - A `developer-packages` key writes in the packages the server allows (`SAP_ALLOWED_PACKAGES`) and in no other: it is the profile for an unattended key that must write in transportable packages.
 - Because API-key profiles are fixed, there is no `key:developer:Z*` syntax.
-- To give an API key transportable-package write access, use a tightly scoped `admin` key on a server whose `SAP_ALLOWED_PACKAGES` is restricted, or use OIDC/XSUAA for real per-user roles.
+- To give an API key transportable-package write access, use a `developer-packages` key on a server whose `SAP_ALLOWED_PACKAGES` is restricted (never `*`), or use OIDC/XSUAA for real per-user roles. Keep `admin` keys for administration.
 - A profile cannot override the server. If `SAP_ALLOW_WRITES=false`, every API key is effectively read-only.
 
 Example: shared sandbox with one viewer and one `$TMP` developer key:
@@ -565,8 +565,8 @@ Then assign role collections in BTP Cockpit. The server says what the instance c
 | User has `write`, but writes fail with `allowWrites=false` | Server ceiling is still closed | Set `SAP_ALLOW_WRITES=true` |
 | User has `transports`, but transport create fails | Mutations also need `write`, and server needs both write flags | Grant `write` + `transports`; set `SAP_ALLOW_WRITES=true` and `SAP_ALLOW_TRANSPORT_WRITES=true` |
 | `SAP_ALLOW_TRANSPORT_WRITES=true`, but transport create fails | `SAP_ALLOW_WRITES=false` still blocks all mutations | Set both flags |
-| `developer` API key cannot write to `Z*` | Developer API-key profiles are capped to `$TMP` | Use `$TMP`, use a restricted `admin` key, or use XSUAA/OIDC |
-| You want one API key to write `Z*`, but not be full admin | API-key profiles are fixed; per-key custom package caps are not supported | Use an `admin` key on a narrowly configured server, or use XSUAA/OIDC |
+| `developer` API key cannot write to `Z*` | Developer API-key profiles are capped to `$TMP` | Use a `developer-packages` key (it writes in `SAP_ALLOWED_PACKAGES`), or XSUAA/OIDC |
+| You want one API key to write `Z*`, but not be full admin | API-key profiles are fixed; per-key custom package caps are not supported | Use a `developer-packages` key on a server whose `SAP_ALLOWED_PACKAGES` is narrow, or XSUAA/OIDC |
 | SQL still blocked after `SAP_ALLOW_FREE_SQL=true` | User lacks `sql` scope | Grant `sql` or use `viewer-sql` / `developer-sql` |
 | Table preview blocked after `SAP_ALLOW_DATA_PREVIEW=true` | User lacks `data` scope | Grant `data`; `sql` also implies `data` |
 | Package allowlist seems ignored for reads | ARC-1 package allowlist is write-only | Enforce read restrictions in SAP roles |

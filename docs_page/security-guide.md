@@ -165,7 +165,7 @@ For HTTP-streamable deployments without XSUAA/OIDC, use `ARC1_API_KEYS` with per
 
 A user's effective safety is always the intersection of (1) the server ceiling, (2) their profile's partial safety, and (3) their JWT scopes. Per-user config can only tighten, never widen.
 
-Important: API-key `developer*` profiles are sandboxed to `$TMP` by design. If a key must write to transportable packages, use a tightly scoped `admin` key with a narrow server-side `SAP_ALLOWED_PACKAGES`, or use OIDC/XSUAA for per-user authorization.
+Important: API-key `developer`, `developer-data` and `developer-sql` profiles are sandboxed to `$TMP` by design. If a key must write to transportable packages, use the `developer-packages` profile with a narrow server-side `SAP_ALLOWED_PACKAGES` (never `*`), or use OIDC/XSUAA for per-user authorization. Do not use an `admin` key for this.
 
 Full authorization model: [authorization.md](authorization.md).
 
