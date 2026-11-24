@@ -1,0 +1,29 @@
+name: Mirror verso Account Aziendale
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "**"
+  delete:
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Scarica codice
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Mirror verso grendina-key2
+        env:
+          TOKEN: ${{ secrets.MIRROR_TOKEN }}
+        run: |
+          AUTH=$(printf "grendina-key2:%s" "${TOKEN}" | base64 -w0)
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${AUTH}" \
+            push --mirror \
+            "https://github.com/grendina-key2/nova-arc-1.git"
